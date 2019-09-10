@@ -1,0 +1,17 @@
+dist: xenial
+language: elixir
+elixir: 1.9
+otp_release: 22.0
+services:
+  - docker
+before_script:
+  - docker-compose up -d
+matrix:
+  include:
+    - elixir: 1.4
+      otp_release: 19.3
+    - elixir: 1.5
+      otp_release: 19.3
+script:
+  - mix format --check-formatted
+  - mix do deps.get, test

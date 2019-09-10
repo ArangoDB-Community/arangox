@@ -1,0 +1,62 @@
+defmodule Arangox.MixProject do
+  use Mix.Project
+
+  @version "0.1.0"
+  @description """
+  ArangoDB 3.3.9+ driver for Elixir with connection pooling and support \
+  for active failover.
+  """
+  @source_url "https://github.com/suazithustra/arangox"
+  @homepage_url "https://www.arangodb.com"
+
+  def project do
+    [
+      app: :arangox,
+      version: @version,
+      elixir: "~> 1.4",
+      start_permanent: Mix.env() == :prod,
+      name: "Arangox",
+      description: @description,
+      source_url: @source_url,
+      homepage_url: @homepage_url,
+      package: package(),
+      docs: docs(),
+      deps: deps()
+    ]
+  end
+
+  # Run "mix help compile.app" to learn about applications.
+  def application do
+    [extra_applications: [:logger] ++ extras(Mix.env())]
+  end
+
+  defp extras(:prod), do: []
+  defp extras(_), do: [:gun]
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url}
+    ]
+  end
+
+  defp docs do
+    [
+      source_ref: "v#{@version}",
+      main: "readme",
+      extras: ["README.md"]
+    ]
+  end
+
+  # Run "mix help deps" to learn about dependencies.
+  defp deps do
+    [
+      {:db_connection, "~> 2.1"},
+      {:jason, "~> 1.1", optional: true},
+      {:gun, "~> 1.3", optional: true},
+      {:mint, "~> 0.4.0", optional: true},
+      {:ex_doc, "> 0.0.0", only: :dev, runtime: false},
+      {:credo, "~> 1.1", only: :dev, runtime: false}
+    ]
+  end
+end
