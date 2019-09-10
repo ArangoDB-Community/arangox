@@ -4,14 +4,14 @@ An implementation of [`db_connection`](https://hex.pm/packages/db_connection)
 for _ArangoDB_, which is silly because _Arangodb_ is not a transactional database (i.e.
 no prepare, commit, rollback, etc.), but whatever, it's a solid connection pooler.
 
-Arangox supports [_active failover_](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active failover-architecture.html).
+Arangox supports [active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
 
 ### Peer Dependencies
 
 Arangox requires a json library and http client to work, the defaults are `:jason` and
 `:gun`:
 
-```
+```elixir
 def deps do
   [
     ...
@@ -24,7 +24,7 @@ end
 
 You _might_ need to add `:gun` as an extra application in `mix.exs`:
 
-```
+```elixir
 def application() do
   [
     extra_applications: [:logger, :gun])
@@ -35,14 +35,14 @@ end
 To use a different json library, set the `:json_library` config to the module of your
 choice:
 
-```
+```elixir
 config :arangox, :json_library, Poison
 ```
 
 Arangox already has a `Mint` client. To use it, add `:mint` to your deps instead of
 `:gun` and set the `:client` start option to `Arangox.Client.Mint`:
 
-```
+```elixir
 Arangox.start_link(client: Arangox.Client.Mint)
 ```
 
@@ -95,13 +95,13 @@ Arangox assumes defaults for the `:endpoints`, `:username` and `:password` optio
 and [`db_connection`](https://hex.pm/packages/db_connection) assumes a default
 `:pool_size` of `1` so the following:
 
-```
+```elixir
 Arangox.start_link()
 ```
 
 Is equivalent to:
 
-```
+```elixir
 options = [
   pool_size: 1,
   endpoints: ["http://localhost:8529"],
@@ -115,7 +115,7 @@ Arangox.start_link(options)
 
 As is common amongst _ArangoDB_ drivers, arangox takes a list of endpoints as binaries:
 
-```
+```elixir
 endpoints = [
   "http://localhost:8529",
   "http://localhost:8530",
@@ -131,7 +131,7 @@ or is a follower in an _active failover_ setup, it will be skipped.
 With the `read_only?` option set to `true`, arangox will try to find a server in
 _readonly_ mode instead and add the _x-arango-allow-dirty-read_ header to every request:
 
-```
+```elixir
 iex> endpoints = ["http://localhost:8003", "http://localhost:8004", "http://localhost:8005"]
 iex> {:ok, conn} = Arangox.start_link(endpoints: endpoints, read_only?: true)
 iex> %Arangox.Response{body: body} = Arangox.get!(conn, "/_admin/server/mode")
@@ -153,7 +153,7 @@ Arangox will generate an authorization header with the `:username` and `:passwor
 options and add it to every request. To prevent this behavior, set the `:auth?`
 option to `false`.
 
-```
+```elixir
 iex> {:ok, conn} = Arangox.start_link(auth?: false)
 iex> {:error, exception} = Arangox.get(conn, "/_admin/server/mode")
 iex> exception.message
@@ -163,7 +163,7 @@ iex> exception.message
 The header value is obfuscated in the transfomed requests returned by arangox, for
 obvious reasons:
 
-```
+```elixir
 iex> {:ok, conn} = Arangox.start_link()
 iex> {:ok, request, _response} = Arangox.options(conn)
 iex> request.headers
@@ -176,7 +176,7 @@ If a value is given to the `:database` option, arangox will prepend `/_db/:value
 to the path of every request that isn't already prepended. If a value is not given,
 nothing is prepended (_ArangoDB_ will assume the `_system` database).
 
-```
+```elixir
 iex> {:ok, conn} = Arangox.start_link()
 iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
 iex> request.path
@@ -194,13 +194,13 @@ iex> request.path
 
 Headers are given as lists of two-element tuples:
 
-```
+```elixir
 [{"header", "value"}, {"another-header", "another-value"}]
 ```
 
 When given to the `:headers` start option, they are merged with every request.
 
-```
+```elixir
 iex> {:ok, conn} = Arangox.start_link(headers: [{"header", "value"}])
 iex> {:ok, request, _response} = Arangox.options(conn)
 iex> request.headers
@@ -209,7 +209,7 @@ iex> request.headers
 
 Headers can also be passed as an argument to any request:
 
-```
+```elixir
 iex> {:ok, conn} = Arangox.start_link()
 iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time", [{"header", "value"}])
 iex> request.headers
