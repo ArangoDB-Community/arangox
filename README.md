@@ -6,7 +6,13 @@ An implementation of [`db_connection`](https://hex.pm/packages/db_connection)
 for _ArangoDB_, which is silly because _Arangodb_ is not a transactional database (i.e.
 no prepare, commit, rollback, etc.), but whatever, it's a solid connection pooler.
 
-Arangox supports [active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
+Tested on:
+
+- ArangoDB 3.3.9 - 3.5
+- Elixir 1.6 - 1.9
+- OTP 20 - 22
+
+Supports [active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
 
 ### Peer Dependencies
 
