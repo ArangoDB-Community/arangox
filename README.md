@@ -1,5 +1,7 @@
 # Arangox
 
+[![Build Status](https://travis-ci.com/suazithustra/arangox.svg?branch=master)](https://travis-ci.org/suazithustra/arangox)
+
 An implementation of [`db_connection`](https://hex.pm/packages/db_connection)
 for _ArangoDB_, which is silly because _Arangodb_ is not a transactional database (i.e.
 no prepare, commit, rollback, etc.), but whatever, it's a solid connection pooler.
