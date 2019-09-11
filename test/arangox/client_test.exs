@@ -86,7 +86,7 @@ defmodule Arangox.ClientTest do
 
     test "connect_timeout option" do
       assert {:error, %TransportError{reason: :timeout}} =
-               Mint.connect(@default, connect_timeout: 0)
+               Mint.connect(@default, connect_timeout: 1)
     end
 
     test "tcp_opts option" do
