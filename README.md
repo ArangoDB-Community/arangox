@@ -115,6 +115,11 @@ Arangox.start_link(options)
 
 ### Endpoints
 
+See the
+[arangosh](https://www.arangodb.com/docs/stable/programs-arangosh-examples.html) or
+[arangojs](https://www.arangodb.com/docs/stable/drivers/js-reference-database.html)
+documentation for examples of supported endpoint formats.
+
 As is common amongst _ArangoDB_ drivers, arangox takes a list of endpoints as binaries:
 
 ```elixir
@@ -144,11 +149,6 @@ iex> exception.message
 "forbidden"
 ```
 
-See the
-[arangosh](https://www.arangodb.com/docs/stable/programs-arangosh-examples.html) or
-[arangojs](https://www.arangodb.com/docs/stable/drivers/js-reference-database.html)
-documentation for examples of supported endpoint formats.
-
 ### Authentication
 
 Arangox will generate an authorization header with the `:username` and `:password`
@@ -162,7 +162,7 @@ iex> exception.message
 "not authorized to execute this request"
 ```
 
-The header value is obfuscated in the transfomed requests returned by arangox, for
+The header value is obfuscated in transfomed requests returned by arangox, for
 obvious reasons:
 
 ```elixir
@@ -200,7 +200,7 @@ Headers are given as lists of two-element tuples:
 [{"header", "value"}, {"another-header", "another-value"}]
 ```
 
-When given to the `:headers` start option, they are merged with every request.
+When given to the start option they are merged with every request.
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(headers: [{"header", "value"}])
@@ -222,16 +222,16 @@ iex> request.headers
 
 Transport options can be specified via `:tcp_opts` and `:ssl_opts`, for non-encrypted and
 encrypted connections respectively. These options are passed directly to the `:transport_opts`
-option of `:gun` or `Mint`. Some transport options are set by arangox and cannot be
-overridden with these options (i.e. `Mint`'s `:mode` option).
+option of `:gun` or `Mint`.
 
 See [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-connect_option)
 for more information on `:tcp_opts`, or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
 
 The `:client_opts` option can be used to pass client-specific options to `:gun` or `Mint`.
-These options are merged with and may override any of the values set by arangox. If
-`:transport_opts` is set here it will override everything given to `:tcp_opts` or `:ssl_opts`,
-regardless of whether or not a connection is encrypted.
+These options are merged with and may override values set by arangox. Some options  cannot be
+overridden (i.e. `Mint`'s `:mode` option). If `:transport_opts` is set here it will override
+everything given to `:tcp_opts` or `:ssl_opts`, regardless of whether or not a connection is
+encrypted.
 
 See the `gun:opts()` type in the [gun docs](https://ninenines.eu/docs/en/gun/1.3/manual/gun/)
 or [`connect/4`](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4) in the mint docs for more
