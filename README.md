@@ -245,6 +245,6 @@ mix test
 
 ## Roadmap
 
-- a VelocyStream client
-- an Ecto adapter
-- more descriptive logs
+- A VelocyStream client
+- An Ecto adapter
+- More descriptive logs

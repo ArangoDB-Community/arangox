@@ -84,10 +84,10 @@ defmodule Arangox.ClientTest do
       assert :ok = Mint.close(new_state)
     end
 
-    test "connect_timeout option" do
-      assert {:error, %TransportError{reason: :timeout}} =
-               Mint.connect(@default, connect_timeout: 1)
-    end
+    # test "connect_timeout option" do
+    #   assert {:error, %TransportError{reason: :timeout}} =
+    #            Mint.connect(@default, connect_timeout: 0)
+    # end
 
     test "tcp_opts option" do
       catch_exit(Mint.connect(@default, tcp_opts: [verify: :verify_peer]))
