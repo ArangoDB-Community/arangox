@@ -294,10 +294,10 @@ defmodule Arangox.Connection do
   # Utils
 
   defp put_header(%{headers: headers} = struct, header) when is_tuple(header),
-    do: %{struct | headers: [header | headers]}
+    do: %{struct | headers: Enum.dedup_by([header | headers], fn {h, _v} -> h end)}
 
   defp put_headers(%{headers: headers} = struct, new_headers) when is_list(new_headers),
-    do: %{struct | headers: headers ++ new_headers}
+    do: %{struct | headers: Enum.dedup_by(headers ++ new_headers, fn {h, _v} -> h end)}
 
   # defp get_header(%{headers: headers}, header) when is_binary(header) do
   #   case Enum.find(headers, fn {k, _v} -> k == header end) do

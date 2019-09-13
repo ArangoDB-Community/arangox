@@ -12,6 +12,8 @@ defmodule ArangoxTest do
   @failover_2 TestHelper.failover_2()
   @failover_3 TestHelper.failover_3()
 
+  # TODO: Test the way duplicate headers are handled
+
   describe "invalid endpoints option:" do
     test "not a list" do
       assert_raise ArgumentError, fn ->

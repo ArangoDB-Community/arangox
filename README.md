@@ -224,6 +224,9 @@ iex> request.headers
 [{"header", "value"}, {"authorization", "..."}]
 ```
 
+Headers given to the start option will not override any of the headers set by Arangox,
+but headers passed to requests will.
+
 ### Transport
 
 Transport options can be specified via `:tcp_opts` and `:ssl_opts`, for non-encrypted and
