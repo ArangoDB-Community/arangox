@@ -18,9 +18,9 @@ if Code.ensure_compiled?(:gun) do
 
     alias Arangox.{
       Client,
+      Connection,
       Request,
-      Response,
-      Connection
+      Response
     }
 
     @behaviour Client

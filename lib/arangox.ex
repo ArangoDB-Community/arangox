@@ -303,7 +303,7 @@ defmodule Arangox do
   Defaults to `Jason`.
   """
   @spec json_library() :: module()
-  def json_library(), do: Application.get_env(:arangox, :json_library, Jason)
+  def json_library, do: Application.get_env(:arangox, :json_library, Jason)
 
   defp ensure_valid!(opts) do
     if endpoints = Keyword.get(opts, :endpoints) do

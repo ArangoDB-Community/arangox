@@ -1,6 +1,11 @@
 defmodule ArangoxTest do
   use ExUnit.Case, async: true
-  alias Arangox.{Request, Response, Error}
+
+  alias Arangox.{
+    Error,
+    Request,
+    Response
+  }
 
   doctest Arangox
 
@@ -12,7 +17,7 @@ defmodule ArangoxTest do
   @failover_2 TestHelper.failover_2()
   @failover_3 TestHelper.failover_3()
 
-  # TODO: Test the way duplicate headers are handled
+  # TODO: Test the way duplicate headers are overridden
 
   describe "invalid endpoints option:" do
     test "not a list" do

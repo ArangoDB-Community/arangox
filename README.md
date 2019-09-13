@@ -251,7 +251,7 @@ information.
 ## Contributing
 
 ```
-mix do format, credo
+mix do format, credo --strict
 docker-compose up -d
 mix test
 ```

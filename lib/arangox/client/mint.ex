@@ -20,9 +20,9 @@ if Code.ensure_compiled?(Mint.HTTP) do
 
     alias Arangox.{
       Client,
+      Connection,
       Request,
-      Response,
-      Connection
+      Response
     }
 
     @behaviour Client

@@ -4,8 +4,8 @@ defmodule Arangox.ClientTest do
 
   alias Arangox.{
     Client,
-    Client.Mint,
     Client.Gun,
+    Client.Mint,
     Connection,
     Request,
     Response
