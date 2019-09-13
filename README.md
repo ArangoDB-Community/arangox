@@ -259,3 +259,5 @@ mix test
 - A VelocyStream client
 - An Ecto adapter
 - More descriptive logs
+
+If anyone would like to collaborate, find me on the `elixir-lang` or `arangodb-community` slack.
