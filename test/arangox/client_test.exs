@@ -1,6 +1,6 @@
 defmodule Arangox.ClientTest do
   use ExUnit.Case, async: true
-  alias Mint.TransportError
+  # alias Mint.TransportError
 
   alias Arangox.{
     Client,
