@@ -54,6 +54,8 @@ Arangox already has a `Mint` client. To use it, add `:mint` to your deps instead
 Arangox.start_link(client: Arangox.Client.Mint)
 ```
 
+__NOTE:__ `Mint` does not accept paths to unix sockets at the moment.
+
 To use something else, you'd have to implement the `Arangox.Client` behaviour in a
 module somewhere and set that instead. The `Arangox.Endpoint` module has utilities
 for parsing _ArangoDB_ endpoints.
