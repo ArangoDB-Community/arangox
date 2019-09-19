@@ -15,3 +15,7 @@ matrix:
       script:
         - mix format --check-formatted
         - MIX_ENV=test mix do deps.get, test
+branches:
+  only:
+    - master
+    - dev
