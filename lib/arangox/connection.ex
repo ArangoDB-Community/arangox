@@ -56,7 +56,7 @@ defmodule Arangox.Connection do
 
   @impl true
   def connect(opts) do
-    client = Keyword.get(opts, :http_client, @default_client)
+    client = Keyword.get(opts, :client, @default_client)
     endpoints = Keyword.get(opts, :endpoints, [@default_endpoint])
 
     with(
