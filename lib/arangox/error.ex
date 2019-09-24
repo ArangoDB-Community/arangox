@@ -7,7 +7,7 @@ defmodule Arangox.Error do
 
   @type t :: %__MODULE__{
           status: pos_integer | nil,
-          endpoint: binary | nil,
+          endpoint: Arangox.endpoint() | nil,
           message: binary
         }
 

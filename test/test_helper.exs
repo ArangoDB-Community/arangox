@@ -1,4 +1,8 @@
 defmodule TestHelper do
+  def opts(opts \\ []) do
+    Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
+  end
+
   def unreachable, do: "http://fake_endpoint:1234"
   def default, do: "http://localhost:8529"
   def no_auth, do: "http://localhost:8001"

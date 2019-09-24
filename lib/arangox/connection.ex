@@ -5,6 +5,8 @@ defmodule Arangox.Connection do
 
   alias Arangox.{
     Client,
+    Client.Velocy,
+    Endpoint,
     Error,
     Request,
     Response
@@ -13,12 +15,13 @@ defmodule Arangox.Connection do
   @type t :: %__MODULE__{
           socket: any,
           client: module,
-          endpoint: binary,
+          endpoint: Arangox.endpoint(),
+          failover?: boolean,
           database: binary,
           auth?: boolean,
           username: binary,
           password: binary,
-          headers: list(Arangox.header()),
+          headers: Arangox.headers(),
           read_only?: boolean
         }
 
@@ -28,40 +31,40 @@ defmodule Arangox.Connection do
     :socket,
     :client,
     :endpoint,
+    :failover?,
     :database,
     auth?: true,
     username: "root",
     password: "",
-    headers: [],
+    headers: %{},
     read_only?: false
   ]
 
-  @spec new(any, module, binary, [Arangox.start_option()]) :: t
-  def new(socket, client, endpoint, opts) do
+  @spec new(any, module, binary, boolean, [Arangox.start_option()]) :: t
+  def new(socket, client, endpoint, failover?, opts) do
     __MODULE__
     |> struct(opts)
     |> Map.put(:socket, socket)
     |> Map.put(:client, client)
     |> Map.put(:endpoint, endpoint)
+    |> Map.put(:failover?, failover?)
   end
 
-  @default_client Client.Gun
-  @default_endpoint "http://localhost:8529"
-  # @header_endpoint "x-arango-endpoint"
+  # @header_x_arango_endpoint "x-arango-endpoint"
   @header_dirty_read {"x-arango-allow-dirty-read", "true"}
-  @request_ping %Request{method: :options, path: "/"}
+  @request_ping %Request{method: :get, path: "/_admin/server/availability"}
   @request_availability %Request{method: :get, path: "/_admin/server/availability"}
   @request_mode %Request{method: :get, path: "/_admin/server/mode"}
   @exception_no_trans %Error{message: "ArangoDB is not a transactional database"}
 
   @impl true
   def connect(opts) do
-    client = Keyword.get(opts, :client, @default_client)
-    endpoints = Keyword.get(opts, :endpoints, [@default_endpoint])
+    client = Keyword.get(opts, :client, Velocy)
+    endpoints = Keyword.get(opts, :endpoints, "http://localhost:8529")
 
     with(
       {:ok, %__MODULE__{} = state} <- do_connect(client, endpoints, opts),
-      {:ok, %__MODULE__{} = state} <- resolve_auth(state),
+      {:ok, %__MODULE__{} = state} <- resolve_auth(stringify_kvs(state)),
       {:ok, %__MODULE__{} = state} <- check_availability(state)
     ) do
       {:ok, state}
@@ -80,9 +83,23 @@ defmodule Arangox.Connection do
     end
   end
 
+  defp do_connect(client, endpoint, opts) when is_binary(endpoint) do
+    case Client.connect(client, Endpoint.new(endpoint), opts) do
+      {:ok, socket} ->
+        {:ok, new(socket, client, endpoint, false, opts)}
+
+      {:error, reason} ->
+        new(nil, client, endpoint, false, opts)
+        |> exception(reason)
+        |> failover_callback(opts)
+
+        {:error, reason}
+    end
+  end
+
   defp do_connect(client, [], opts) do
     {:error,
-     new(nil, client, nil, opts)
+     new(nil, client, nil, true, opts)
      |> exception("all endpoints are unavailable")
      |> failover_callback(opts)}
   end
@@ -90,12 +107,12 @@ defmodule Arangox.Connection do
   defp do_connect(client, endpoints, opts) when is_list(endpoints) do
     endpoint = hd(endpoints)
 
-    case Client.connect(client, endpoint, opts) do
+    case Client.connect(client, Endpoint.new(endpoint), opts) do
       {:ok, socket} ->
-        {:ok, new(socket, client, endpoint, opts)}
+        {:ok, new(socket, client, endpoint, true, opts)}
 
       {:error, reason} ->
-        new(nil, client, endpoint, opts)
+        new(nil, client, endpoint, true, opts)
         |> exception(reason)
         |> failover_callback(opts)
 
@@ -123,8 +140,18 @@ defmodule Arangox.Connection do
   defp resolve_auth(%__MODULE__{auth?: false} = state),
     do: {:ok, %{state | username: nil, password: nil}}
 
-  defp resolve_auth(%__MODULE__{username: username, password: password} = state) do
-    base64_encoded = Base.encode64("#{username}:#{password}")
+  defp resolve_auth(%__MODULE__{client: Velocy} = state) do
+    case Velocy.authorize(state) do
+      :ok ->
+        {:ok, state}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp resolve_auth(%__MODULE__{username: un, password: pw} = state) do
+    base64_encoded = Base.encode64("#{un}:#{pw}")
 
     {:ok, put_header(state, {"authorization", "Basic #{base64_encoded}"})}
   end
@@ -136,20 +163,29 @@ defmodule Arangox.Connection do
 
     with(
       {:ok, %Response{status: 200} = response, state} <- result,
-      response <- DBConnection.Query.decode(@request_mode, response, []),
-      %Response{body: %{"mode" => "readonly"}} <- response
+      %Response{body: %{"mode" => "readonly"}} <- maybe_decode_body(response, state)
     ) do
       {:ok, state}
     else
-      {:error, _reason, _state} ->
-        {:error, :failed}
+      {:error, reason, state} ->
+        error =
+          if state.failover?,
+            do: :failed,
+            else: exception(state, reason)
+
+        {:error, error}
 
       _ ->
-        {:error, :unavailable}
+        error =
+          if state.failover?,
+            do: :unavailable,
+            else: exception(state, "not a read only server")
+
+        {:error, error}
     end
   end
 
-  defp check_availability(%__MODULE__{} = state) do
+  defp check_availability(%__MODULE__{failover?: failover?} = state) do
     request = put_headers(@request_availability, state.headers)
     # result = Client.request(request, state)
 
@@ -159,10 +195,12 @@ defmodule Arangox.Connection do
       result <- Client.request(request, state),
       {:ok, %Response{status: 503}, _state} <- result
       # {:ok, %Response{status: 503} = response, _state} <- result
-      # endpoint when is_binary(endpoint) <- get_header(response, @header_endpoint)
+      # endpoint when not is_nil(endpoint) <- response.headers[@header_x_arango_endpoint]
     ) do
       # {:connect, endpoint}
-      {:error, :unavailable}
+
+      error = if failover?, do: :unavailable, else: exception(state, "service unavailable")
+      {:error, error}
     else
       {:ok, %Response{status: _status}, state} ->
         {:ok, state}
@@ -198,6 +236,7 @@ defmodule Arangox.Connection do
     {:case, [], [condition, [do: exec_cases_before() ++ body ++ exec_cases_after()]]}
   end
 
+  # TODO: Status codes that disconnect should be configurable
   def exec_cases_before do
     quote do
       {:ok, %Response{status: 505} = response, state} ->
@@ -209,11 +248,11 @@ defmodule Arangox.Connection do
       {:ok, %Response{status: 405} = response, state} ->
         {:disconnect, exception(state, response), state}
 
-      {:ok, %Response{status: 403} = response, state} ->
-        {:error, exception(state, response), state}
-
       {:ok, %Response{status: 401} = response, state} ->
         {:disconnect, exception(state, response), state}
+
+      {:ok, %Response{status: status} = response, state} when status in 400..599 ->
+        {:error, exception(state, response), state}
     end
   end
 
@@ -231,31 +270,25 @@ defmodule Arangox.Connection do
   end
 
   @impl true
-  def handle_execute(_q, %Request{} = request, _opts, %__MODULE__{database: nil} = state) do
-    request = put_headers(request, state.headers)
-
-    exec_case Client.request(request, state) do
-      {:ok, response, state} ->
-        {:ok, sanitize_headers(request), response, state}
-    end
-  end
-
-  @impl true
   def handle_execute(_q, %Request{} = request, _opts, %__MODULE__{} = state) do
     request =
       request
       |> put_headers(state.headers)
-      |> maybe_prepend_database(state.database)
+      |> maybe_prepend_database(state)
+      |> maybe_encode_body(state)
 
     exec_case Client.request(request, state) do
       {:ok, response, state} ->
-        {:ok, sanitize_headers(request), response, state}
+        {:ok, sanitize_headers(request), maybe_decode_body(response, state), state}
     end
   end
 
   @impl true
   def ping(%__MODULE__{} = state) do
-    exec_case Client.request(@request_ping, state) do
+    @request_ping
+    |> put_headers(state.headers)
+    |> Client.request(state)
+    |> exec_case do
       {:ok, %Response{}, state} ->
         {:ok, state}
     end
@@ -293,33 +326,53 @@ defmodule Arangox.Connection do
 
   # Utils
 
-  defp put_header(%{headers: headers} = struct, header) when is_tuple(header),
-    do: %{struct | headers: Enum.dedup_by([header | headers], fn {h, _v} -> h end)}
+  defp put_header(%__MODULE__{headers: headers} = struct, {key, value}),
+    do: %{struct | headers: Map.put(headers, key, value)}
 
-  defp put_headers(%{headers: headers} = struct, new_headers) when is_list(new_headers),
-    do: %{struct | headers: Enum.dedup_by(headers ++ new_headers, fn {h, _v} -> h end)}
+  defp put_headers(%Request{headers: headers} = struct, state_headers)
+       when is_map(state_headers),
+       do: %{struct | headers: Map.merge(state_headers, stringify_kvs(headers))}
 
-  # defp get_header(%{headers: headers}, header) when is_binary(header) do
-  #   case Enum.find(headers, fn {k, _v} -> k == header end) do
-  #     {_k, v} -> v
-  #     nil -> nil
-  #   end
-  # end
+  defp stringify_kvs(%{headers: headers} = struct),
+    do: %{struct | headers: stringify_kvs(headers)}
 
-  defp sanitize_headers(struct) when is_map(struct),
-    do: Map.update!(struct, :headers, &sanitize_headers/1)
+  defp stringify_kvs(headers),
+    do: Map.new(headers, fn {k, v} -> {to_string(k), to_string(v)} end)
 
-  defp sanitize_headers(headers) when is_list(headers) do
-    Enum.map(headers, fn {key, _value} = header ->
-      if key == "authorization", do: {key, "..."}, else: header
-    end)
+  defp sanitize_headers(%{headers: %{"authorization" => _auth} = headers} = struct)
+       when is_map(struct) do
+    %{struct | headers: %{headers | "authorization" => "..."}}
   end
 
-  defp maybe_prepend_database(%Request{path: "/_db/" <> _} = request, _),
+  defp sanitize_headers(%{headers: _headers} = struct) when is_map(struct), do: struct
+
+  defp maybe_prepend_database(%Request{} = request, %{client: Velocy}),
     do: request
 
-  defp maybe_prepend_database(%Request{path: path} = request, database),
-    do: %{request | path: "/_db/" <> database <> path}
+  defp maybe_prepend_database(%Request{} = request, %{database: nil}),
+    do: request
+
+  defp maybe_prepend_database(%Request{path: "/_db/" <> _} = request, %{database: _db}),
+    do: request
+
+  defp maybe_prepend_database(%Request{path: path} = request, %{database: db}),
+    do: %{request | path: "/_db/" <> db <> path}
+
+  defp maybe_encode_body(%_{} = struct, %__MODULE__{client: Velocy}), do: struct
+
+  defp maybe_encode_body(%_{body: ""} = struct, %__MODULE__{}), do: struct
+
+  defp maybe_encode_body(%_{body: body} = struct, %__MODULE__{}) do
+    %{struct | body: Arangox.json_library().encode!(body)}
+  end
+
+  defp maybe_decode_body(%_{} = struct, %__MODULE__{client: Velocy}), do: struct
+
+  defp maybe_decode_body(%_{body: nil} = struct, %__MODULE__{}), do: struct
+
+  defp maybe_decode_body(%_{body: body} = struct, %__MODULE__{}) do
+    %{struct | body: Arangox.json_library().decode!(body)}
+  end
 
   defp exception(state, %Response{status: 405} = response) do
     %Error{
@@ -333,13 +386,13 @@ defmodule Arangox.Connection do
     do: %Error{endpoint: state.endpoint, status: response.status}
 
   defp exception(state, %Response{} = response) do
-    response = DBConnection.Query.decode(struct(Request, []), response, [])
+    message =
+      response
+      |> maybe_decode_body(state)
+      |> Map.get(:body)
+      |> Map.get("errorMessage")
 
-    %Error{
-      endpoint: state.endpoint,
-      status: response.status,
-      message: Map.get(response.body, "errorMessage")
-    }
+    %Error{endpoint: state.endpoint, status: response.status, message: message}
   end
 
   defp exception(state, reason),
