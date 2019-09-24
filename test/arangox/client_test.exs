@@ -100,9 +100,9 @@ defmodule Arangox.ClientTest do
       catch_exit(Velocy.connect(@default, tcp_opts: [verify: :verify_peer]))
     end
 
-    test "connect_timeout option" do
-      assert {:error, :timeout} = Velocy.connect(@default, connect_timeout: 0)
-    end
+    # test "connect_timeout option" do
+    #   assert {:error, :timeout} = Velocy.connect(@default, connect_timeout: 0)
+    # end
 
     test "arangox's transport opts can't be overridden" do
       assert {:ok, socket} = Velocy.connect(@default, packet: :raw, mode: :binary, active: false)
