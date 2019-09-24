@@ -6,13 +6,14 @@ An implementation of [`db_connection`](https://hex.pm/packages/db_connection)
 for _ArangoDB_, which is silly because _ArangoDB_ is not a transactional database (i.e.
 no prepare, commit, rollback, etc.), but whatever, it's a solid connection pooler.
 
-Supports [VelocyStream](https://github.com/arangodb/velocystream) and [Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
+Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/)
+and [Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
 
 Tested on:
 
-- ArangoDB 3.3.9 - 3.5
-- Elixir 1.6 - 1.9
-- OTP 20 - 22
+- __ArangoDB__ 3.3.9 - 3.5
+- __Elixir__ 1.6 - 1.9
+- __OTP__ 20 - 22
 
 ## Peer Dependencies
 
@@ -31,7 +32,7 @@ end
 The default vst chunk size is `30_720`. To change it, you can include the following in your `config/config.exs`:
 
 ```elixir
-config :arangox, :vst_maxsize, 12345
+config :arangox, :vst_maxsize, 12_345
 ```
 
 ### Examples
@@ -279,7 +280,7 @@ iex> request.headers
 
 ## Transport
 
-The `:connect_timeout` start option defaults to `5_000` in all three clients.
+The `:connect_timeout` start option defaults to `5_000`.
 
 Transport options can be specified via `:tcp_opts` and `:ssl_opts`, for unencrypted and
 encrypted connections respectively. When using `:gun` or `:mint`, these options are passed
