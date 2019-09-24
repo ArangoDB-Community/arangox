@@ -2,61 +2,102 @@ defmodule Arangox.Endpoint do
   @moduledoc """
   Utilities for parsing _ArangoDB_ endpoints.
 
-  See the \
-  [arangosh](https://www.arangodb.com/docs/stable/programs-arangosh-examples.html) or \
-  [arangojs](https://www.arangodb.com/docs/stable/drivers/js-reference-database.html) \
-  documentation for examples of supported endpoint formats.
+      iex> Endpoint.new("http://localhost:8529")
+      %Arangox.Endpoint{addr: {:tcp, "localhost", 8529}, ssl?: false}
+
+      iex> Endpoint.new("https://localhost:8529")
+      %Arangox.Endpoint{addr: {:tcp, "localhost", 8529}, ssl?: true}
+
+      iex> Endpoint.new("http://unix:/tmp/arangodb.sock")
+      %Arangox.Endpoint{addr: {:unix, "/tmp/arangodb.sock"}, ssl?: false}
   """
+
+  @type addr ::
+          {:unix, path :: binary}
+          | {:tcp, host :: binary, port :: non_neg_integer}
+
+  @type t :: %__MODULE__{
+          addr: addr,
+          ssl?: boolean
+        }
+
+  @keys [:addr, :ssl?]
+
+  @enforce_keys @keys
+  defstruct @keys
 
   @doc """
-  Parses an endpoint uri and returns a `%URI{}` struct. This is identical to
-  `URI.parse/1` with the exception that the host defaults to `localhost`
-  and the port to `8529`.
+  Parses an endpoint and returns an `%Arangox.Endpoint{}` struct.
   """
-  @spec parse(binary) :: URI.t()
-  def parse(endpoint) do
-    endpoint
-    |> URI.parse()
-    |> Map.update!(:host, &(&1 || "localhost"))
-    |> Map.update!(:port, &port_for/1)
+  @spec new(Arangox.endpoint()) :: %__MODULE__{addr: addr, ssl?: boolean}
+  def new(endpoint) do
+    uri =
+      endpoint
+      |> URI.parse()
+      |> Map.update!(:port, &do_port(&1, endpoint))
+
+    %__MODULE__{addr: do_addr(uri, endpoint), ssl?: ssl?(uri, endpoint)}
   end
 
-  defp port_for(80), do: 8529
-  defp port_for(443), do: 8529
-  defp port_for(nil), do: 8529
-  defp port_for(port), do: port
+  defp do_port(80 = port, endpoint), do: maybe_do_port(port, endpoint)
+  defp do_port(443 = port, endpoint), do: maybe_do_port(port, endpoint)
+  defp do_port(port, _endpoint), do: port
 
-  @doc """
-  Determines wether a binary or `%URI{}` struct is a ssl/tls endpoint.
-  """
-  @spec ssl?(binary | URI.t()) :: boolean
-  def ssl?(%URI{scheme: nil}), do: false
-
-  def ssl?(%URI{scheme: scheme}) do
-    schemes = String.split(scheme, "+")
-
-    "ssl" in schemes or "https" in schemes
+  defp maybe_do_port(port, endpoint) do
+    if String.contains?(endpoint, ":" <> Integer.to_string(port)), do: port, else: nil
   end
 
-  def ssl?(endpoint) when is_binary(endpoint) do
-    endpoint
-    |> parse()
-    |> ssl?()
+  defp do_addr(uri, endpoint) do
+    if unix?(uri, endpoint), do: do_unix(uri, endpoint), else: do_tcp(uri, endpoint)
   end
 
-  @doc """
-  Determines wether a binary or `%URI{}` struct is a unix endpoint.
-  """
-  @spec unix?(binary | URI.t()) :: boolean
-  def unix?(%URI{host: host, scheme: nil}), do: host == "unix"
-
-  def unix?(%URI{host: host, scheme: scheme}) do
-    "unix" in [host | String.split(scheme, "+")]
+  defp do_unix(%URI{path: nil}, endpoint) do
+    raise ArgumentError, """
+    Missing path in unix endpoint configuration: #{inspect(endpoint)}\
+    """
   end
 
-  def unix?(endpoint) when is_binary(endpoint) do
-    endpoint
-    |> parse()
-    |> unix?()
+  defp do_unix(%URI{path: path}, _endpoint), do: {:unix, path}
+
+  defp do_tcp(%URI{host: nil}, endpoint) do
+    raise ArgumentError, """
+    Missing host in endpoint configuration: #{inspect(endpoint)}\
+    """
+  end
+
+  defp do_tcp(%URI{port: nil}, endpoint) do
+    raise ArgumentError, """
+    Missing port in endpoint configuration: #{inspect(endpoint)}\
+    """
+  end
+
+  defp do_tcp(%URI{host: host, port: port}, _endpoint), do: {:tcp, host, port}
+
+  defp ssl?(%URI{scheme: "https" <> _}, _endpoint), do: true
+  defp ssl?(%URI{scheme: "ssl" <> _}, _endpoint), do: true
+  defp ssl?(%URI{scheme: "tls" <> _}, _endpoint), do: true
+  defp ssl?(_, _endpoint), do: false
+
+  defp unix?(%URI{scheme: "http", host: "unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "https", host: "unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "tcp", host: "unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "ssl", host: "unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "tls", host: "unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "http+unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "https+unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "tcp+unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "ssl+unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "tls+unix"}, _endpoint), do: true
+  defp unix?(%URI{scheme: "http"}, _endpoint), do: false
+  defp unix?(%URI{scheme: "https"}, _endpoint), do: false
+  defp unix?(%URI{scheme: "tcp"}, _endpoint), do: false
+  defp unix?(%URI{scheme: "ssl"}, _endpoint), do: false
+  defp unix?(%URI{scheme: "tls"}, _endpoint), do: false
+
+  defp unix?(_, endpoint) do
+    raise ArgumentError, """
+    Invalid protocol in endpoint configuration: #{inspect(endpoint)}\
+    """
   end
 end

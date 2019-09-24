@@ -6,18 +6,62 @@ An implementation of [`db_connection`](https://hex.pm/packages/db_connection)
 for _ArangoDB_, which is silly because _ArangoDB_ is not a transactional database (i.e.
 no prepare, commit, rollback, etc.), but whatever, it's a solid connection pooler.
 
+Supports [VelocyStream](https://github.com/arangodb/velocystream) and [Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
+
 Tested on:
 
 - ArangoDB 3.3.9 - 3.5
 - Elixir 1.6 - 1.9
 - OTP 20 - 22
 
-Supports [active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
+## Peer Dependencies
 
-### Peer Dependencies
+By default, Arangox communicates with _ArangoDB_ via the _VelocyStream_ protocol, which requires the `:velocy` library:
 
-Arangox requires a json library and http client to work, the defaults are `:jason` and
-`:gun`:
+```elixir
+def deps do
+  [
+    ...
+    {:arangox, "~> 0.1.0"},
+    {:velocy, "~> 1.1"}
+  ]
+end
+```
+
+The default vst chunk size is `30_720`. To change it, you can include the following in your `config/config.exs`:
+
+```elixir
+config :arangox, :vst_maxsize, 12345
+```
+
+### Examples
+
+```elixir
+iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
+iex> Arangox.request(conn, :get, "/_admin/server/availability")
+{:ok,
+ %Arangox.Request{
+   body: "",
+   headers: %{},
+   method: :get,
+   path: "/_admin/server/availability"
+ },
+ %Arangox.Response{
+   body: %{"code" => 200, "error" => false, "mode" => "default"},
+   headers: %{},
+   status: 200
+ }}
+iex> Arangox.get!(conn, "/_admin/server/availability")
+%Arangox.Response{
+  body: %{"code" => 200, "error" => false, "mode" => "default"},
+  headers: %{},
+  status: 200
+}
+```
+
+### HTTP
+
+Arangox has two HTTP clients, `Arangox.Client.Gun` and `Arangox.Client.Mint`, they require a json library:
 
 ```elixir
 def deps do
@@ -25,12 +69,27 @@ def deps do
     ...
     {:arangox, "~> 0.1.0"},
     {:jason, "~> 1.1"},
-    {:gun, "~> 1.3"}
+    {:gun, "~> 1.3"} # or {:mint, "~> 0.4.0"}
   ]
 end
 ```
 
-You _might_ need to add `:gun` as an extra application in `mix.exs`:
+```elixir
+Arangox.start_link(client: Arangox.Client.Gun) # or Arangox.Client.Mint
+```
+
+To use something else, you'd have to implement the `Arangox.Client` behaviour in a
+module somewhere and set that instead.
+
+The default json library is `Jason`. To use a different library, set the `:json_library` config to the module of your choice, i.e:
+
+```elixir
+config :arangox, :json_library, Poison
+```
+
+__NOTE:__ `:mint` doesn't support unix sockets.
+
+__NOTE:__ Since `:gun` is an Erlang library, you _might_ need to add it as an extra application in `mix.exs`:
 
 ```elixir
 def application() do
@@ -40,70 +99,50 @@ def application() do
 end
 ```
 
-To use a different json library, set the `:json_library` config to the module of your
-choice:
-
-```elixir
-config :arangox, :json_library, Poison
-```
-
-Arangox already has a `Mint` client. To use it, add `:mint` to your deps instead of
-`:gun` and set the `:client` start option to `Arangox.Client.Mint`:
-
-```elixir
-Arangox.start_link(client: Arangox.Client.Mint)
-```
-
-__NOTE:__ `Mint` does not accept paths to unix sockets at the moment.
-
-To use something else, you'd have to implement the `Arangox.Client` behaviour in a
-module somewhere and set that instead. The `Arangox.Endpoint` module has utilities
-for parsing _ArangoDB_ endpoints.
-
 ### Examples
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.Client.Gun, pool_size: 10)
 iex> Arangox.request(conn, :options, "/")
 {:ok,
  %Arangox.Request{
    body: "",
-   headers: [{"authorization", "..."}],
+   headers: %{"authorization" => "..."},
    method: :options,
    path: "/"
  },
  %Arangox.Response{
    body: nil,
-   headers: [
-     {"x-content-type-options", "nosniff"},
-     {"allow", "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"},
-     {"server", "ArangoDB"},
-     {"connection", "Keep-Alive"},
-     {"content-type", "text/plain; charset=utf-8"},
-     {"content-length", "0"}
-   ],
+   headers: %{
+     "allow" => "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+     "connection" => "Keep-Alive",
+     "content-length" => "0",
+     "content-type" => "text/plain; charset=utf-8",
+     "server" => "ArangoDB",
+     "x-content-type-options" => "nosniff"
+   },
    status: 200
  }}
-iex> Arangox.options!(conn)
+iex> Arangox.options!(conn, "/")
 %Arangox.Response{
   body: nil,
-  headers: [
-    {"x-content-type-options", "nosniff"},
-    {"allow", "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"},
-    {"server", "ArangoDB"},
-    {"connection", "Keep-Alive"},
-    {"content-type", "text/plain; charset=utf-8"},
-    {"content-length", "0"}
-  ],
+  headers: %{
+    "allow" => "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+    "connection" => "Keep-Alive",
+    "content-length" => "0",
+    "content-type" => "text/plain; charset=utf-8",
+    "server" => "ArangoDB",
+    "x-content-type-options" => "nosniff"
+  },
   status: 200
 }
 ```
 
-## Options
+## Start Options
 
 Arangox assumes defaults for the `:endpoints`, `:username` and `:password` options,
 and [`db_connection`](https://hex.pm/packages/db_connection) assumes a default
-`:pool_size` of `1` so the following:
+`:pool_size` of `1`, so the following:
 
 ```elixir
 Arangox.start_link()
@@ -113,37 +152,39 @@ Is equivalent to:
 
 ```elixir
 options = [
-  pool_size: 1,
-  endpoints: ["http://localhost:8529"],
+  endpoints: "http://localhost:8529",
   username: "root",
-  password: ""
+  password: "",
+  pool_size: 1
 ]
 Arangox.start_link(options)
 ```
 
-### Endpoints
+## Endpoints
 
-See the
-[arangosh](https://www.arangodb.com/docs/stable/programs-arangosh-examples.html) or
-[arangojs](https://www.arangodb.com/docs/stable/drivers/js-reference-database.html)
-documentation for examples of supported endpoint formats.
-
-As is common amongst _ArangoDB_ drivers, arangox takes a list of endpoints as binaries:
+Unencrypted endpoints can be specified with either `http://` or
+`tcp://`, whereas encrypted endpoints can be specified with `https://`,
+`ssl://` or `tls://`:
 
 ```elixir
-endpoints = [
-  "http://localhost:8529",
-  "http://localhost:8530",
-  "http://localhost:8531"
-]
-Arangox.start_link(endpoints: endpoints)
+"tcp://localhost:8529" == "http://localhost:8529"
+"https://localhost:8529" == "ssl://localhost:8529" == "tls://localhost:8529"
+
+"tcp+unix:///tmp/arangodb.sock" == "http+unix:///tmp/arangodb.sock"
+"https+unix:///tmp/arangodb.sock" == "ssl+unix:///tmp/arangodb.sock" == "tls+unix:///tmp/arangodb.sock"
+
+"tcp://unix:/tmp/arangodb.sock" == "http://unix:/tmp/arangodb.sock"
+"https://unix:/tmp/arangodb.sock" == "ssl://unix:/tmp/arangodb.sock" == "tls://unix:/tmp/arangodb.sock"
 ```
 
-Arangox will try to establish a connection with the first endpoint it can and
-check it's availability (via the _ArangoDB_ api). If an endpoint is in maintenance mode
-or is a follower in an _active failover_ setup, it will be skipped.
+The `:endpoints` option accepts either a binary, or a list of binaries. In the case of a list,
+Arangox will try to establish a connection with the first endpoint it can.
 
-With the `read_only?` option set to `true`, arangox will try to find a server in
+If a connection is established, the availability of the server will be checked (via the _ArangoDB_ api), and
+if an endpoint is in maintenance mode or is a _Follower_ in an _Active Failover_ setup, the connection
+will be dropped, or in the case of a list, the endpoint skipped.
+
+With the `:read_only?` option set to `true`, arangox will try to find a server in
 _readonly_ mode instead and add the _x-arango-allow-dirty-read_ header to every request:
 
 ```elixir
@@ -157,14 +198,22 @@ iex> exception.message
 "forbidden"
 ```
 
-### Authentication
+## Authentication
 
-Arangox will generate an authorization header with the `:username` and `:password`
-options and add it to every request. To prevent this behavior, set the `:auth?`
-option to `false`.
+### Velocy
+
+When using the default client, authorization is resolved with the `:username`
+and `:password` options after a connection is established (authorization headers are not used).
+This can be disabled by setting the `:auth?` option to `false`.
+
+### HTTP
+
+When using an HTTP client, Arangox will generate a _Basic_ authorization header with the
+`:username` and `:password` options and add it to every request. To prevent this
+behavior, set the `:auth?` option to `false`.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(auth?: false)
+iex> {:ok, conn} = Arangox.start_link(auth?: false, client: Arangox.Client.Gun)
 iex> {:error, exception} = Arangox.get(conn, "/_admin/server/mode")
 iex> exception.message
 "not authorized to execute this request"
@@ -174,79 +223,96 @@ The header value is obfuscated in transfomed requests returned by arangox, for
 obvious reasons:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link()
-iex> {:ok, request, _response} = Arangox.options(conn)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.Client.Gun)
+iex> {:ok, request, _response} = Arangox.options(conn, "/")
 iex> request.headers
-[{"authorization", "..."}]
+%{"authorization" => "..."}
 ```
 
-### Databases
+## Databases
 
-If a value is given to the `:database` option, arangox will prepend `/_db/:value`
-to the path of every request that isn't already prepended. If a value is not given,
-nothing is prepended (_ArangoDB_ will assume the `_system` database).
+### Velocy
+
+If the `:database` option is set, it can be overridden by prepending the path of a
+request with `/_db/:value`. If nothing is set, _ArangoDB_ will assume the `_system` database.
+
+### HTTP
+
+When using an HTTP client, arangox will prepend `/_db/:value` to the path of every request
+only if it isn't already prepended. If the start option is not set, nothing is prepended.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link()
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.Client.Gun)
 iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
 iex> request.path
 "/_admin/time"
-iex> {:ok, conn} = Arangox.start_link(database: "myDatabase")
+iex> {:ok, conn} = Arangox.start_link(database: "_system", client: Arangox.Client.Gun)
 iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
 iex> request.path
-"/_db/myDatabase/_admin/time"
-iex> {:ok, request, _response} = Arangox.get(conn, "/_db/anotherDatabase/_admin/time")
+"/_db/_system/_admin/time"
+iex> {:ok, request, _response} = Arangox.get(conn, "/_db/_system/_admin/time")
 iex> request.path
-"/_db/anotherDatabase/_admin/time"
+"/_db/_system/_admin/time"
 ```
 
-### Headers
+## Headers
 
-Headers are given as lists of two-element tuples:
-
-```elixir
-[{"header", "value"}, {"another-header", "another-value"}]
-```
-
-When given to the start option they are merged with every request.
+Headers given to the start option are merged with every request, but will not override
+any of the headers set by Arangox:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(headers: [{"header", "value"}])
-iex> {:ok, request, _response} = Arangox.options(conn)
+iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"})
+iex> {:ok, request, _response} = Arangox.get(conn, "/_api/version")
 iex> request.headers
-[{"authorization", "..."}, {"header", "value"}]
+%{"header" => "value"}
 ```
 
-Headers can also be passed as an argument to any request:
+Headers passed to requests will override any of the headers given to the start option
+or set by Arangox:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link()
-iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time", [{"header", "value"}])
+iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"})
+iex> {:ok, request, _response} = Arangox.get(conn, "/_api/version", %{"header" => "new_value"})
 iex> request.headers
-[{"header", "value"}, {"authorization", "..."}]
+%{"header" => "new_value"}
 ```
 
-Headers given to the start option will not override any of the headers set by Arangox,
-but headers passed to requests will.
+## Transport
 
-### Transport
+The `:connect_timeout` start option defaults to `5_000` in all three clients.
 
-Transport options can be specified via `:tcp_opts` and `:ssl_opts`, for non-encrypted and
-encrypted connections respectively. These options are passed directly to the `:transport_opts`
-option of `:gun` or `Mint`.
+Transport options can be specified via `:tcp_opts` and `:ssl_opts`, for unencrypted and
+encrypted connections respectively. When using `:gun` or `:mint`, these options are passed
+directly to the `:transport_opts` connect option.
 
 See [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-connect_option)
 for more information on `:tcp_opts`, or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
 
-The `:client_opts` option can be used to pass client-specific options to `:gun` or `Mint`.
+The `:client_opts` option can be used to pass client-specific options to `:gun` or `:mint`.
 These options are merged with and may override values set by arangox. Some options  cannot be
-overridden (i.e. `Mint`'s `:mode` option). If `:transport_opts` is set here it will override
+overridden (i.e. `:mint`'s `:mode` option). If `:transport_opts` is set here it will override
 everything given to `:tcp_opts` or `:ssl_opts`, regardless of whether or not a connection is
 encrypted.
 
 See the `gun:opts()` type in the [gun docs](https://ninenines.eu/docs/en/gun/1.3/manual/gun/)
 or [`connect/4`](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4) in the mint docs for more
 information.
+
+## Request Options
+
+Request options are handled by and passed directly to `:db_connection`. See [execute/4](https://hexdocs.pm/db_connection/DBConnection.html#execute/4) in the `:db_connection` docs for supported options.
+
+Request timeouts default to `15_000`.
+
+```elixir
+iex> {:ok, conn} = Arangox.start_link()
+iex> Arangox.get!(conn, "/_admin/server/availability", [], timeout: 15_000)
+%Arangox.Response{
+  body: %{"code" => 200, "error" => false, "mode" => "default"},
+  headers: %{},
+  status: 200
+}
+```
 
 ## Contributing
 
@@ -258,8 +324,5 @@ mix test
 
 ## Roadmap
 
-- A VelocyStream client
 - An Ecto adapter
 - More descriptive logs
-
-If anyone would like to collaborate, find me on the `elixir-lang` or `arangodb-community` slack.

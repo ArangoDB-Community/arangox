@@ -5,6 +5,7 @@ defmodule Arangox do
              |> Enum.join("\n")
 
   alias __MODULE__.{
+    Client.Velocy,
     Client.Gun,
     Client.Mint,
     Error,
@@ -23,7 +24,7 @@ defmodule Arangox do
 
   @type path :: binary
   @type body :: binary | map | list | nil
-  @type header :: {binary, binary}
+  @type headers :: map
   @type endpoint :: binary
   @type conn :: DBConnection.conn()
 
@@ -34,7 +35,7 @@ defmodule Arangox do
           | {:database, binary}
           | {:username, binary}
           | {:password, binary}
-          | {:headers, list(header)}
+          | {:headers, headers}
           | {:read_only?, boolean}
           | {:connect_timeout, timeout}
           | {:failover_callback, (Error.t() -> any) | {module, atom, [any]}}
@@ -59,16 +60,16 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.start_link/2`, as well as any of the
   following:
 
-    * `:endpoints` - A list of _ArangoDB_ endpoints in order of presedence. Each process
-    in a pool will individually attempt to establish a connection with and check the
-    availablility of each endpoint in the order given until one is found. Defaults to
-    `["http://localhost:8529"]`.
+    * `:endpoints` - Either a single _ArangoDB_ endpoint binary, or a list of endpoints in
+    order of presedence. Each process in a pool will individually attempt to establish a connection
+    with and check the availablility of each endpoint in the order given until an available endpoint
+    is found. Defaults to `"http://localhost:8529"`.
     * `:database` - Arangox will prepend `/_db/:value` to the path of every request that
     isn't already prepended. If a value is not given, nothing is prepended (_ArangoDB_ will
     assume the __system_ database).
-    * `:headers` - A list of headers to merge with every request.
-    * `:auth?` - Configure whether or not to add an _authorization_ header to every request
-    with the provided username and password. Defaults to `true`.
+    * `:headers` - A map of headers to merge with every request.
+    * `:auth?` - Configure whether or not to resolve authorization with the `:username` and
+    `:password` options. Defaults to `true`.
     * `:username` - Defaults to `"root"`.
     * `:password` - Defaults to `""`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
@@ -85,11 +86,11 @@ defmodule Arangox do
     * `:client_opts` - Options for the client library being used. *WARNING*: If `:transport_opts`
     is set here it will override the options given to `:tcp_opts` _and_ `:ssl_opts`.
     * `:failover_callback` - A function to call every time arangox fails to establish a
-    connection. This is called regardless of whether or not it's connecting to an endpoint in
-    an _active failover_ setup. Can be either an anonymous function that takes one argument
-    (which is an `%Arangox.Error{}` struct), or a three-element tuple containing arguments
-    to pass to `apply/3` (in which case an `%Arangox.Error{}` struct is always prepended to
-    the arguments).
+    connection. This is only called if a list of endpoints is given, regardless of whether or not
+    it's connecting to an endpoint in an _active failover_ setup. Can be either an anonymous function
+    that takes one argument (which is an `%Arangox.Error{}` struct), or a three-element tuple
+    containing arguments to pass to `apply/3` (in which case an `%Arangox.Error{}` struct is always
+    prepended to the arguments).
   """
   @spec start_link([start_option]) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -103,9 +104,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec get(conn, path, [header], [DBConnection.option()]) ::
+  @spec get(conn, path, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def get(conn, path, headers \\ [], opts \\ []) do
+  def get(conn, path, headers \\ %{}, opts \\ []) do
     request(conn, :get, path, "", headers, opts)
   end
 
@@ -114,8 +115,8 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec get!(conn, path, [header], [DBConnection.option()]) :: Response.t()
-  def get!(conn, path, headers \\ [], opts \\ []) do
+  @spec get!(conn, path, headers, [DBConnection.option()]) :: Response.t()
+  def get!(conn, path, headers \\ %{}, opts \\ []) do
     request!(conn, :get, path, "", headers, opts)
   end
 
@@ -124,9 +125,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec head(conn, path, [header], [DBConnection.option()]) ::
+  @spec head(conn, path, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def head(conn, path, headers \\ [], opts \\ []) do
+  def head(conn, path, headers \\ %{}, opts \\ []) do
     request(conn, :head, path, "", headers, opts)
   end
 
@@ -135,8 +136,8 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec head!(conn, path, [header], [DBConnection.option()]) :: Response.t()
-  def head!(conn, path, headers \\ [], opts \\ []) do
+  @spec head!(conn, path, headers, [DBConnection.option()]) :: Response.t()
+  def head!(conn, path, headers \\ %{}, opts \\ []) do
     request!(conn, :head, path, "", headers, opts)
   end
 
@@ -145,9 +146,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec delete(conn, path, [header], [DBConnection.option()]) ::
+  @spec delete(conn, path, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def delete(conn, path, headers \\ [], opts \\ []) do
+  def delete(conn, path, headers \\ %{}, opts \\ []) do
     request(conn, :delete, path, "", headers, opts)
   end
 
@@ -156,8 +157,8 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec delete!(conn, path, [header], [DBConnection.option()]) :: Response.t()
-  def delete!(conn, path, headers \\ [], opts \\ []) do
+  @spec delete!(conn, path, headers, [DBConnection.option()]) :: Response.t()
+  def delete!(conn, path, headers \\ %{}, opts \\ []) do
     request!(conn, :delete, path, "", headers, opts)
   end
 
@@ -166,9 +167,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec post(conn, path, body, [header], [DBConnection.option()]) ::
+  @spec post(conn, path, body, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def post(conn, path, body \\ "", headers \\ [], opts \\ []) do
+  def post(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
     request(conn, :post, path, body, headers, opts)
   end
 
@@ -177,8 +178,8 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec post!(conn, path, body, [header], [DBConnection.option()]) :: Response.t()
-  def post!(conn, path, body \\ "", headers \\ [], opts \\ []) do
+  @spec post!(conn, path, body, headers, [DBConnection.option()]) :: Response.t()
+  def post!(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
     request!(conn, :post, path, body, headers, opts)
   end
 
@@ -187,9 +188,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec put(conn, path, body, [header], [DBConnection.option()]) ::
+  @spec put(conn, path, body, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def put(conn, path, body \\ "", headers \\ [], opts \\ []) do
+  def put(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
     request(conn, :put, path, body, headers, opts)
   end
 
@@ -198,8 +199,8 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec put!(conn, path, body, [header], [DBConnection.option()]) :: Response.t()
-  def put!(conn, path, body \\ "", headers \\ [], opts \\ []) do
+  @spec put!(conn, path, body, headers, [DBConnection.option()]) :: Response.t()
+  def put!(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
     request!(conn, :put, path, body, headers, opts)
   end
 
@@ -208,9 +209,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec patch(conn, path, body, [header], [DBConnection.option()]) ::
+  @spec patch(conn, path, body, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def patch(conn, path, body \\ "", headers \\ [], opts \\ []) do
+  def patch(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
     request(conn, :patch, path, body, headers, opts)
   end
 
@@ -219,8 +220,8 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec patch!(conn, path, body, [header], [DBConnection.option()]) :: Response.t()
-  def patch!(conn, path, body \\ "", headers \\ [], opts \\ []) do
+  @spec patch!(conn, path, body, headers, [DBConnection.option()]) :: Response.t()
+  def patch!(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
     request!(conn, :patch, path, body, headers, opts)
   end
 
@@ -229,9 +230,10 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec options(conn, [DBConnection.option()]) :: {:ok, Request.t(), Response.t()} | {:error, any}
-  def options(conn, opts \\ []) do
-    request(conn, :options, "", "", [], opts)
+  @spec options(conn, path, headers, [DBConnection.option()]) ::
+          {:ok, Request.t(), Response.t()} | {:error, any}
+  def options(conn, path, headers \\ %{}, opts \\ []) do
+    request(conn, :options, path, "", headers, opts)
   end
 
   @doc """
@@ -239,9 +241,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec options!(conn, [DBConnection.option()]) :: Response.t()
-  def options!(conn, opts \\ []) do
-    request!(conn, :options, "", "", [], opts)
+  @spec options!(conn, path, headers, [DBConnection.option()]) :: Response.t()
+  def options!(conn, path, headers \\ %{}, opts \\ []) do
+    request!(conn, :options, path, "", headers, opts)
   end
 
   @doc """
@@ -249,9 +251,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
-  @spec request(conn, method, path, body, [header], [DBConnection.option()]) ::
+  @spec request(conn, method, path, body, headers, [DBConnection.option()]) ::
           {:ok, Request.t(), Response.t()} | {:error, any}
-  def request(conn, method, path, body \\ "", headers \\ [], opts \\ []) do
+  def request(conn, method, path, body \\ "", headers \\ %{}, opts \\ []) do
     request = %Request{method: method, path: path, body: body, headers: headers}
 
     DBConnection.execute(conn, request, nil, opts)
@@ -262,8 +264,9 @@ defmodule Arangox do
 
   Accepts any of the options accepted by `DBConnection.execute!/4`.
   """
-  @spec request!(conn, method, path, body, [header], [DBConnection.option()]) :: Response.t()
-  def request!(conn, method, path, body \\ "", headers \\ [], opts \\ []) do
+  @spec request!(conn, method, path, body, headers, [DBConnection.option()]) ::
+          Response.t()
+  def request!(conn, method, path, body \\ "", headers \\ %{}, opts \\ []) do
     request = %Request{method: method, path: path, body: body, headers: headers}
 
     DBConnection.execute!(conn, request, nil, opts)
@@ -296,7 +299,7 @@ defmodule Arangox do
   @doc """
   Returns the configured JSON library.
 
-  To customize the JSON library, include the following in your `config/config.exs`:
+  To change the library, include the following in your `config/config.exs`:
 
       config :arangox, :json_library, Module
 
@@ -307,16 +310,16 @@ defmodule Arangox do
 
   defp ensure_valid!(opts) do
     if endpoints = Keyword.get(opts, :endpoints) do
-      unless is_list(endpoints) and endpoints_valid?(endpoints) do
+      unless is_binary(endpoints) or (is_list(endpoints) and endpoints_valid?(endpoints)) do
         raise ArgumentError, """
-        The :endpoints option expects a non-empty list of binaries, got: \
-        #{inspect(endpoints)}
+        The :endpoints option expects a binary or a non-empty list of binaries,\
+        got: #{inspect(endpoints)}
         """
       end
     end
 
     if client = Keyword.get(opts, :client) do
-      ensure_client_valid!(client)
+      ensure_client_loaded!(client)
     end
 
     if database = Keyword.get(opts, :database) do
@@ -333,14 +336,14 @@ defmodule Arangox do
       Enum.count(endpoints, &is_binary/1) == length(endpoints)
   end
 
-  defp ensure_client_valid!(client) do
+  defp ensure_client_loaded!(client) do
     cond do
       not is_atom(client) ->
         raise ArgumentError, """
         The :client option expects a module, got: #{inspect(client)}
         """
 
-      client in [Gun, Mint] ->
+      client in [Velocy, Gun, Mint] ->
         unless Code.ensure_loaded?(client) do
           library =
             client

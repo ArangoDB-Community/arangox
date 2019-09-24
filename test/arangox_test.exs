@@ -1,7 +1,9 @@
 defmodule ArangoxTest do
   use ExUnit.Case, async: true
+  import TestHelper, only: [opts: 1, opts: 0]
 
   alias Arangox.{
+    Client.Gun,
     Error,
     Request,
     Response
@@ -17,72 +19,72 @@ defmodule ArangoxTest do
   @failover_2 TestHelper.failover_2()
   @failover_3 TestHelper.failover_3()
 
-  # TODO: Test the way duplicate headers are overridden
-
   describe "invalid endpoints option:" do
     test "not a list" do
       assert_raise ArgumentError, fn ->
-        Arangox.start_link(endpoints: {})
+        Arangox.start_link(opts(endpoints: {}))
       end
     end
 
     test "empty list" do
       assert_raise ArgumentError, fn ->
-        Arangox.start_link(endpoints: [])
+        Arangox.start_link(opts(endpoints: []))
       end
     end
 
     test "non-binary element in list" do
       assert_raise ArgumentError, fn ->
-        Arangox.start_link(endpoints: ["binary", :not_a_binary])
+        Arangox.start_link(opts(endpoints: ["binary", :not_a_binary]))
       end
     end
   end
 
   test "connecting with default options" do
-    {:ok, conn} = Arangox.start_link()
-    Arangox.options!(conn)
+    {:ok, conn} = Arangox.start_link(opts())
+    Arangox.get!(conn, "/_admin/time")
   end
 
   test "connecting with auth disabled" do
-    {:ok, conn1} = Arangox.start_link(auth?: false)
-    assert {:error, %Arangox.Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
+    {:ok, conn1} = Arangox.start_link(opts(auth?: false))
+    assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
 
-    {:ok, conn2} = Arangox.start_link(endpoints: [@no_auth], auth?: false)
+    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@no_auth], auth?: false))
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")
   end
 
   test "connecting with ssl" do
-    {:ok, conn} = Arangox.start_link(endpoints: [@ssl])
-    Arangox.options!(conn)
+    {:ok, conn} = Arangox.start_link(opts(endpoints: [@ssl]))
+    Arangox.get!(conn, "/_admin/time")
   end
 
   @tag :unix
   test "connecting to a unix socket" do
-    if File.exists?("test/unix.sock") do
-      File.rm!("test/unix.sock")
+    if File.exists?("_build/#{Mix.env()}/unix.sock") do
+      File.rm("_build/#{Mix.env()}/unix.sock")
     end
 
-    port = Port.open({:spawn, "nc -lU test/unix.sock"}, [:binary])
-    endpoint = "unix://#{Path.expand("test")}/unix.sock"
+    port = Port.open({:spawn, "nc -lU _build/#{Mix.env()}/unix.sock"}, [:binary])
+    endpoint = "unix://#{Path.expand("_build")}/#{Mix.env()}/unix.sock"
 
-    {:ok, _conn} = Arangox.start_link(endpoints: [endpoint])
+    :timer.sleep(1000)
+
+    assert {:ok, _conn} = Arangox.start_link(opts(endpoints: endpoint))
 
     assert_receive {^port, {:data, _data}}
   after
-    File.rm!("test/unix.sock")
+    File.rm("_build/#{Mix.env()}/unix.sock")
   end
 
   test "finding an available endpoint" do
-    {:ok, conn} = Arangox.start_link(endpoints: [@unreachable, @unreachable, @default])
+    {:ok, conn} = Arangox.start_link(opts(endpoints: [@unreachable, @unreachable, @default]))
 
-    Arangox.options!(conn)
+    Arangox.get!(conn, "/_admin/time")
   end
 
   test "finding the leader in an active-failover setup" do
-    {:ok, conn1} = Arangox.start_link(endpoints: [@failover_1, @failover_2, @failover_3])
-    {:ok, conn2} = Arangox.start_link(endpoints: [@failover_3, @failover_1, @failover_2])
-    {:ok, conn3} = Arangox.start_link(endpoints: [@failover_2, @failover_3, @failover_1])
+    {:ok, conn1} = Arangox.start_link(opts(endpoints: [@failover_1, @failover_2, @failover_3]))
+    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@failover_3, @failover_1, @failover_2]))
+    {:ok, conn3} = Arangox.start_link(opts(endpoints: [@failover_2, @failover_3, @failover_1]))
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/availability")
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/availability")
     assert %Response{status: 200} = Arangox.get!(conn3, "/_admin/server/availability")
@@ -90,70 +92,95 @@ defmodule ArangoxTest do
 
   test "finding a follower in an active-failover setup" do
     {:ok, conn1} =
-      Arangox.start_link(endpoints: [@failover_1, @failover_2, @failover_3], read_only?: true)
+      Arangox.start_link(
+        opts(endpoints: [@failover_1, @failover_2, @failover_3], read_only?: true)
+      )
 
     {:ok, conn2} =
-      Arangox.start_link(endpoints: [@failover_3, @failover_1, @failover_2], read_only?: true)
+      Arangox.start_link(
+        opts(endpoints: [@failover_3, @failover_1, @failover_2], read_only?: true)
+      )
 
     {:ok, conn3} =
-      Arangox.start_link(endpoints: [@failover_2, @failover_3, @failover_1], read_only?: true)
+      Arangox.start_link(
+        opts(endpoints: [@failover_2, @failover_3, @failover_1], read_only?: true)
+      )
 
-    assert {:error, %Error{status: 403}} = Arangox.delete(conn1, "/_api/database/readOnly")
-    assert {:error, %Error{status: 403}} = Arangox.delete(conn2, "/_api/database/readOnly")
-    assert {:error, %Error{status: 403}} = Arangox.delete(conn3, "/_api/database/readOnly")
+    assert {:error, %Error{status: 403}} = Arangox.delete(conn1, "/_api/database/mydatabase")
+    assert {:error, %Error{status: 403}} = Arangox.delete(conn2, "/_api/database/mydatabase")
+    assert {:error, %Error{status: 403}} = Arangox.delete(conn3, "/_api/database/mydatabase")
   end
 
   describe "database option:" do
     test "invalid value" do
       assert_raise ArgumentError, fn ->
-        Arangox.start_link(database: :not_a_binary)
+        Arangox.start_link(opts(database: :not_a_binary))
       end
     end
 
-    test "prepends request paths unless already prepended" do
-      {:ok, conn} = Arangox.start_link(database: "does_not_exist")
+    test "prepends request paths when using an http client unless already prepended" do
+      {:ok, conn} = Arangox.start_link(opts(database: "does_not_exist", client: Gun))
 
-      assert %Response{status: 404} = Arangox.get!(conn, "/_api/database/current")
+      assert {:error, %Error{status: 404}} = Arangox.get(conn, "/_api/database/current")
 
       assert %Response{body: %{"result" => %{"name" => "_system"}}} =
                Arangox.get!(conn, "/_db/_system/_api/database/current")
     end
   end
 
-  test "username and password options" do
-    {:ok, conn1} = Arangox.start_link(username: "root", password: "")
+  test "auth resolution with velocy client" do
+    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: ""))
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
-    {:ok, conn2} = Arangox.start_link(username: "root", password: "invalid")
-    assert {:error, %Arangox.Error{status: 401}} = Arangox.get(conn2, "/_admin/server/mode")
-    {:ok, conn3} = Arangox.start_link(username: "invalid", password: "")
-    assert {:error, %Arangox.Error{status: 401}} = Arangox.get(conn3, "/_admin/server/mode")
+    {:ok, conn2} = Arangox.start_link(opts(username: "root", password: "invalid"))
+    assert {:error, %DBConnection.ConnectionError{}} = Arangox.get(conn2, "/_admin/server/mode")
+    {:ok, conn3} = Arangox.start_link(opts(username: "invalid", password: ""))
+    assert {:error, %DBConnection.ConnectionError{}} = Arangox.get(conn3, "/_admin/server/mode")
+  end
+
+  test "auth resolution with an http client" do
+    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: "", client: Gun))
+    assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
+    {:ok, conn2} = Arangox.start_link(opts(username: "root", password: "invalid", client: Gun))
+    assert {:error, %Error{status: 401}} = Arangox.get(conn2, "/_admin/server/mode")
+    {:ok, conn3} = Arangox.start_link(opts(username: "invalid", password: "", client: Gun))
+    assert {:error, %Error{status: 401}} = Arangox.get(conn3, "/_admin/server/mode")
   end
 
   test "headers option" do
     header = {"header", "value"}
-    {:ok, conn} = Arangox.start_link(headers: [header])
-    {:ok, %Request{headers: headers}, %Response{}} = Arangox.options(conn)
+    {:ok, conn} = Arangox.start_link(opts(headers: Map.new([header])))
+    {:ok, %Request{headers: headers}, %Response{}} = Arangox.get(conn, "/_admin/time")
 
     assert header in headers
   end
 
+  test "request headers override values in headers option" do
+    header = {"header", "value"}
+    {:ok, conn} = Arangox.start_link(opts(headers: Map.new([header])))
+
+    {:ok, %Request{headers: headers}, %Response{}} =
+      Arangox.get(conn, "/_admin/time", %{"header" => "new_value"})
+
+    assert header not in headers
+  end
+
   describe "client option:" do
-    test "not an atom" do
+    test "when not an atom" do
       assert_raise ArgumentError, fn ->
-        Arangox.start_link(client: "client")
+        Arangox.start_link(opts(client: "client"))
       end
     end
 
-    test "not loaded" do
+    test "when not loaded" do
       assert_raise RuntimeError, fn ->
-        Arangox.start_link(client: :not_a_loaded_module)
+        Arangox.start_link(opts(client: :not_a_loaded_module))
       end
     end
 
-    test "valid" do
-      {:ok, conn} = Arangox.start_link(client: Arangox.Client.Mint)
+    test "when is loaded" do
+      {:ok, conn} = Arangox.start_link(opts(client: Arangox.Client.Mint))
 
-      assert {:ok, %Request{}, %Response{}} = Arangox.options(conn)
+      assert {:ok, %Request{}, %Response{}} = Arangox.get(conn, "/_admin/time")
     end
   end
 
@@ -164,18 +191,22 @@ defmodule ArangoxTest do
 
     {:ok, _} =
       Arangox.start_link(
-        endpoints: [@unreachable, @unreachable, @default],
-        failover_callback: fun
+        opts(
+          endpoints: [@unreachable, @unreachable, @default],
+          failover_callback: fun
+        )
       )
 
     {:ok, _} =
       Arangox.start_link(
-        endpoints: [@unreachable, @unreachable, @default],
-        failover_callback: tuple
+        opts(
+          endpoints: [@unreachable, @unreachable, @default],
+          failover_callback: tuple
+        )
       )
 
-    assert_receive {:fun, %Arangox.Error{}}
-    assert_receive {:tuple, %Arangox.Error{}}
+    assert_receive {:fun, %Error{}}
+    assert_receive {:tuple, %Error{}}
   end
 
   test "json_library function and config" do
@@ -188,58 +219,55 @@ defmodule ArangoxTest do
   end
 
   test "request functions" do
-    {:ok, conn} = Arangox.start_link()
-    header = {"header", "value"}
-
-    {:ok, %Request{body: body, headers: headers}, %Response{status: 200}} =
-      Arangox.request(conn, :options, "/", %{}, [header])
-
-    assert body == "{}"
-    assert header in headers
+    {:ok, conn} = Arangox.start_link(opts())
 
     assert {:error, _} = Arangox.request(conn, :invalid_method, "/")
-    assert_raise Arangox.Error, fn -> Arangox.request!(conn, :invalid_method, "/") end
+    assert_raise Error, fn -> Arangox.request!(conn, :invalid_method, "/") end
 
     assert {:ok, %Request{method: :get}, %Response{}} = Arangox.get(conn, "/")
     assert %Response{} = Arangox.get!(conn, "/")
-
-    assert {:ok, %Request{method: :head}, %Response{}} = Arangox.head(conn, "/")
-    assert %Response{} = Arangox.head!(conn, "/")
-
-    assert {:ok, %Request{method: :delete}, %Response{}} = Arangox.delete(conn, "/")
-    assert %Response{} = Arangox.delete!(conn, "/")
-
-    assert {:ok, %Request{method: :post}, %Response{}} = Arangox.post(conn, "/")
-    assert %Response{} = Arangox.post!(conn, "/")
-
-    assert {:ok, %Request{method: :put}, %Response{}} = Arangox.put(conn, "/")
-    assert %Response{} = Arangox.put!(conn, "/")
-
-    assert {:ok, %Request{method: :patch}, %Response{}} = Arangox.patch(conn, "/")
-    assert %Response{} = Arangox.patch!(conn, "/")
-
-    assert {:ok, %Request{method: :options}, %Response{}} = Arangox.options(conn)
-    assert %Response{} = Arangox.options!(conn)
   end
 
-  test "transaction execution" do
-    {:ok, conn} = Arangox.start_link()
+  test "transaction/2" do
+    {:ok, conn1} = Arangox.start_link(opts())
 
     assert {:ok, %Response{}} =
-             Arangox.transaction(conn, fn c ->
-               Arangox.options!(c)
+             Arangox.transaction(conn1, fn c ->
+               Arangox.get!(c, "/_admin/time")
              end)
 
+    {:ok, conn2} = Arangox.start_link(opts(auth?: false))
+
     assert {:error, :rollback} =
-             Arangox.transaction(conn, fn c ->
-               Arangox.request(c, :invalid_method, "/")
+             Arangox.transaction(conn2, fn c ->
+               Arangox.get(c, "/_admin/server/status")
              end)
+  end
+
+  test "transaction/3" do
+    {:ok, conn1} = Arangox.start_link(opts())
+
+    assert {:ok, %Response{}} =
+             Arangox.transaction(
+               conn1,
+               fn c -> Arangox.get!(c, "/_admin/time") end,
+               timeout: 15_000
+             )
+
+    {:ok, conn2} = Arangox.start_link(opts(auth?: false))
+
+    assert {:error, :rollback} =
+             Arangox.transaction(
+               conn2,
+               fn c -> Arangox.get(c, "/_admin/server/status") end,
+               timeout: 15_000
+             )
   end
 
   test "ownership pool" do
-    {:ok, conn} = Arangox.start_link(pool: DBConnection.Ownership)
+    {:ok, conn} = Arangox.start_link(opts(pool: DBConnection.Ownership))
 
-    assert %Response{} = Arangox.options!(conn)
+    assert %Response{} = Arangox.get!(conn, "/_admin/time")
     assert :ok = DBConnection.Ownership.ownership_checkin(conn, [])
   end
 end

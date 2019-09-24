@@ -1,48 +1,52 @@
 defmodule Arangox.EndpointTest do
   use ExUnit.Case, async: true
+  alias Arangox.Endpoint
   import Arangox.Endpoint
 
-  describe "parsing an endpoint:" do
-    test "host defaults to 'localhost'" do
-      assert %URI{host: "localhost"} = parse("scheme://")
-    end
+  test "parsing an endpoint" do
+    assert %Endpoint{addr: {:tcp, "host", 123}, ssl?: false} = new("tcp://host:123")
+    assert %Endpoint{addr: {:tcp, "host", 123}, ssl?: true} = new("ssl://host:123")
+    assert %Endpoint{addr: {:tcp, "host", 123}, ssl?: true} = new("tls://host:123")
+    assert %Endpoint{addr: {:tcp, "host", 123}, ssl?: false} = new("http://host:123")
+    assert %Endpoint{addr: {:tcp, "host", 123}, ssl?: true} = new("https://host:123")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: false} = new("unix:///path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: false} = new("tcp+unix:///path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: true} = new("ssl+unix:///path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: true} = new("tls+unix:///path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: false} = new("http+unix:///path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: true} = new("https+unix:///path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: false} = new("tcp://unix:/path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: true} = new("ssl://unix:/path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: true} = new("tls://unix:/path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: false} = new("http://unix:/path.sock")
+    assert %Endpoint{addr: {:unix, "/path.sock"}, ssl?: true} = new("https://unix:/path.sock")
 
-    test "port defaults to 8529" do
-      assert %URI{port: 8529} = parse("scheme://")
-    end
-  end
+    assert_raise ArgumentError, fn -> new("") end
+    assert_raise ArgumentError, fn -> new("host") end
+    assert_raise ArgumentError, fn -> new("host:123") end
 
-  test "determining an ssl endpoint" do
-    assert ssl?(URI.parse("ssl://endpoint:port"))
-    assert ssl?(URI.parse("https://endpoint:port"))
-    refute ssl?(URI.parse("tcp://endpoint:port"))
-    refute ssl?(URI.parse("http://endpoint:port"))
+    assert_raise ArgumentError,
+                 "Missing host in endpoint configuration: \"http://\"",
+                 fn -> new("http://") end
 
-    assert ssl?(URI.parse("ssl+unix:///tmp/arangodb.sock"))
-    assert ssl?(URI.parse("https+unix:///tmp/arangodb.sock"))
-    refute ssl?(URI.parse("unix:///tmp/arangodb.sock"))
-    refute ssl?(URI.parse("tcp+unix:///tmp/arangodb.sock"))
-    refute ssl?(URI.parse("http+unix:///tmp/arangodb.sock"))
+    assert_raise ArgumentError,
+                 "Missing port in endpoint configuration: \"http://host\"",
+                 fn -> new("http://host") end
 
-    assert ssl?(URI.parse("ssl://unix:/tmp/arangodb.sock"))
-    assert ssl?(URI.parse("https://unix:/tmp/arangodb.sock"))
-    refute ssl?(URI.parse("tcp://unix:/tmp/arangodb.sock"))
-    refute ssl?(URI.parse("http://unix:/tmp/arangodb.sock"))
-  end
+    assert_raise ArgumentError,
+                 "Missing host in endpoint configuration: \"http://:123\"",
+                 fn -> new("http://:123") end
 
-  test "determining a unix endpoint" do
-    assert unix?(URI.parse("unix:///tmp/arangodb.sock"))
-    assert unix?(URI.parse("ssl+unix:///tmp/arangodb.sock"))
-    assert unix?(URI.parse("https+unix:///tmp/arangodb.sock"))
-    assert unix?(URI.parse("tcp+unix:///tmp/arangodb.sock"))
-    assert unix?(URI.parse("http+unix:///tmp/arangodb.sock"))
-    assert unix?(URI.parse("ssl://unix:/tmp/arangodb.sock"))
-    assert unix?(URI.parse("https://unix:/tmp/arangodb.sock"))
-    assert unix?(URI.parse("tcp://unix:/tmp/arangodb.sock"))
-    assert unix?(URI.parse("http://unix:/tmp/arangodb.sock"))
-    refute unix?(URI.parse("ssl://endpoint:port"))
-    refute unix?(URI.parse("https://endpoint:port"))
-    refute unix?(URI.parse("tcp://endpoint:port"))
-    refute unix?(URI.parse("http://endpoint:port"))
+    assert_raise ArgumentError,
+                 "Invalid protocol in endpoint configuration: \"unexpected://host:123\"",
+                 fn -> new("unexpected://host:123") end
+
+    assert_raise ArgumentError,
+                 "Invalid protocol in endpoint configuration: \"unexpected+ssl://host:123\"",
+                 fn -> new("unexpected+ssl://host:123") end
+
+    assert_raise ArgumentError,
+                 "Invalid protocol in endpoint configuration: \"http+unexpected://host:123\"",
+                 fn -> new("http+unexpected://host:123") end
   end
 end

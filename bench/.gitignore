@@ -20,6 +20,5 @@ erl_crash.dump
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-arangox-*.tar
+bench-*.tar
 
-.iex.exs

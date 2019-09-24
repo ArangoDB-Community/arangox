@@ -6,8 +6,8 @@ defmodule Arangox.RequestTest do
   @request %Request{method: :method, path: "/path"}
   @response %Response{status: 000, headers: []}
 
-  test "body must default to \"\" and headers to []" do
-    assert @request == %{@request | body: "", headers: []}
+  test "body must default to \"\" and headers to %{}" do
+    assert @request == %{@request | body: "", headers: %{}}
   end
 
   describe "DBConnection.Query protocol:" do
@@ -20,13 +20,12 @@ defmodule Arangox.RequestTest do
     end
 
     test "encode" do
-      assert Query.encode(%{@request | body: nil}, [], []) == %{@request | body: "null"}
+      assert Query.encode(%{@request | path: "/path"}, [], []) == %{@request | path: "/path"}
       assert Query.encode(%{@request | path: "path"}, [], []) == %{@request | path: "/path"}
     end
 
     test "decode" do
-      assert Query.decode(@request, %{@response | body: nil}, []) == %{@response | body: nil}
-      assert Query.decode(@request, %{@response | body: "null"}, []) == %{@response | body: nil}
+      assert Query.decode(@request, @response, []) == @response
     end
   end
 end

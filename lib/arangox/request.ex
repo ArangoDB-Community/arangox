@@ -7,7 +7,7 @@ defmodule Arangox.Request do
   @type t :: %__MODULE__{
           method: Arangox.method(),
           path: Arangox.path(),
-          headers: [Arangox.header()],
+          headers: Arangox.headers(),
           body: Arangox.body()
         }
 
@@ -16,7 +16,7 @@ defmodule Arangox.Request do
   defstruct [
     :method,
     :path,
-    headers: [],
+    headers: %{},
     body: ""
   ]
 
@@ -25,20 +25,12 @@ defmodule Arangox.Request do
 
     def describe(request, _opts), do: request
 
-    def encode(%Request{path: "/" <> _path, body: ""} = request, _params, _opts), do: request
-
-    def encode(%Request{path: "/" <> _path, body: body} = request, _params, _opts) do
-      %Request{request | body: Arangox.json_library().encode!(body)}
-    end
+    def encode(%Request{path: "/" <> _path} = request, _params, _opts), do: request
 
     def encode(%Request{path: path} = request, params, opts) do
       encode(%Request{request | path: "/" <> path}, params, opts)
     end
 
-    def decode(_query, %Response{body: nil} = response, _opts), do: response
-
-    def decode(_query, %Response{body: body} = response, _opts) do
-      %Response{response | body: Arangox.json_library().decode!(body)}
-    end
+    def decode(_query, %Response{} = response, _opts), do: response
   end
 end

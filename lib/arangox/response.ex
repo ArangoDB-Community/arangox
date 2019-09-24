@@ -3,7 +3,7 @@ defmodule Arangox.Response do
 
   @type t :: %__MODULE__{
           status: pos_integer,
-          headers: [Arangox.header()],
+          headers: Arangox.headers(),
           body: Arangox.body()
         }
 

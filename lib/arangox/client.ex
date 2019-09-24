@@ -1,11 +1,10 @@
 defmodule Arangox.Client do
   @moduledoc """
-  HTTP client behaviour for `Arangox`.
+  HTTP client behaviour for `Arangox`. Arangox uses client implementations to
+  perform all it's connection and execution operations.
 
-  To use an http library other than `:gun` or `Mint`, implement this behaviour
-  in a module and pass that module to the `:client` start option. Arangox
-  will use that implementation to perform all it's http related connection and
-  execution operations.
+  To use an http library other than `:gun` or `:mint`, implement this behaviour
+  in a module and pass that module to the `:client` start option.
   """
 
   alias Arangox.{
@@ -14,53 +13,55 @@ defmodule Arangox.Client do
     Response
   }
 
-  @type endpoint :: Arangox.endpoint()
-  @type start_options :: [Arangox.start_option()]
-  @type conn :: any
+  @type socket :: any
   @type exception_or_reason :: any
-  @type state :: Connection.t()
-  @type request :: Request.t()
-  @type response :: Response.t()
 
   @doc """
-  Receives a raw endpoint binary and all the start options from `Arangox.start_link/1`.
+  Receives an `Arangox.Endpoint` struct and all the start options from `Arangox.start_link/1`.
 
-  The `Arangox.Endpoint` module has utilities for parsing ArangoDB endpoints.
-  The `conn` returned from this callback gets placed in the `:socket` field
-  of an `%Arango.Connection{}` struct, which represents a connection's state.
+  The `socket` returned from this callback gets placed in the `:socket` field
+  of an `Arango.Connection` struct (a connection's state) to be used by the
+  other callbacks as needed. It can be anything, a tuple, another struct, whatever
+  the client needs.
 
   It's up to the client to consolidate the `:connect_timeout`, `:transport_opts`
   and `:client_opts` options.
   """
-  @callback connect(endpoint, start_options) ::
-              {:ok, conn} | {:error, exception_or_reason}
+  @callback connect(endpoint :: Endpoint.t(), start_options :: [Arangox.start_option()]) ::
+              {:ok, socket} | {:error, exception_or_reason}
 
-  @callback alive?(state) :: boolean
+  @callback alive?(state :: Connection.t()) :: boolean
 
   @doc """
-  Receives a `Arangox.Request` struct and a connection's state, an `Arangox.Connection`
-  struct, and returns an `Arangox.Response` struct or error (or exception struct),
-  along with the new state.
+  Receives a `Arangox.Request` struct and a connection's state (an `Arangox.Connection`
+  struct), and returns an `Arangox.Response` struct or error (or exception struct),
+  along with the new state (which doesn't necessarily need to change).
 
   Arangox handles the encoding and decoding of request and response bodies.
 
-  In the case of an error, this should return `{:error, :noproc, state}` if the connection
-  was lost, otherwise an attempt to reconnect won't be made until the next request hitting
-  this process fails.
+  If a connection is lost, this may return `{:error, :noproc, state}` to force a disconnect,
+  otherwise an attempt to reconnect may not be made until the next request hitting this process
+  fails.
   """
-  @callback request(request, state) ::
-              {:ok, response, state} | {:error, exception_or_reason, state}
+  @callback request(request :: Request.t(), state :: Connection.t()) ::
+              {:ok, Response.t(), Connection.t()} | {:error, exception_or_reason, Connection.t()}
 
-  @callback close(state) :: :ok
+  @callback close(state :: Connection.t()) :: :ok
 
   # API
 
-  def connect(client, endpoint, opts), do: client.connect(endpoint, opts)
+  @spec connect(module, Endpoint.t(), [Arangox.start_option()]) ::
+          {:ok, socket} | {:error, exception_or_reason}
+  def connect(client, endpoint, start_options), do: client.connect(endpoint, start_options)
 
+  @spec alive?(Connection.t()) :: boolean
   def alive?(%Connection{client: client} = state), do: client.alive?(state)
 
+  @spec request(Request.t(), Connection.t()) ::
+          {:ok, Response.t(), Connection.t()} | {:error, exception_or_reason, Connection.t()}
   def request(%Request{} = request, %Connection{client: client} = state),
     do: client.request(request, state)
 
+  @spec close(Connection.t()) :: :ok
   def close(%Connection{client: client} = state), do: client.close(state)
 end

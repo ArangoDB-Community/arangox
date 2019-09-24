@@ -1,26 +1,22 @@
 if Code.ensure_compiled?(Mint.HTTP) do
   defmodule Arangox.Client.Mint do
     @moduledoc """
-    An HTTP client implementation for arangox.
+    An HTTP client implementation of the \
+    [`:mint`](https://hexdocs.pm/mint/Mint.HTTP.html "documentation") \
+    library. Requires [`:mint`](https://hex.pm/packages/mint "hex.pm") to be
+    added as a dependency.
 
-    Implements the \
-    [`Mint`](https://hexdocs.pm/mint/Mint.HTTP.html "documentation") \
-    library. Add [`:mint`](https://hex.pm/packages/mint "hex.pm") to your deps and
-    pass this module to the `:client` start option to use it:
+    [__Hex.pm__](https://hex.pm/packages/mint)
 
-        Arangox.start_link(client: Arangox.Client.Mint)
-
-    [documentation](https://hexdocs.pm/mint/Mint.HTTP.html)
-
-    [hex.pm](https://hex.pm/packages/mint)
+    [__Documentation__](https://hexdocs.pm/mint/Mint.HTTP.html)
     """
 
-    import Arangox.Endpoint
     alias Mint.HTTP
 
     alias Arangox.{
       Client,
       Connection,
+      Endpoint,
       Request,
       Response
     }
@@ -28,15 +24,14 @@ if Code.ensure_compiled?(Mint.HTTP) do
     @behaviour Client
 
     @impl true
-    def connect(endpoint, opts) do
-      uri = parse(endpoint)
-      connect_timeout = Keyword.get(opts, :connect_timeout, 15_000)
-      transport_opts = if ssl?(uri), do: :ssl_opts, else: :tcp_opts
+    def connect(%Endpoint{addr: addr, ssl?: ssl?}, opts) do
+      connect_timeout = Keyword.get(opts, :connect_timeout, 5_000)
+      transport_opts = if ssl?, do: :ssl_opts, else: :tcp_opts
       transport_opts = Keyword.get(opts, transport_opts, [])
       transport_opts = Keyword.merge([timeout: connect_timeout], transport_opts)
 
       transport_opts =
-        if ssl?(uri),
+        if ssl?,
           do: Keyword.put_new(transport_opts, :verify, :verify_none),
           else: transport_opts
 
@@ -45,7 +40,7 @@ if Code.ensure_compiled?(Mint.HTTP) do
       options = Keyword.merge(options, mode: :passive)
 
       with(
-        {:ok, conn} <- open_unix_or_tcp(uri, options),
+        {:ok, conn} <- open(addr, ssl?, options),
         true <- HTTP.open?(conn)
       ) do
         {:ok, conn}
@@ -58,14 +53,16 @@ if Code.ensure_compiled?(Mint.HTTP) do
       end
     end
 
-    defp open_unix_or_tcp(%URI{host: host, port: port} = uri, options) do
-      if unix?(uri) do
-        {:error, ":mint doesn't accept paths to unix sockets :("}
-      else
-        scheme = if ssl?(uri), do: :https, else: :http
+    defp open({:unix, _path}, _ssl?, _options) do
+      raise ArgumentError, """
+      Mint doesn't accept unix sockets yet :(
+      """
+    end
 
-        HTTP.connect(scheme, host, port, options)
-      end
+    defp open({:tcp, host, port}, ssl?, options) do
+      scheme = if ssl?, do: :https, else: :http
+
+      HTTP.connect(scheme, host, port, options)
     end
 
     @impl true
@@ -75,7 +72,7 @@ if Code.ensure_compiled?(Mint.HTTP) do
           state.socket,
           request.method |> Atom.to_string() |> String.upcase(),
           request.path,
-          request.headers,
+          Enum.into(request.headers, [], fn {k, v} -> {k, v} end),
           request.body
         )
 
@@ -97,7 +94,7 @@ if Code.ensure_compiled?(Mint.HTTP) do
             {:headers, ^ref, headers},
             {:done, ^ref}
           ] ->
-            {:ok, %Response{status: status, headers: headers}, new_state}
+            {:ok, %Response{status: status, headers: Map.new(headers)}, new_state}
 
           [
             {:status, ^ref, status},
@@ -105,7 +102,7 @@ if Code.ensure_compiled?(Mint.HTTP) do
             {:data, ^ref, body},
             {:done, ^ref}
           ] ->
-            {:ok, %Response{status: status, headers: headers, body: body}, new_state}
+            {:ok, %Response{status: status, headers: Map.new(headers), body: body}, new_state}
 
           %_{} = exception ->
             {:error, exception, new_state}
