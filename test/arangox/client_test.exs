@@ -29,7 +29,7 @@ defmodule Arangox.ClientTest do
     test "request/2" do
       state = struct(Connection, client: TestClient)
 
-      assert {:ok, %Response{}, state} = Client.request(struct(Request, []), state)
+      assert {:ok, %Response{}, _state} = Client.request(struct(Request, []), state)
     end
 
     test "close/1" do
@@ -151,7 +151,7 @@ defmodule Arangox.ClientTest do
     end
 
     test "ssl and ssl_opts" do
-      assert {:ok, pid} = GunClient.connect(@ssl, [])
+      assert {:ok, _pid} = GunClient.connect(@ssl, [])
 
       assert {:error, _} = GunClient.connect(@ssl, ssl_opts: [verify: :verify_peer])
     end

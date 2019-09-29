@@ -6,7 +6,7 @@ An implementation of [`:db_connection`](https://hex.pm/packages/db_connection) f
 [ArangoDB](https://www.arangodb.com).
 
 Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/),
-[Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streaming cursors.
+[Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and cursors.
 
 [Documentation](https://hexdocs.pm/arangox/readme.html)
 
