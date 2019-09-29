@@ -1,10 +1,10 @@
 defmodule Arangox.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
   @description """
-  ArangoDB 3.3.9+ driver for Elixir with connection pooling, VelocyStream \
-  and support for Active Failover.
+  ArangoDB 3.3.9+ driver for Elixir with connection pooling, VelocyStream, \
+  support for Active Failover, transactions and streamed cursors.
   """
   @source_url "https://github.com/suazithustra/arangox"
   @homepage_url "https://www.arangodb.com"
