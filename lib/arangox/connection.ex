@@ -5,11 +5,11 @@ defmodule Arangox.Connection do
 
   alias Arangox.{
     Client,
-    Client.Velocy,
     Endpoint,
     Error,
     Request,
-    Response
+    Response,
+    VelocyClient
   }
 
   @type t :: %__MODULE__{
@@ -22,7 +22,8 @@ defmodule Arangox.Connection do
           username: binary,
           password: binary,
           headers: Arangox.headers(),
-          read_only?: boolean
+          read_only?: boolean,
+          cursors: map
         }
 
   @enforce_keys [:socket, :client, :endpoint]
@@ -37,7 +38,8 @@ defmodule Arangox.Connection do
     username: "root",
     password: "",
     headers: %{},
-    read_only?: false
+    read_only?: false,
+    cursors: %{}
   ]
 
   @spec new(any, module, binary, boolean, [Arangox.start_option()]) :: t
@@ -50,16 +52,18 @@ defmodule Arangox.Connection do
     |> Map.put(:failover?, failover?)
   end
 
-  # @header_x_arango_endpoint "x-arango-endpoint"
+  # @header_arango_endpoint "x-arango-endpoint"
+  @path_trx "/_api/transaction/"
+  @header_trx_id "x-arango-trx-id"
   @header_dirty_read {"x-arango-allow-dirty-read", "true"}
   @request_ping %Request{method: :get, path: "/_admin/server/availability"}
   @request_availability %Request{method: :get, path: "/_admin/server/availability"}
   @request_mode %Request{method: :get, path: "/_admin/server/mode"}
-  @exception_no_trans %Error{message: "ArangoDB is not a transactional database"}
+  @exception_no_prep %Error{message: "ArangoDB doesn't support prepared queries yet"}
 
   @impl true
   def connect(opts) do
-    client = Keyword.get(opts, :client, Velocy)
+    client = Keyword.get(opts, :client, VelocyClient)
     endpoints = Keyword.get(opts, :endpoints, "http://localhost:8529")
 
     with(
@@ -89,11 +93,7 @@ defmodule Arangox.Connection do
         {:ok, new(socket, client, endpoint, false, opts)}
 
       {:error, reason} ->
-        new(nil, client, endpoint, false, opts)
-        |> exception(reason)
-        |> failover_callback(opts)
-
-        {:error, reason}
+        {:error, exception(new(nil, client, endpoint, false, opts), reason)}
     end
   end
 
@@ -125,23 +125,21 @@ defmodule Arangox.Connection do
       {mod, fun, args} ->
         apply(mod, fun, [exception | args])
 
-        exception
-
       fun when is_function(fun, 1) ->
         fun.(exception)
 
-        exception
-
       _invalid_callback ->
-        exception
+        nil
     end
+
+    exception
   end
 
   defp resolve_auth(%__MODULE__{auth?: false} = state),
     do: {:ok, %{state | username: nil, password: nil}}
 
-  defp resolve_auth(%__MODULE__{client: Velocy} = state) do
-    case Velocy.authorize(state) do
+  defp resolve_auth(%__MODULE__{client: VelocyClient} = state) do
+    case VelocyClient.authorize(state) do
       :ok ->
         {:ok, state}
 
@@ -158,7 +156,7 @@ defmodule Arangox.Connection do
 
   defp check_availability(%__MODULE__{read_only?: true} = state) do
     state = put_header(state, @header_dirty_read)
-    request = put_headers(@request_mode, state.headers)
+    request = merge_headers(@request_mode, state.headers)
     result = Client.request(request, state)
 
     with(
@@ -179,14 +177,14 @@ defmodule Arangox.Connection do
         error =
           if state.failover?,
             do: :unavailable,
-            else: exception(state, "not a read only server")
+            else: exception(state, "not a readonly server")
 
         {:error, error}
     end
   end
 
   defp check_availability(%__MODULE__{failover?: failover?} = state) do
-    request = put_headers(@request_availability, state.headers)
+    request = merge_headers(@request_availability, state.headers)
     # result = Client.request(request, state)
 
     # if a server is running inside a container, it's x-arango-endpoint
@@ -195,7 +193,7 @@ defmodule Arangox.Connection do
       result <- Client.request(request, state),
       {:ok, %Response{status: 503}, _state} <- result
       # {:ok, %Response{status: 503} = response, _state} <- result
-      # endpoint when not is_nil(endpoint) <- response.headers[@header_x_arango_endpoint]
+      # endpoint when not is_nil(endpoint) <- response.headers[@header_arango_endpoint]
     ) do
       # {:connect, endpoint}
 
@@ -222,13 +220,214 @@ defmodule Arangox.Connection do
   @impl true
   def checkin(state), do: {:ok, state}
 
-  # These don't do anything, but are required for `DBConnection.transaction/3` to work
+  # Transaction handlers
 
   @impl true
-  def handle_begin(_opts, %__MODULE__{} = state), do: {:ok, :result, state}
+  def handle_begin(_opts, %__MODULE__{headers: %{@header_trx_id => _id}} = state),
+    do: {:transaction, state}
 
   @impl true
-  def handle_commit(_opts, %__MODULE__{} = state), do: {:ok, :result, state}
+  def handle_begin(opts, %__MODULE__{} = state) do
+    collections =
+      opts
+      |> Keyword.take([:read, :write, :exclusive])
+      |> Enum.into(%{})
+
+    body =
+      opts
+      |> Keyword.get(:properties, [])
+      |> Enum.into(%{collections: collections})
+
+    with(
+      {:ok, %Response{status: 201} = response, state} <-
+        %Request{
+          method: :post,
+          path: Path.join(@path_trx, "begin"),
+          body: body
+        }
+        |> merge_headers(state.headers)
+        |> maybe_prepend_database(state)
+        |> maybe_encode_body(state)
+        |> Client.request(state),
+      %Response{body: %{"result" => %{"id" => id}}} = response <-
+        maybe_decode_body(response, state)
+    ) do
+      {:ok, response, put_header(state, {@header_trx_id, id})}
+    else
+      {:ok, %Response{}, state} ->
+        {:error, state}
+
+      {:error, :noproc, state} ->
+        {:disconnect, exception(state, "connection lost"), state}
+
+      {:error, _reason, state} ->
+        {:error, state}
+    end
+  end
+
+  @impl true
+  def handle_status(_opts, %__MODULE__{} = state) do
+    with(
+      {id, headers} when is_binary(id) <- Map.pop(state.headers, @header_trx_id),
+      {:ok, %Response{status: 200}, state} <-
+        %Request{
+          method: :get,
+          path: Path.join(@path_trx, id)
+        }
+        |> merge_headers(headers)
+        |> maybe_prepend_database(state)
+        |> Client.request(state)
+    ) do
+      {:transaction, state}
+    else
+      {nil, _headers} ->
+        {:idle, state}
+
+      {:ok, %Response{status: _status}, state} ->
+        {:error, state}
+
+      {:error, :noproc, state} ->
+        {:disconnect, exception(state, "connection lost"), state}
+
+      {:error, _reason, state} ->
+        {:error, state}
+    end
+  end
+
+  @impl true
+  def handle_commit(_opts, %__MODULE__{} = state) do
+    with(
+      {id, headers} when is_binary(id) <- Map.pop(state.headers, @header_trx_id),
+      {:ok, %Response{status: 200} = response, state} <-
+        %Request{
+          method: :put,
+          path: Path.join(@path_trx, id)
+        }
+        |> merge_headers(headers)
+        |> maybe_prepend_database(state)
+        |> Client.request(state)
+    ) do
+      {:ok, maybe_decode_body(response, state), %{state | headers: headers}}
+    else
+      {nil, _headers} ->
+        {:idle, state}
+
+      {:ok, %Response{status: _status}, state} ->
+        {:error, state}
+
+      {:error, :noproc, state} ->
+        {:disconnect, exception(state, "connection lost"), state}
+
+      {:error, _reason, state} ->
+        {:error, state}
+    end
+  end
+
+  @impl true
+  def handle_rollback(_opts, %__MODULE__{} = state) do
+    with(
+      {id, headers} when is_binary(id) <- Map.pop(state.headers, @header_trx_id),
+      {:ok, %Response{status: 200} = response, state} <-
+        %Request{
+          method: :delete,
+          path: Path.join(@path_trx, id)
+        }
+        |> merge_headers(headers)
+        |> maybe_prepend_database(state)
+        |> Client.request(state)
+    ) do
+      {:ok, maybe_decode_body(response, state), %{state | headers: headers}}
+    else
+      {nil, _headers} ->
+        {:idle, state}
+
+      {:ok, %Response{status: _status}, state} ->
+        {:error, state}
+
+      {:error, :noproc, state} ->
+        {:disconnect, exception(state, "connection lost"), state}
+
+      {:error, _reason, state} ->
+        {:error, state}
+    end
+  end
+
+  @impl true
+  def handle_declare(query, params, opts, %__MODULE__{} = state) do
+    body =
+      opts
+      |> Keyword.get(:properties, [])
+      |> Enum.into(%{query: query, bindVars: params})
+
+    request = %Request{
+      method: :post,
+      path: "/_api/cursor",
+      body: body
+    }
+
+    case handle_execute(query, request, opts, state) do
+      {:ok, _req, %Response{body: %{"id" => cursor}} = initial, state} ->
+        {:ok, query, cursor, %{state | cursors: Map.put(state.cursors, cursor, initial)}}
+
+      {:ok, _req, %Response{} = initial, state} ->
+        cursor = rand()
+        {:ok, query, cursor, %{state | cursors: Map.put(state.cursors, cursor, initial)}}
+
+      error ->
+        error
+    end
+  end
+
+  defp rand do
+    min = String.to_integer("100000", 36)
+    max = String.to_integer("ZZZZZZ", 36)
+
+    max
+    |> Kernel.-(min)
+    |> :rand.uniform()
+    |> Kernel.+(min)
+    |> Integer.to_string(36)
+  end
+
+  @impl true
+  def handle_fetch(query, cursor, opts, %__MODULE__{cursors: cursors} = state) do
+    with(
+      {nil, _cursors} <-
+        Map.pop(cursors, cursor),
+      {:ok, _req, %Response{body: %{"hasMore" => has_more}} = response, state} <-
+        handle_execute(
+          query,
+          %Request{method: :put, path: "/_api/cursor/" <> cursor},
+          opts,
+          state
+        )
+    ) do
+      {cont_or_halt(has_more), response, state}
+    else
+      {%Response{body: %{"hasMore" => has_more}} = initial, cursors} ->
+        {cont_or_halt(has_more), initial, %{state | cursors: cursors}}
+
+      error ->
+        error
+    end
+  end
+
+  defp cont_or_halt(true), do: :cont
+  defp cont_or_halt(false), do: :halt
+
+  @impl true
+  def handle_deallocate(query, cursor, opts, %__MODULE__{cursors: cursors} = state) do
+    state = %{state | cursors: Map.delete(cursors, cursor)}
+    request = %Request{method: :delete, path: "/_api/cursor/" <> cursor}
+
+    case handle_execute(query, request, opts, state) do
+      {:ok, _req, response, state} ->
+        {:ok, response, state}
+
+      error ->
+        error
+    end
+  end
 
   # Execution callbacks
 
@@ -236,7 +435,6 @@ defmodule Arangox.Connection do
     {:case, [], [condition, [do: exec_cases_before() ++ body ++ exec_cases_after()]]}
   end
 
-  # TODO: Status codes that disconnect should be configurable
   def exec_cases_before do
     quote do
       {:ok, %Response{status: 505} = response, state} ->
@@ -273,7 +471,7 @@ defmodule Arangox.Connection do
   def handle_execute(_q, %Request{} = request, _opts, %__MODULE__{} = state) do
     request =
       request
-      |> put_headers(state.headers)
+      |> merge_headers(state.headers)
       |> maybe_prepend_database(state)
       |> maybe_encode_body(state)
 
@@ -286,7 +484,7 @@ defmodule Arangox.Connection do
   @impl true
   def ping(%__MODULE__{} = state) do
     @request_ping
-    |> put_headers(state.headers)
+    |> merge_headers(state.headers)
     |> Client.request(state)
     |> exec_case do
       {:ok, %Response{}, state} ->
@@ -297,41 +495,22 @@ defmodule Arangox.Connection do
   # Unsupported callbacks
 
   @impl true
-  def handle_prepare(_q, _opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
+  def handle_prepare(_q, _opts, %__MODULE__{} = state) do
+    {:error, %{@exception_no_prep | endpoint: state.endpoint}, state}
+  end
 
   @impl true
-  def handle_close(_q, _opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
-
-  @impl true
-  def handle_rollback(_opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
-
-  @impl true
-  def handle_status(_opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
-
-  @impl true
-  def handle_declare(_q, _params, _opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
-
-  @impl true
-  def handle_fetch(_q, _cursor, _opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
-
-  @impl true
-  def handle_deallocate(_q, _cursor, _opts, %__MODULE__{} = state),
-    do: {:error, %{@exception_no_trans | endpoint: state.endpoint}, state}
+  def handle_close(_q, _opts, %__MODULE__{} = state) do
+    {:error, %{@exception_no_prep | endpoint: state.endpoint}, state}
+  end
 
   # Utils
 
   defp put_header(%__MODULE__{headers: headers} = struct, {key, value}),
     do: %{struct | headers: Map.put(headers, key, value)}
 
-  defp put_headers(%Request{headers: headers} = struct, state_headers)
-       when is_map(state_headers),
-       do: %{struct | headers: Map.merge(state_headers, stringify_kvs(headers))}
+  defp merge_headers(%Request{headers: req_headers} = struct, headers) when is_map(headers),
+    do: %{struct | headers: Map.merge(headers, stringify_kvs(req_headers))}
 
   defp stringify_kvs(%{headers: headers} = struct),
     do: %{struct | headers: stringify_kvs(headers)}
@@ -346,7 +525,8 @@ defmodule Arangox.Connection do
 
   defp sanitize_headers(%{headers: _headers} = struct) when is_map(struct), do: struct
 
-  defp maybe_prepend_database(%Request{} = request, %{client: Velocy}),
+  # Only prepends when not velocy or nil or path already contains /_db/
+  defp maybe_prepend_database(%Request{} = request, %{client: VelocyClient}),
     do: request
 
   defp maybe_prepend_database(%Request{} = request, %{database: nil}),
@@ -358,7 +538,8 @@ defmodule Arangox.Connection do
   defp maybe_prepend_database(%Request{path: path} = request, %{database: db}),
     do: %{request | path: "/_db/" <> db <> path}
 
-  defp maybe_encode_body(%_{} = struct, %__MODULE__{client: Velocy}), do: struct
+  # Only encodes when not velocy or empty string
+  defp maybe_encode_body(%_{} = struct, %__MODULE__{client: VelocyClient}), do: struct
 
   defp maybe_encode_body(%_{body: ""} = struct, %__MODULE__{}), do: struct
 
@@ -366,7 +547,8 @@ defmodule Arangox.Connection do
     %{struct | body: Arangox.json_library().encode!(body)}
   end
 
-  defp maybe_decode_body(%_{} = struct, %__MODULE__{client: Velocy}), do: struct
+  # Only decodes when not velocy or nil
+  defp maybe_decode_body(%_{} = struct, %__MODULE__{client: VelocyClient}), do: struct
 
   defp maybe_decode_body(%_{body: nil} = struct, %__MODULE__{}), do: struct
 

@@ -1,5 +1,5 @@
 if Code.ensure_compiled?(Velocy) do
-  defmodule Arangox.Client.Velocy do
+  defmodule Arangox.VelocyClient do
     @moduledoc """
     The default client. Implements the \
     [VelocyStream](https://github.com/arangodb/velocystream) \
@@ -29,9 +29,9 @@ if Code.ensure_compiled?(Velocy) do
 
     To change the chunk size, include the following in your `config/config.exs`:
 
-        config :arangox, :vst_maxsize, integer
+        config :arangox, :vst_maxsize, 12_345
 
-    Defaults to `30720`.
+    Defaults to `30_720`.
     """
     @spec vst_maxsize() :: pos_integer()
     def vst_maxsize, do: Application.get_env(:arangox, :vst_maxsize, 30_720)
@@ -79,7 +79,7 @@ if Code.ensure_compiled?(Velocy) do
         {:ok, port} <- mod.connect(addr_for(addr), port_for(addr), options, timeout),
         :ok <- mod.send(port, "VST/#{@vst_version}\r\n\r\n")
       ) do
-        {:ok, {mod, port}}
+        {:ok, [mod, port]}
       else
         {:error, reason} ->
           {:error, reason}
@@ -277,9 +277,9 @@ if Code.ensure_compiled?(Velocy) do
       >>
     end
 
-    defp send_stream({mod, port}, chunk) when is_binary(chunk), do: mod.send(port, chunk)
+    defp send_stream([mod, port], chunk) when is_binary(chunk), do: mod.send(port, chunk)
 
-    defp send_stream({mod, port}, chunks) when is_list(chunks) do
+    defp send_stream([mod, port], chunks) when is_list(chunks) do
       for p <- chunks do
         mod.send(port, p)
       end
@@ -290,7 +290,7 @@ if Code.ensure_compiled?(Velocy) do
       end
     end
 
-    defp recv_header({mod, port}) do
+    defp recv_header([mod, port]) do
       case mod.recv(port, @chunk_header_size) do
         {:ok,
          <<
@@ -301,17 +301,17 @@ if Code.ensure_compiled?(Velocy) do
          >>} ->
           <<chunk_n::31, is_first::1>> = :binary.encode_unsigned(chunk_x, :little)
 
-          {:ok, {chunk_length, chunk_n, is_first, msg_id, msg_length}}
+          {:ok, [chunk_length, chunk_n, is_first, msg_id, msg_length]}
 
         {:error, reason} ->
           {:error, reason}
       end
     end
 
-    defp recv_stream(socket, {chunk_length, 1, 1, _msg_id, _msg_length}),
+    defp recv_stream(socket, [chunk_length, 1, 1, _msg_id, _msg_length]),
       do: recv_chunk(socket, chunk_length)
 
-    defp recv_stream(socket, {chunk_length, n_chunks, 1, _msg_id, _msg_length}) do
+    defp recv_stream(socket, [chunk_length, n_chunks, 1, _msg_id, _msg_length]) do
       with(
         {:ok, buffer} <- recv_chunk(socket, chunk_length),
         {:ok, stream} <- recv_stream(socket, n_chunks, buffer)
@@ -326,7 +326,7 @@ if Code.ensure_compiled?(Velocy) do
     defp recv_stream(socket, n_chunks, buffer) do
       Enum.reduce_while(1..(n_chunks - 1), buffer, fn n, buffer ->
         with(
-          {:ok, {chunk_length, _, _, _, _}} <- recv_header(socket),
+          {:ok, [chunk_length, _, _, _, _]} <- recv_header(socket),
           {:ok, chunk} <- recv_chunk(socket, chunk_length)
         ) do
           if n == n_chunks - 1 do
@@ -341,7 +341,7 @@ if Code.ensure_compiled?(Velocy) do
       end)
     end
 
-    defp recv_chunk({mod, port}, chunk_length),
+    defp recv_chunk([mod, port], chunk_length),
       do: mod.recv(port, chunk_length - @chunk_header_size)
 
     defp decode_stream(stream, acc \\ [])
@@ -373,6 +373,6 @@ if Code.ensure_compiled?(Velocy) do
     end
 
     @impl true
-    def close(%Connection{socket: {mod, port}}), do: mod.close(port)
+    def close(%Connection{socket: [mod, port]}), do: mod.close(port)
   end
 end

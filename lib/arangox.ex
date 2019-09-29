@@ -5,12 +5,12 @@ defmodule Arangox do
              |> Enum.join("\n")
 
   alias __MODULE__.{
-    Client.Velocy,
-    Client.Gun,
-    Client.Mint,
     Error,
+    GunClient,
+    MintClient,
     Request,
-    Response
+    Response,
+    VelocyClient
   }
 
   @type method ::
@@ -22,11 +22,13 @@ defmodule Arangox do
           | :patch
           | :options
 
+  @type conn :: DBConnection.conn()
+  @type endpoint :: binary
   @type path :: binary
   @type body :: binary | map | list | nil
   @type headers :: map
-  @type endpoint :: binary
-  @type conn :: DBConnection.conn()
+  @type query :: binary
+  @type bindvars :: keyword | map
 
   @type start_option ::
           {:client, module}
@@ -74,15 +76,13 @@ defmodule Arangox do
     * `:password` - Defaults to `""`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
-    * `:connect_timeout` - Sets the timeout for establishing a connection with a server.
-    * `:transport_opts` - Transport options for the socket interface (which is `:gen_tcp` or
-    `:ssl` for both gun and mint, depending on whether or not they are connecting via ssl).
+    * `:connect_timeout` - Sets the timeout for establishing a connection with a database.
     * `:tcp_opts` - Transport options for the tcp socket interface (`:gen_tcp` in the case
     of gun or mint).
     * `:ssl_opts` - Transport options for the ssl socket interface (`:ssl` in the case of
     gun or mint).
     * `:client` - A module that implements the `Arangox.Client` behaviour. Defaults to
-    `Arangox.Client.Gun`.
+    `Arangox.VelocyClient`.
     * `:client_opts` - Options for the client library being used. *WARNING*: If `:transport_opts`
     is set here it will override the options given to `:tcp_opts` _and_ `:ssl_opts`.
     * `:failover_callback` - A function to call every time arangox fails to establish a
@@ -273,28 +273,134 @@ defmodule Arangox do
   end
 
   @doc """
-  Acquire a connection from a pool and run a series of requests with it.
-  If the connection disconnects, all future calls using that connection
-  reference will fail.
+  Acquires a connection from a pool and runs a series of requests or cursors with it.
+  If the connection disconnects, all future calls using that connection reference will
+  fail.
 
-  Requests can be nested multiple times if the connection reference is used
-  to start a nested transaction (i.e. calling another function that calls
-  this one). The top level transaction function will represent the actual
-  transaction.
+  Runs can be nested multiple times if the connection reference is used to start a
+  nested run (i.e. calling another function that calls this one). The top level run
+  function will represent the actual run.
+
+  Delegates to `DBConnection.run/3`.
+
+  ## Example
+
+      result =
+        Arangox.run(conn, fn c  ->
+          Arangox.request!(c, ...)
+        end)
+  """
+  @spec run(conn, (DBConnection.t() -> result), [DBConnection.option()]) :: result
+        when result: var
+  defdelegate run(conn, fun, opts \\ []), to: DBConnection
+
+  @doc """
+  Acquires a connection from a pool, begins a transaction in the database and runs a
+  series of requests or cursors with it. If the connection disconnects, all future calls
+  using that connection reference will fail.
+
+  Transactions can be nested multiple times if the connection reference is used to start a
+  nested transactions (i.e. calling another function that calls this one). The top level
+  transaction function will represent the actual transaction and nested transactions will
+  be interpreted as a `run/3`, erego, any collections declared in nested transactions will
+  have no effect.
+
+  Accepts any of the options accepted by `DBConnection.transaction/3`, as well as any of the
+  following:
+
+    * `:read` - An array of collection names or a single collection name as a binary.
+    * `:write` - An array of collection names or a single collection name as a binary.
+    * `:exclusive` - An array of collection names or a single collection name as a binary.
+    * `:properties` - A list or map of additional body attributes to append to the request
+    body when beginning a transaction.
 
   Delegates to `DBConnection.transaction/3`.
 
   ## Example
 
-      {:ok, result} =
-        Arangox.transaction(conn, fn c  ->
-          Arangox.request!(c, ...)
-        end)
+      Arangox.transaction(conn, fn c ->
+        Arangox.status(c) #=> :transaction
+
+        # do stuff
+      end, [
+        write: "something",
+        properties: [waitForSync: true]
+      ])
   """
   @spec transaction(conn, (DBConnection.t() -> result), [DBConnection.option()]) ::
           {:ok, result} | {:error, any}
         when result: var
   defdelegate transaction(conn, fun, opts \\ []), to: DBConnection
+
+  @doc """
+  Fetches the current status of a transaction from the database and returns its
+  corresponding `DBconnection` status.
+
+  Delegates to `DBConnection.status/1`.
+  """
+  @spec status(conn) :: DBConnection.status()
+  defdelegate status(conn), to: DBConnection
+
+  @doc """
+  Aborts a transaction for the given reason.
+
+  Delegates to `DBConnection.abort/2`.
+
+  ## Example
+
+      iex> {:ok, conn} = Arangox.start_link()
+      iex> Arangox.transaction(conn, fn c ->
+      iex>   Arangox.abort(c, :reason)
+      iex> end)
+      {:error, :reason}
+  """
+  @spec abort(conn, reason :: any) :: no_return()
+  defdelegate abort(conn, reason), to: DBConnection, as: :rollback
+
+  @doc """
+  Creates a cursor and returns a `DBConnection.Stream` struct. Results are fetched
+  upon enumeration.
+
+  The cursor is created, results fetched, then deleted from the database upon each
+  enumeration (not to be confused with iteration). When a cursor is created, an initial
+  result set is fetched from the database. The initial result is returned with the first
+  iteration, subsequent iterations are fetched lazily.
+
+  Can only be used within a `transaction/3` or `run/3` call.
+
+  Accepts any of the options accepted by `DBConnection.stream/4`, as well as any of the
+  following:
+
+    * `:properties` - A list or map of additional body attributes to append to the
+    request body when creating the cursor.
+
+  Delegates to `DBConnection.stream/4`.
+
+  ## Example
+
+      iex> {:ok, conn} = Arangox.start_link()
+      iex> Arangox.transaction(conn, fn c ->
+      iex>   stream =
+      iex>     Arangox.cursor(
+      iex>       c,
+      iex>       "for i in [1, 2, 3] filter i == 1 || i == @num return i",
+      iex>       [num: 2],
+      iex>       properties: [batchSize: 1]
+      iex>     )
+      iex>
+      iex>   all_batches_reduced =
+      iex>     Enum.reduce(stream, [], fn resp, acc ->
+      iex>       acc ++ resp.body["result"]
+      iex>     end)
+      iex>
+      iex>   second_batch = Enum.at(stream, 1).body["result"]
+      iex>
+      iex>   {all_batches_reduced, second_batch}
+      iex> end)
+      {:ok, {[1, 2], [2]}}
+  """
+  @spec cursor(conn(), query, bindvars, [DBConnection.option()]) :: DBConnection.Stream.t()
+  defdelegate cursor(conn, query, bindvars \\ [], opts \\ []), to: DBConnection, as: :stream
 
   @doc """
   Returns the configured JSON library.
@@ -343,7 +449,7 @@ defmodule Arangox do
         The :client option expects a module, got: #{inspect(client)}
         """
 
-      client in [Velocy, Gun, Mint] ->
+      client in [VelocyClient, GunClient, MintClient] ->
         unless Code.ensure_loaded?(client) do
           library =
             client

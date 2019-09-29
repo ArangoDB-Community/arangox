@@ -3,8 +3,8 @@ defmodule ArangoxTest do
   import TestHelper, only: [opts: 1, opts: 0]
 
   alias Arangox.{
-    Client.Gun,
     Error,
+    GunClient,
     Request,
     Response
   }
@@ -119,7 +119,7 @@ defmodule ArangoxTest do
     end
 
     test "prepends request paths when using an http client unless already prepended" do
-      {:ok, conn} = Arangox.start_link(opts(database: "does_not_exist", client: Gun))
+      {:ok, conn} = Arangox.start_link(opts(database: "does_not_exist", client: GunClient))
 
       assert {:error, %Error{status: 404}} = Arangox.get(conn, "/_api/database/current")
 
@@ -138,11 +138,14 @@ defmodule ArangoxTest do
   end
 
   test "auth resolution with an http client" do
-    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: "", client: Gun))
+    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: "", client: GunClient))
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
-    {:ok, conn2} = Arangox.start_link(opts(username: "root", password: "invalid", client: Gun))
+
+    {:ok, conn2} =
+      Arangox.start_link(opts(username: "root", password: "invalid", client: GunClient))
+
     assert {:error, %Error{status: 401}} = Arangox.get(conn2, "/_admin/server/mode")
-    {:ok, conn3} = Arangox.start_link(opts(username: "invalid", password: "", client: Gun))
+    {:ok, conn3} = Arangox.start_link(opts(username: "invalid", password: "", client: GunClient))
     assert {:error, %Error{status: 401}} = Arangox.get(conn3, "/_admin/server/mode")
   end
 
@@ -178,7 +181,7 @@ defmodule ArangoxTest do
     end
 
     test "when is loaded" do
-      {:ok, conn} = Arangox.start_link(opts(client: Arangox.Client.Mint))
+      {:ok, conn} = Arangox.start_link(opts(client: Arangox.MintClient))
 
       assert {:ok, %Request{}, %Response{}} = Arangox.get(conn, "/_admin/time")
     end
@@ -262,6 +265,16 @@ defmodule ArangoxTest do
                fn c -> Arangox.get(c, "/_admin/server/status") end,
                timeout: 15_000
              )
+  end
+
+  test "cursors and run/3" do
+    {:ok, conn} = Arangox.start_link(opts())
+
+    assert [%Response{status: 201}] =
+             Arangox.run(conn, fn c ->
+               stream = Arangox.cursor(c, "return @this", [this: "this"], timeout: 15_000)
+               Enum.to_list(stream)
+             end)
   end
 
   test "ownership pool" do

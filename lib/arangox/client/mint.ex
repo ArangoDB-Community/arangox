@@ -1,5 +1,5 @@
 if Code.ensure_compiled?(Mint.HTTP) do
-  defmodule Arangox.Client.Mint do
+  defmodule Arangox.MintClient do
     @moduledoc """
     An HTTP client implementation of the \
     [`:mint`](https://hexdocs.pm/mint/Mint.HTTP.html "documentation") \

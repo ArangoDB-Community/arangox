@@ -37,7 +37,7 @@ defmodule Arangox.Client do
   struct), and returns an `Arangox.Response` struct or error (or exception struct),
   along with the new state (which doesn't necessarily need to change).
 
-  Arangox handles the encoding and decoding of request and response bodies.
+  Arangox handles the encoding and decoding of request and response bodies, and merging headers.
 
   If a connection is lost, this may return `{:error, :noproc, state}` to force a disconnect,
   otherwise an attempt to reconnect may not be made until the next request hitting this process

@@ -1,5 +1,5 @@
 if Code.ensure_compiled?(:gun) do
-  defmodule Arangox.Client.Gun do
+  defmodule Arangox.GunClient do
     @moduledoc """
     An HTTP client implementation of the \
     [`:gun`](https://ninenines.eu/docs/en/gun/1.3/guide "documentation") \

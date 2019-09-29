@@ -2,12 +2,13 @@
 
 [![Build Status](https://travis-ci.org/suazithustra/arangox.svg?branch=master)](https://travis-ci.org/suazithustra/arangox)
 
-An implementation of [`db_connection`](https://hex.pm/packages/db_connection)
-for _ArangoDB_, which is silly because _ArangoDB_ is not a transactional database (i.e.
-no prepare, commit, rollback, etc.), but whatever, it's a solid connection pooler.
+An implementation of [`:db_connection`](https://hex.pm/packages/db_connection) for
+[ArangoDB](https://www.arangodb.com).
 
-Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/)
-and [Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html).
+Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/),
+[Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streaming cursors.
+
+[Documentation](https://hexdocs.pm/arangox/readme.html)
 
 Tested on:
 
@@ -15,27 +16,7 @@ Tested on:
 - __Elixir__ 1.6 - 1.9
 - __OTP__ 20 - 22
 
-## Peer Dependencies
-
-By default, Arangox communicates with _ArangoDB_ via the _VelocyStream_ protocol, which requires the `:velocy` library:
-
-```elixir
-def deps do
-  [
-    ...
-    {:arangox, "~> 0.1.0"},
-    {:velocy, "~> 1.1"}
-  ]
-end
-```
-
-The default vst chunk size is `30_720`. To change it, you can include the following in your `config/config.exs`:
-
-```elixir
-config :arangox, :vst_maxsize, 12_345
-```
-
-### Examples
+## Examples
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
@@ -58,11 +39,52 @@ iex> Arangox.get!(conn, "/_admin/server/availability")
   headers: %{},
   status: 200
 }
+iex> Arangox.get(conn, "/invalid")
+{:error,
+ %Arangox.Error{
+   endpoint: "http://localhost:8529",
+   message: "unknown path '/invalid'",
+   status: 404
+ }}
+iex> Arangox.transaction(conn, fn c ->
+iex>   stream =
+iex>     Arangox.cursor(
+iex>       c,
+iex>       "for i in [1, 2, 3] filter i == 1 || i == @num return i",
+iex>       [num: 2],
+iex>       properties: [batchSize: 1]
+iex>     )
+iex>
+iex>   Enum.reduce(stream, [], fn resp, acc ->
+iex>     acc ++ resp.body["result"]
+iex>   end)
+iex> end)
+{:ok, [1, 2]}
+```
+
+## Peer Dependencies
+
+By default, Arangox communicates with _ArangoDB_ via the _VelocyStream_ protocol, which requires the `:velocy` library:
+
+```elixir
+def deps do
+  [
+    ...
+    {:arangox, "~> 0.1.0"},
+    {:velocy, "~> 1.1"}
+  ]
+end
+```
+
+The default vst chunk size is `30_720`. To change it, you can include the following in your `config/config.exs`:
+
+```elixir
+config :arangox, :vst_maxsize, 12_345
 ```
 
 ### HTTP
 
-Arangox has two HTTP clients, `Arangox.Client.Gun` and `Arangox.Client.Mint`, they require a json library:
+Arangox has two HTTP clients, `Arangox.GunClient` and `Arangox.MintClient`, they require a json library:
 
 ```elixir
 def deps do
@@ -76,16 +98,7 @@ end
 ```
 
 ```elixir
-Arangox.start_link(client: Arangox.Client.Gun) # or Arangox.Client.Mint
-```
-
-To use something else, you'd have to implement the `Arangox.Client` behaviour in a
-module somewhere and set that instead.
-
-The default json library is `Jason`. To use a different library, set the `:json_library` config to the module of your choice, i.e:
-
-```elixir
-config :arangox, :json_library, Poison
+Arangox.start_link(client: Arangox.GunClient) # or Arangox.MintClient
 ```
 
 __NOTE:__ `:mint` doesn't support unix sockets.
@@ -100,10 +113,19 @@ def application() do
 end
 ```
 
+To use something else, you'd have to implement the `Arangox.Client` behaviour in a
+module somewhere and set that instead.
+
+The default json library is `Jason`. To use a different library, set the `:json_library` config to the module of your choice, i.e:
+
+```elixir
+config :arangox, :json_library, Poison
+```
+
 ### Examples
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.Client.Gun, pool_size: 10)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, pool_size: 10)
 iex> Arangox.request(conn, :options, "/")
 {:ok,
  %Arangox.Request{
@@ -214,7 +236,7 @@ When using an HTTP client, Arangox will generate a _Basic_ authorization header 
 behavior, set the `:auth?` option to `false`.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(auth?: false, client: Arangox.Client.Gun)
+iex> {:ok, conn} = Arangox.start_link(auth?: false, client: Arangox.GunClient)
 iex> {:error, exception} = Arangox.get(conn, "/_admin/server/mode")
 iex> exception.message
 "not authorized to execute this request"
@@ -224,7 +246,7 @@ The header value is obfuscated in transfomed requests returned by arangox, for
 obvious reasons:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.Client.Gun)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
 iex> {:ok, request, _response} = Arangox.options(conn, "/")
 iex> request.headers
 %{"authorization" => "..."}
@@ -243,11 +265,11 @@ When using an HTTP client, arangox will prepend `/_db/:value` to the path of eve
 only if it isn't already prepended. If the start option is not set, nothing is prepended.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.Client.Gun)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
 iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
 iex> request.path
 "/_admin/time"
-iex> {:ok, conn} = Arangox.start_link(database: "_system", client: Arangox.Client.Gun)
+iex> {:ok, conn} = Arangox.start_link(database: "_system", client: Arangox.GunClient)
 iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
 iex> request.path
 "/_db/_system/_admin/time"
