@@ -43,6 +43,7 @@ iex> Arangox.get(conn, "/invalid")
 {:error,
  %Arangox.Error{
    endpoint: "http://localhost:8529",
+   error_num: 404,
    message: "unknown path '/invalid'",
    status: 404
  }}
