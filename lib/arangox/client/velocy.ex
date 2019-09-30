@@ -18,6 +18,8 @@ if Code.ensure_compiled?(Velocy) do
       Response
     }
 
+    alias Velocy, as: VelocyPack
+
     @behaviour Client
 
     @vst_version 1.1
@@ -41,7 +43,7 @@ if Code.ensure_compiled?(Velocy) do
       auth = [1, 1000, "plain", un, pw]
 
       with(
-        {:ok, auth} <- Velocy.encode(auth),
+        {:ok, auth} <- VelocyPack.encode(auth),
         :ok <- send_stream(socket, build_stream(auth)),
         {:ok, header} <- recv_header(socket),
         {:ok, stream} <- recv_stream(socket, header),
@@ -116,7 +118,7 @@ if Code.ensure_compiled?(Velocy) do
       ]
 
       with(
-        {:ok, request} <- Velocy.encode(request),
+        {:ok, request} <- VelocyPack.encode(request),
         {:ok, body} <- body_for(body),
         :ok <- send_stream(socket, build_stream(request <> body)),
         {:ok, header} <- recv_header(socket),
@@ -230,7 +232,7 @@ if Code.ensure_compiled?(Velocy) do
     end
 
     defp body_for(""), do: {:ok, ""}
-    defp body_for(body), do: Velocy.encode(body)
+    defp body_for(body), do: VelocyPack.encode(body)
 
     defp body_from([]), do: nil
     defp body_from([body]), do: body
@@ -349,7 +351,7 @@ if Code.ensure_compiled?(Velocy) do
     defp decode_stream("", acc), do: {:ok, acc}
 
     defp decode_stream(stream, acc) do
-      case Velocy.decode(stream) do
+      case VelocyPack.decode(stream) do
         {:ok, {term, rest}} ->
           decode_stream(rest, acc ++ [term])
 

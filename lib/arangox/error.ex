@@ -1,15 +1,18 @@
 defmodule Arangox.Error do
-  defexception [
-    :status,
-    :endpoint,
-    message: "arangox error"
-  ]
-
   @type t :: %__MODULE__{
-          status: pos_integer | nil,
           endpoint: Arangox.endpoint() | nil,
+          status: pos_integer | nil,
+          error_num: non_neg_integer,
           message: binary
         }
+
+  @keys [
+    :endpoint,
+    :status,
+    :error_num
+  ]
+
+  defexception [{:message, "arangox error"} | @keys]
 
   def message(%__MODULE__{message: message} = exception) when is_binary(message) do
     prepend(exception) <> message
@@ -19,11 +22,14 @@ defmodule Arangox.Error do
     prepend(exception) <> inspect(message)
   end
 
-  defp prepend(%__MODULE__{endpoint: nil, status: nil}), do: ""
+  defp prepend(%__MODULE__{} = exception) do
+    for key <- @keys, into: "" do
+      exception
+      |> Map.get(key)
+      |> prepend()
+    end
+  end
 
-  defp prepend(%__MODULE__{endpoint: endpoint, status: nil}), do: "[#{endpoint}] "
-
-  defp prepend(%__MODULE__{endpoint: nil, status: status}), do: "[#{status}] "
-
-  defp prepend(%__MODULE__{endpoint: endpoint, status: status}), do: "[#{endpoint}] [#{status}] "
+  defp prepend(nil), do: ""
+  defp prepend(key), do: "[#{key}] "
 end

@@ -556,25 +556,20 @@ defmodule Arangox.Connection do
     %{struct | body: Arangox.json_library().decode!(body)}
   end
 
-  defp exception(state, %Response{status: 405} = response) do
-    %Error{
-      endpoint: state.endpoint,
-      status: response.status,
-      message: "method not allowed"
-    }
-  end
-
   defp exception(state, %Response{body: nil} = response),
     do: %Error{endpoint: state.endpoint, status: response.status}
 
   defp exception(state, %Response{} = response) do
-    message =
-      response
-      |> maybe_decode_body(state)
-      |> Map.get(:body)
-      |> Map.get("errorMessage")
+    response = maybe_decode_body(response, state)
+    message = response.body["errorMessage"]
+    error_num = response.body["errorNum"]
 
-    %Error{endpoint: state.endpoint, status: response.status, message: message}
+    %Error{
+      endpoint: state.endpoint,
+      status: response.status,
+      error_num: error_num,
+      message: message
+    }
   end
 
   defp exception(state, reason),
