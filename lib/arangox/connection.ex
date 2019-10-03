@@ -1,3 +1,13 @@
+defimpl DBConnection.Query, for: BitString do
+  def parse(query, _opts), do: query
+
+  def describe(query, _opts), do: query
+
+  def encode(_query, params, _opts), do: Enum.into(params, %{})
+
+  def decode(_query, params, _opts), do: params
+end
+
 defmodule Arangox.Connection do
   @moduledoc false
 
@@ -22,6 +32,7 @@ defmodule Arangox.Connection do
           username: binary,
           password: binary,
           headers: Arangox.headers(),
+          disconnect_on_error_codes: [integer],
           read_only?: boolean,
           cursors: map
         }
@@ -38,6 +49,7 @@ defmodule Arangox.Connection do
     username: "root",
     password: "",
     headers: %{},
+    disconnect_on_error_codes: [401, 405, 503, 505],
     read_only?: false,
     cursors: %{}
   ]
@@ -238,117 +250,111 @@ defmodule Arangox.Connection do
       |> Keyword.get(:properties, [])
       |> Enum.into(%{collections: collections})
 
-    with(
-      {:ok, %Response{status: 201} = response, state} <-
-        %Request{
-          method: :post,
-          path: Path.join(@path_trx, "begin"),
-          body: body
-        }
-        |> merge_headers(state.headers)
-        |> maybe_prepend_database(state)
-        |> maybe_encode_body(state)
-        |> Client.request(state),
-      %Response{body: %{"result" => %{"id" => id}}} = response <-
-        maybe_decode_body(response, state)
-    ) do
-      {:ok, response, put_header(state, {@header_trx_id, id})}
-    else
-      {:ok, %Response{}, state} ->
+    request = %Request{
+      method: :post,
+      path: Path.join(@path_trx, "begin"),
+      body: body
+    }
+
+    case handle_execute(nil, request, opts, state) do
+      {:ok, _request, %Response{status: 201, body: %{"result" => %{"id" => id}}} = response,
+       state} ->
+        {:ok, response, put_header(state, {@header_trx_id, id})}
+
+      {:ok, _request, %Response{}, state} ->
         {:error, state}
 
-      {:error, :noproc, state} ->
-        {:disconnect, exception(state, "connection lost"), state}
+      {:error, _exception, state} ->
+        {:error, state}
 
-      {:error, _reason, state} ->
+      {:disconnect, _exception, state} ->
         {:error, state}
     end
   end
 
   @impl true
-  def handle_status(_opts, %__MODULE__{} = state) do
+  def handle_status(opts, %__MODULE__{} = state) do
     with(
-      {id, headers} when is_binary(id) <- Map.pop(state.headers, @header_trx_id),
-      {:ok, %Response{status: 200}, state} <-
-        %Request{
-          method: :get,
-          path: Path.join(@path_trx, id)
-        }
-        |> merge_headers(headers)
-        |> maybe_prepend_database(state)
-        |> Client.request(state)
+      {id, _headers} when is_binary(id) <-
+        Map.pop(state.headers, @header_trx_id),
+      {:ok, _request, %Response{status: 200}, state} <-
+        handle_execute(
+          nil,
+          %Request{method: :get, path: Path.join(@path_trx, id)},
+          opts,
+          state
+        )
     ) do
       {:transaction, state}
     else
       {nil, _headers} ->
         {:idle, state}
 
-      {:ok, %Response{status: _status}, state} ->
+      {:ok, _request, %Response{}, state} ->
         {:error, state}
 
-      {:error, :noproc, state} ->
-        {:disconnect, exception(state, "connection lost"), state}
-
-      {:error, _reason, state} ->
+      {:error, _exception, state} ->
         {:error, state}
+
+      {:disconnect, exception, state} ->
+        {:disconnect, exception, state}
     end
   end
 
   @impl true
-  def handle_commit(_opts, %__MODULE__{} = state) do
+  def handle_commit(opts, %__MODULE__{} = state) do
     with(
-      {id, headers} when is_binary(id) <- Map.pop(state.headers, @header_trx_id),
-      {:ok, %Response{status: 200} = response, state} <-
-        %Request{
-          method: :put,
-          path: Path.join(@path_trx, id)
-        }
-        |> merge_headers(headers)
-        |> maybe_prepend_database(state)
-        |> Client.request(state)
+      {id, headers} when is_binary(id) <-
+        Map.pop(state.headers, @header_trx_id),
+      {:ok, _request, %Response{status: 200} = response, state} <-
+        handle_execute(
+          nil,
+          %Request{method: :put, path: Path.join(@path_trx, id)},
+          opts,
+          %{state | headers: headers}
+        )
     ) do
-      {:ok, maybe_decode_body(response, state), %{state | headers: headers}}
+      {:ok, response, state}
     else
       {nil, _headers} ->
         {:idle, state}
 
-      {:ok, %Response{status: _status}, state} ->
+      {:ok, _request, %Response{}, state} ->
         {:error, state}
 
-      {:error, :noproc, state} ->
-        {:disconnect, exception(state, "connection lost"), state}
-
-      {:error, _reason, state} ->
+      {:error, _exception, state} ->
         {:error, state}
+
+      {:disconnect, exception, state} ->
+        {:disconnect, exception, state}
     end
   end
 
   @impl true
-  def handle_rollback(_opts, %__MODULE__{} = state) do
+  def handle_rollback(opts, %__MODULE__{} = state) do
     with(
       {id, headers} when is_binary(id) <- Map.pop(state.headers, @header_trx_id),
-      {:ok, %Response{status: 200} = response, state} <-
-        %Request{
-          method: :delete,
-          path: Path.join(@path_trx, id)
-        }
-        |> merge_headers(headers)
-        |> maybe_prepend_database(state)
-        |> Client.request(state)
+      {:ok, _request, %Response{status: 200} = response, state} <-
+        handle_execute(
+          nil,
+          %Request{method: :put, path: Path.join(@path_trx, id)},
+          opts,
+          %{state | headers: headers}
+        )
     ) do
-      {:ok, maybe_decode_body(response, state), %{state | headers: headers}}
+      {:ok, response, state}
     else
       {nil, _headers} ->
         {:idle, state}
 
-      {:ok, %Response{status: _status}, state} ->
+      {:ok, _request, %Response{}, state} ->
         {:error, state}
 
-      {:error, :noproc, state} ->
-        {:disconnect, exception(state, "connection lost"), state}
-
-      {:error, _reason, state} ->
+      {:error, _exception, state} ->
         {:error, state}
+
+      {:disconnect, exception, state} ->
+        {:disconnect, exception, state}
     end
   end
 
@@ -429,41 +435,14 @@ defmodule Arangox.Connection do
     end
   end
 
-  # Execution callbacks
+  @impl true
+  def ping(%__MODULE__{} = state) do
+    case handle_execute(nil, @request_ping, [], state) do
+      {:ok, _request, %Response{}, state} ->
+        {:ok, state}
 
-  defmacrop exec_case(condition, do: body) do
-    {:case, [], [condition, [do: exec_cases_before() ++ body ++ exec_cases_after()]]}
-  end
-
-  def exec_cases_before do
-    quote do
-      {:ok, %Response{status: 505} = response, state} ->
-        {:disconnect, exception(state, response), state}
-
-      {:ok, %Response{status: 503} = response, state} ->
-        {:disconnect, exception(state, response), state}
-
-      {:ok, %Response{status: 405} = response, state} ->
-        {:disconnect, exception(state, response), state}
-
-      {:ok, %Response{status: 401} = response, state} ->
-        {:disconnect, exception(state, response), state}
-
-      {:ok, %Response{status: status} = response, state} when status in 400..599 ->
-        {:error, exception(state, response), state}
-    end
-  end
-
-  def exec_cases_after do
-    quote do
-      {:error, :noproc, state} ->
-        {:disconnect, exception(state, "connection lost"), state}
-
-      {:error, %_{} = reason, state} ->
-        {:error, reason, state}
-
-      {:error, reason, state} ->
-        {:error, exception(state, reason), state}
+      {call, exception, state} when call in [:error, :disconnect] ->
+        {:disconnect, exception, state}
     end
   end
 
@@ -475,21 +454,26 @@ defmodule Arangox.Connection do
       |> maybe_prepend_database(state)
       |> maybe_encode_body(state)
 
-    exec_case Client.request(request, state) do
+    case Client.request(request, state) do
+      {:ok, %Response{status: status} = response, state} when status in 400..599 ->
+        {disc_or_err(status, state.disconnect_on_error_codes), exception(state, response), state}
+
       {:ok, response, state} ->
         {:ok, sanitize_headers(request), maybe_decode_body(response, state), state}
+
+      {:error, :noproc, state} ->
+        {:disconnect, exception(state, "connection lost"), state}
+
+      {:error, %_{} = reason, state} ->
+        {:error, reason, state}
+
+      {:error, reason, state} ->
+        {:error, exception(state, reason), state}
     end
   end
 
-  @impl true
-  def ping(%__MODULE__{} = state) do
-    @request_ping
-    |> merge_headers(state.headers)
-    |> Client.request(state)
-    |> exec_case do
-      {:ok, %Response{}, state} ->
-        {:ok, state}
-    end
+  defp disc_or_err(status, codes) do
+    if status in codes, do: :disconnect, else: :error
   end
 
   # Unsupported callbacks

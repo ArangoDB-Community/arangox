@@ -70,13 +70,16 @@ defmodule Arangox do
     isn't already prepended. If a value is not given, nothing is prepended (_ArangoDB_ will
     assume the __system_ database).
     * `:headers` - A map of headers to merge with every request.
-    * `:auth?` - Configure whether or not to resolve authorization with the `:username` and
-    `:password` options. Defaults to `true`.
+    * `:disconnect_on_error_codes` - A list of status codes that will trigger a forced disconnect.
+    Only integers within the range `400..599` are affected. Defaults to
+    `[401, 405, 503, 505]`.
+    * `:auth?` - Configure whether or not to resolve authorization (with the `:username` and
+    `:password` options). Defaults to `true`.
     * `:username` - Defaults to `"root"`.
     * `:password` - Defaults to `""`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
-    * `:connect_timeout` - Sets the timeout for establishing a connection with a database.
+    * `:connect_timeout` - Sets the timeout for establishing connections with a database.
     * `:tcp_opts` - Transport options for the tcp socket interface (`:gen_tcp` in the case
     of gun or mint).
     * `:ssl_opts` - Transport options for the ssl socket interface (`:ssl` in the case of

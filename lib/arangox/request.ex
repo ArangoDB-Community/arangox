@@ -32,14 +32,4 @@ defmodule Arangox.Request do
 
     def decode(_query, %Response{} = response, _opts), do: response
   end
-
-  defimpl DBConnection.Query, for: BitString do
-    def parse(query, _opts), do: query
-
-    def describe(query, _opts), do: query
-
-    def encode(_query, params, _opts), do: Enum.into(params, %{})
-
-    def decode(_query, params, _opts), do: params
-  end
 end

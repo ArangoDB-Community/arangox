@@ -1,5 +1,6 @@
 defmodule ArangoxTest do
   use ExUnit.Case, async: true
+  import ExUnit.CaptureLog
   import TestHelper, only: [opts: 1, opts: 0]
 
   alias Arangox.{
@@ -37,6 +38,23 @@ defmodule ArangoxTest do
         Arangox.start_link(opts(endpoints: ["binary", :not_a_binary]))
       end
     end
+  end
+
+  @tag capture_log: false
+  test "disconnect_on_error_codes option" do
+    {:ok, conn_empty} = Arangox.start_link(opts(disconnect_on_error_codes: [], auth?: false))
+
+    refute capture_log(fn ->
+             Arangox.get(conn_empty, "/_admin/server/mode")
+             :timer.sleep(500)
+           end) =~ "disconnected"
+
+    {:ok, conn_401} = Arangox.start_link(opts(disconnect_on_error_codes: [401], auth?: false))
+
+    assert capture_log(fn ->
+             Arangox.get(conn_401, "/_admin/server/mode")
+             :timer.sleep(500)
+           end) =~ "disconnected"
   end
 
   test "connecting with default options" do
@@ -229,22 +247,6 @@ defmodule ArangoxTest do
 
     assert {:ok, %Request{method: :get}, %Response{}} = Arangox.get(conn, "/")
     assert %Response{} = Arangox.get!(conn, "/")
-  end
-
-  test "transaction/2" do
-    {:ok, conn1} = Arangox.start_link(opts())
-
-    assert {:ok, %Response{}} =
-             Arangox.transaction(conn1, fn c ->
-               Arangox.get!(c, "/_admin/time")
-             end)
-
-    {:ok, conn2} = Arangox.start_link(opts(auth?: false))
-
-    assert {:error, :rollback} =
-             Arangox.transaction(conn2, fn c ->
-               Arangox.get(c, "/_admin/server/status")
-             end)
   end
 
   test "transaction/3" do
