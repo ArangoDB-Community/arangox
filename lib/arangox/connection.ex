@@ -37,6 +37,8 @@ defmodule Arangox.Connection do
           cursors: map
         }
 
+  @type failover? :: boolean
+
   @enforce_keys [:socket, :client, :endpoint]
 
   defstruct [
@@ -45,16 +47,22 @@ defmodule Arangox.Connection do
     :endpoint,
     :failover?,
     :database,
+    :cursors,
     auth?: true,
     username: "root",
     password: "",
     headers: %{},
     disconnect_on_error_codes: [401, 405, 503, 505],
-    read_only?: false,
-    cursors: %{}
+    read_only?: false
   ]
 
-  @spec new(any, module, binary, boolean, [Arangox.start_option()]) :: t
+  @spec new(
+          Client.socket(),
+          Arangox.client(),
+          Arangox.endpoint(),
+          failover?,
+          [Arangox.start_option()]
+        ) :: t
   def new(socket, client, endpoint, failover?, opts) do
     __MODULE__
     |> struct(opts)
@@ -62,6 +70,7 @@ defmodule Arangox.Connection do
     |> Map.put(:client, client)
     |> Map.put(:endpoint, endpoint)
     |> Map.put(:failover?, failover?)
+    |> Map.put(:cursors, %{})
   end
 
   # @header_arango_endpoint "x-arango-endpoint"

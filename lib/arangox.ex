@@ -23,6 +23,7 @@ defmodule Arangox do
           | :options
 
   @type conn :: DBConnection.conn()
+  @type client :: module
   @type endpoint :: binary
   @type path :: binary
   @type body :: binary | map | list | nil

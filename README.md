@@ -258,7 +258,8 @@ iex> request.headers
 ### Velocy
 
 If the `:database` option is set, it can be overridden by prepending the path of a
-request with `/_db/:value`. If nothing is set, _ArangoDB_ will assume the `_system` database.
+request with `/_db/:value`. If nothing is set, the request will be sent as-is and
+_ArangoDB_ will assume the `_system` database.
 
 ### HTTP
 
