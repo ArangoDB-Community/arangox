@@ -136,6 +136,15 @@ defmodule ArangoxTest do
       end
     end
 
+    test "prepends request paths when using velocy client unless already prepended" do
+      {:ok, conn} = Arangox.start_link(opts(database: "does_not_exist"))
+
+      assert {:error, %Error{status: 404}} = Arangox.get(conn, "/_api/database/current")
+
+      assert %Response{body: %{"result" => %{"name" => "_system"}}} =
+               Arangox.get!(conn, "/_db/_system/_api/database/current")
+    end
+
     test "prepends request paths when using an http client unless already prepended" do
       {:ok, conn} = Arangox.start_link(opts(database: "does_not_exist", client: GunClient))
 

@@ -47,8 +47,8 @@ defmodule Arangox.ClientTest do
 
       assert :ok = VelocyClient.authorize(state)
 
-      assert {:ok, %Response{}, ^state} =
-               VelocyClient.request(%Request{method: :options, path: "/"}, state)
+      assert {:ok, %Response{status: 200}, ^state} =
+               VelocyClient.request(%Request{method: :get, path: "/_api/database/current"}, state)
 
       assert :ok = VelocyClient.close(state)
       refute VelocyClient.alive?(state)

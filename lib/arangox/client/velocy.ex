@@ -1,4 +1,4 @@
-if Code.ensure_compiled?(Velocy) do
+if Code.ensure_compiled?(VelocyPack) do
   defmodule Arangox.VelocyClient do
     @moduledoc """
     The default client. Implements the \
@@ -17,8 +17,6 @@ if Code.ensure_compiled?(Velocy) do
       Request,
       Response
     }
-
-    alias Velocy, as: VelocyPack
 
     @behaviour Client
 
@@ -40,7 +38,7 @@ if Code.ensure_compiled?(Velocy) do
 
     @spec authorize(Connection.t()) :: :ok | {:error, Error.t()}
     def authorize(%Connection{socket: socket, username: un, password: pw} = state) do
-      auth = [1, 1000, "plain", un, pw]
+      auth = [@trunc_vst_version, 1000, "plain", un, pw]
 
       with(
         {:ok, auth} <- VelocyPack.encode(auth),
@@ -102,7 +100,7 @@ if Code.ensure_compiled?(Velocy) do
       request = [
         @trunc_vst_version,
         1,
-        case request.path do
+        case uri.path do
           "/_db/" <> rest ->
             rest
             |> String.split("/")
@@ -112,7 +110,17 @@ if Code.ensure_compiled?(Velocy) do
             state.database || ""
         end,
         method_for(request.method),
-        uri.path,
+        case uri.path do
+          "/_db/" <> rest ->
+            rest
+            |> String.split("/")
+            |> tl()
+            |> Enum.join("/")
+            |> (&("/" <> &1)).()
+
+          path ->
+            path
+        end,
         query_for(uri.query),
         Map.new(request.headers)
       ]

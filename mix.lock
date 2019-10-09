@@ -12,5 +12,5 @@
   "makeup_elixir": {:hex, :makeup_elixir, "0.14.0", "cf8b7c66ad1cff4c14679698d532f0b5d45a3968ffbcbfd590339cb57742f1ae", [:mix], [{:makeup, "~> 1.0", [hex: :makeup, repo: "hexpm", optional: false]}], "hexpm"},
   "mint": {:hex, :mint, "0.4.0", "b93a10192957624ed4a8b8641eff1819019c36487bdf49e2b505afd2cc9b7911", [:mix], [{:castore, "~> 0.1.0", [hex: :castore, repo: "hexpm", optional: true]}], "hexpm"},
   "nimble_parsec": {:hex, :nimble_parsec, "0.5.1", "c90796ecee0289dbb5ad16d3ad06f957b0cd1199769641c961cfe0b97db190e0", [:mix], [], "hexpm"},
-  "velocy": {:hex, :velocy, "0.1.3", "c34df17c5714b3705051b090f4e3afa2718444014370319d558ca8248e50309a", [:mix], [], "hexpm"},
+  "velocy": {:hex, :velocy, "0.1.4", "053cb8fd6e467108e2dc7b5dfd414d45318350c2c6e82eb0f8abe331c287a019", [:mix], [], "hexpm"},
 }
