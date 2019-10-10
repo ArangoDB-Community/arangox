@@ -409,7 +409,7 @@ defmodule Arangox.Connection do
     with(
       {nil, _cursors} <-
         Map.pop(cursors, cursor),
-      {:ok, _req, %Response{body: %{"hasMore" => has_more}} = response, state} <-
+      {:ok, _req, %Response{body: %{"hasMore" => true}} = response, state} <-
         handle_execute(
           query,
           %Request{method: :put, path: "/_api/cursor/" <> cursor},
@@ -417,30 +417,40 @@ defmodule Arangox.Connection do
           state
         )
     ) do
-      {cont_or_halt(has_more), response, state}
+      {:cont, response, state}
     else
-      {%Response{body: %{"hasMore" => has_more}} = initial, cursors} ->
-        {cont_or_halt(has_more), initial, %{state | cursors: cursors}}
+      {%Response{body: %{"hasMore" => false}} = initial, cursors} ->
+        {:halt, initial, %{state | cursors: Map.put(cursors, cursor, :noop)}}
+
+      {%Response{body: %{"hasMore" => true}} = initial, cursors} ->
+        {:cont, initial, %{state | cursors: cursors}}
+
+      {:ok, _req, %Response{body: %{"hasMore" => false}} = response, state} ->
+        {:halt, response, %{state | cursors: Map.put(cursors, cursor, :noop)}}
 
       error ->
         error
     end
   end
 
-  defp cont_or_halt(true), do: :cont
-  defp cont_or_halt(false), do: :halt
-
   @impl true
   def handle_deallocate(query, cursor, opts, %__MODULE__{cursors: cursors} = state) do
     state = %{state | cursors: Map.delete(cursors, cursor)}
-    request = %Request{method: :delete, path: "/_api/cursor/" <> cursor}
 
-    case handle_execute(query, request, opts, state) do
-      {:ok, _req, response, state} ->
-        {:ok, response, state}
+    case cursors do
+      %{^cursor => :noop} ->
+        {:ok, :noop, state}
 
-      error ->
-        error
+      _ ->
+        request = %Request{method: :delete, path: "/_api/cursor/" <> cursor}
+
+        case handle_execute(query, request, opts, state) do
+          {:ok, _req, response, state} ->
+            {:ok, response, state}
+
+          error ->
+            error
+        end
     end
   end
 
