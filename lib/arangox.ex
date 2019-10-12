@@ -387,21 +387,21 @@ defmodule Arangox do
       iex>   stream =
       iex>     Arangox.cursor(
       iex>       c,
-      iex>       "for i in [1, 2, 3] filter i == 1 || i == @num return i",
-      iex>       [num: 2],
+      iex>       "FOR i IN [1, 2, 3] FILTER i == 1 || i == @num RETURN i",
+      iex>       %{num: 2},
       iex>       properties: [batchSize: 1]
       iex>     )
       iex>
-      iex>   all_batches_reduced =
+      iex>   first_batch = Enum.at(stream, 1).body["result"]
+      iex>
+      iex>   exhaust_cursor =
       iex>     Enum.reduce(stream, [], fn resp, acc ->
       iex>       acc ++ resp.body["result"]
       iex>     end)
       iex>
-      iex>   second_batch = Enum.at(stream, 1).body["result"]
-      iex>
-      iex>   {all_batches_reduced, second_batch}
+      iex>   {second_batch, exhaust_cursor}
       iex> end)
-      {:ok, {[1, 2], [2]}}
+      {:ok, {[1], [1, 2]}}
   """
   @spec cursor(conn(), query, bindvars, [DBConnection.option()]) :: DBConnection.Stream.t()
   defdelegate cursor(conn, query, bindvars \\ [], opts \\ []), to: DBConnection, as: :stream

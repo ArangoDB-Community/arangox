@@ -51,8 +51,8 @@ iex> Arangox.transaction(conn, fn c ->
 iex>   stream =
 iex>     Arangox.cursor(
 iex>       c,
-iex>       "for i in [1, 2, 3] filter i == 1 || i == @num return i",
-iex>       [num: 2],
+iex>       "FOR i IN [1, 2, 3] FILTER i == 1 || i == @num RETURN i",
+iex>       %{num: 2},
 iex>       properties: [batchSize: 1]
 iex>     )
 iex>

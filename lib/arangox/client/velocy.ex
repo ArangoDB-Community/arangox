@@ -80,9 +80,6 @@ if Code.ensure_compiled?(VelocyPack) do
         :ok <- mod.send(port, "VST/#{@vst_version}\r\n\r\n")
       ) do
         {:ok, [mod, port]}
-      else
-        {:error, reason} ->
-          {:error, reason}
       end
     end
 
@@ -327,9 +324,6 @@ if Code.ensure_compiled?(VelocyPack) do
         {:ok, stream} <- recv_stream(socket, n_chunks, buffer)
       ) do
         {:ok, stream}
-      else
-        {:error, reason} ->
-          {:error, reason}
       end
     end
 
