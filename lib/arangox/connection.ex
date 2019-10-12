@@ -393,15 +393,14 @@ defmodule Arangox.Connection do
     end
   end
 
-  defp rand do
-    min = String.to_integer("100000", 36)
-    max = String.to_integer("ZZZZZZ", 36)
+  @rand_min String.to_integer("10000000", 36)
+  @rand_max String.to_integer("ZZZZZZZZ", 36)
 
-    max
-    |> Kernel.-(min)
+  defp rand do
+    @rand_max
+    |> Kernel.-(@rand_min)
     |> :rand.uniform()
-    |> Kernel.+(min)
-    |> Integer.to_string(36)
+    |> Kernel.+(@rand_min)
   end
 
   @impl true
@@ -475,7 +474,11 @@ defmodule Arangox.Connection do
 
     case Client.request(request, state) do
       {:ok, %Response{status: status} = response, state} when status in 400..599 ->
-        {disc_or_err(status, state.disconnect_on_error_codes), exception(state, response), state}
+        {
+          err_or_disc(status, state.disconnect_on_error_codes),
+          exception(state, response),
+          state
+        }
 
       {:ok, response, state} ->
         {:ok, sanitize_headers(request), maybe_decode_body(response, state), state}
@@ -491,7 +494,7 @@ defmodule Arangox.Connection do
     end
   end
 
-  defp disc_or_err(status, codes) do
+  defp err_or_disc(status, codes) do
     if status in codes, do: :disconnect, else: :error
   end
 
