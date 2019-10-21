@@ -27,7 +27,7 @@ defmodule Arangox do
   @type endpoint :: binary
   @type path :: binary
   @type body :: binary | map | list | nil
-  @type headers :: map
+  @type headers :: map | [{binary, binary}]
   @type query :: binary
   @type bindvars :: keyword | map
 
@@ -392,14 +392,14 @@ defmodule Arangox do
       iex>       properties: [batchSize: 1]
       iex>     )
       iex>
-      iex>   first_batch = Enum.at(stream, 1).body["result"]
+      iex>   first_batch = Enum.at(stream, 0).body["result"]
       iex>
       iex>   exhaust_cursor =
       iex>     Enum.reduce(stream, [], fn resp, acc ->
       iex>       acc ++ resp.body["result"]
       iex>     end)
       iex>
-      iex>   {second_batch, exhaust_cursor}
+      iex>   {first_batch, exhaust_cursor}
       iex> end)
       {:ok, {[1], [1, 2]}}
   """

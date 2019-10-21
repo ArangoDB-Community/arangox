@@ -21,7 +21,7 @@ if Code.ensure_compiled?(VelocyPack) do
     @behaviour Client
 
     @vst_version 1.1
-    @trunc_vst_version Kernel.trunc(@vst_version)
+    @vst_version_trunc trunc(@vst_version)
     @chunk_header_size 24
 
     @doc """
@@ -38,18 +38,18 @@ if Code.ensure_compiled?(VelocyPack) do
 
     @spec authorize(Connection.t()) :: :ok | {:error, Error.t()}
     def authorize(%Connection{socket: socket, username: un, password: pw} = state) do
-      auth = [@trunc_vst_version, 1000, "plain", un, pw]
+      auth = [@vst_version_trunc, 1000, "plain", un, pw]
 
       with(
         {:ok, auth} <- VelocyPack.encode(auth),
         :ok <- send_stream(socket, build_stream(auth)),
         {:ok, header} <- recv_header(socket),
         {:ok, stream} <- recv_stream(socket, header),
-        {:ok, [[@trunc_vst_version, 2, 200, _headers] | _body]} <- decode_stream(stream)
+        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} <- decode_stream(stream)
       ) do
         :ok
       else
-        {:ok, [[@trunc_vst_version, 2, status, _headers] | [body | _]]} ->
+        {:ok, [[@vst_version_trunc, 2, status, _headers] | [body | _]]} ->
           {:error,
            %Error{
              status: status,
@@ -95,7 +95,7 @@ if Code.ensure_compiled?(VelocyPack) do
       body = request.body
 
       request = [
-        @trunc_vst_version,
+        @vst_version_trunc,
         1,
         case uri.path do
           "/_db/" <> rest ->
@@ -128,7 +128,7 @@ if Code.ensure_compiled?(VelocyPack) do
         :ok <- send_stream(socket, build_stream(request <> body)),
         {:ok, header} <- recv_header(socket),
         {:ok, stream} <- recv_stream(socket, header),
-        {:ok, [[@trunc_vst_version, 2, status, headers] | body]} <- decode_stream(stream)
+        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} <- decode_stream(stream)
       ) do
         {:ok, %Response{status: status, headers: headers, body: body_from(body)}, state}
       else
@@ -148,6 +148,8 @@ if Code.ensure_compiled?(VelocyPack) do
     defp method_for(:patch), do: 5
     defp method_for(:options), do: 6
     defp method_for(_), do: -1
+
+    # ------- Begin Query Parsing Functions (Plataformatec) --------
 
     defp query_for(nil), do: %{}
 
@@ -235,6 +237,8 @@ if Code.ensure_compiled?(VelocyPack) do
         _ -> %{key => value}
       end
     end
+
+    # ------- End Query Parsing Functions --------
 
     defp body_for(""), do: {:ok, ""}
     defp body_for(body), do: VelocyPack.encode(body)

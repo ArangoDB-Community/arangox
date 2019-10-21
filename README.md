@@ -2,11 +2,11 @@
 
 [![Build Status](https://travis-ci.org/ArangoDB-Community/arangox.svg?branch=master)](https://travis-ci.org/ArangoDB-Community/arangox)
 
-An implementation of [`:db_connection`](https://hex.pm/packages/db_connection) for
+An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).
 
 Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/),
-[Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and cursors.
+[Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streamed cursors.
 
 [Documentation](https://hexdocs.pm/arangox/readme.html)
 
@@ -65,7 +65,7 @@ iex> end)
 
 ## Peer Dependencies
 
-By default, Arangox communicates with _ArangoDB_ via the _VelocyStream_ protocol, which requires the `:velocy` library:
+By default, Arangox communicates with _ArangoDB_ via _VelocyStream_, which requires the `:velocy` library:
 
 ```elixir
 def deps do
@@ -126,7 +126,7 @@ config :arangox, :json_library, Poison
 ### Examples
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, pool_size: 10)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
 iex> Arangox.request(conn, :options, "/")
 {:ok,
  %Arangox.Request{
@@ -147,19 +147,6 @@ iex> Arangox.request(conn, :options, "/")
    },
    status: 200
  }}
-iex> Arangox.options!(conn, "/")
-%Arangox.Response{
-  body: nil,
-  headers: %{
-    "allow" => "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
-    "connection" => "Keep-Alive",
-    "content-length" => "0",
-    "content-type" => "text/plain; charset=utf-8",
-    "server" => "ArangoDB",
-    "x-content-type-options" => "nosniff"
-  },
-  status: 200
-}
 ```
 
 ## Start Options
@@ -281,6 +268,18 @@ iex> request.path
 ```
 
 ## Headers
+
+Headers can be given as maps:
+
+```elixir
+%{"header" => "value"}
+```
+
+Or lists of two binary element tuples:
+
+```elixir
+[{"header", "value"}]
+```
 
 Headers given to the start option are merged with every request, but will not override
 any of the headers set by Arangox:
