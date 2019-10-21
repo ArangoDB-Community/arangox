@@ -4,7 +4,7 @@ defmodule Arangox.MixProject do
   @version "0.4.4"
   @description """
   ArangoDB 3.3.9+ driver for Elixir with connection pooling, VelocyStream, \
-  support for Active Failover, transactions and cursors.
+  support for Active Failover, transactions and streamed cursors.
   """
   @source_url "https://github.com/ArangoDB-Community/arangox"
   @homepage_url "https://www.arangodb.com"
@@ -53,7 +53,7 @@ defmodule Arangox.MixProject do
     [
       {:db_connection, "~> 2.1"},
       {:velocy, "~> 0.1", optional: true},
-      {:jason, "~> 1.1", optional: true},
+      {:jason, "~> 1.0", optional: true},
       {:gun, "~> 1.3", optional: true},
       {:mint, "~> 0.4.0", optional: true},
       {:ex_doc, "> 0.0.0", only: :dev, runtime: false},
