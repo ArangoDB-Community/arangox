@@ -43,4 +43,10 @@ end
 
 excludes = List.delete([:unix], os_type)
 
-ExUnit.start(exclude: excludes, capture_log: true)
+assert_timeout = String.to_integer(System.get_env("ELIXIR_ASSERT_TIMEOUT") || "15_000")
+
+ExUnit.start(
+  exclude: excludes,
+  assert_receive_timeout: assert_timeout,
+  capture_log: true
+)

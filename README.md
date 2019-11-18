@@ -71,8 +71,8 @@ By default, Arangox communicates with _ArangoDB_ via _VelocyStream_, which requi
 def deps do
   [
     ...
-    {:arangox, "~> 0.1.0"},
-    {:velocy, "~> 1.1"}
+    {:arangox, "~> 0.4.0"},
+    {:velocy, "~> 0.1"}
   ]
 end
 ```
@@ -91,9 +91,9 @@ Arangox has two HTTP clients, `Arangox.GunClient` and `Arangox.MintClient`, they
 def deps do
   [
     ...
-    {:arangox, "~> 0.1.0"},
+    {:arangox, "~> 0.4.0"},
     {:jason, "~> 1.1"},
-    {:gun, "~> 1.3"} # or {:mint, "~> 0.4.0"}
+    {:gun, "~> 1.3.0"} # or {:mint, "~> 0.4.0"}
   ]
 end
 ```
