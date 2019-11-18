@@ -52,6 +52,8 @@ defmodule Arangox do
   """
   @spec child_spec([start_option()]) :: Supervisor.child_spec()
   def child_spec(opts \\ []) do
+    ensure_valid!(opts)
+
     DBConnection.child_spec(__MODULE__.Connection, opts)
   end
 
