@@ -341,6 +341,7 @@ iex> Arangox.get!(conn, "/_admin/server/availability", [], timeout: 15_000)
 ## Contributing
 
 ```
+mix format
 mix do format, credo --strict
 docker-compose up -d
 mix test
@@ -348,5 +349,6 @@ mix test
 
 ## Roadmap
 
+- `:get_endpoints` and `:port_mappings` options
 - An Ecto adapter
 - More descriptive logs
