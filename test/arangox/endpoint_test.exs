@@ -26,15 +26,15 @@ defmodule Arangox.EndpointTest do
     assert_raise ArgumentError, fn -> new("host:123") end
 
     assert_raise ArgumentError,
-                 "Missing host in endpoint configuration: \"http://\"",
+                 "Missing host or port in endpoint configuration: \"http://\"",
                  fn -> new("http://") end
 
     assert_raise ArgumentError,
-                 "Missing port in endpoint configuration: \"http://host\"",
+                 "Missing host or port in endpoint configuration: \"http://host\"",
                  fn -> new("http://host") end
 
     assert_raise ArgumentError,
-                 "Missing host in endpoint configuration: \"http://:123\"",
+                 "Missing host or port in endpoint configuration: \"http://:123\"",
                  fn -> new("http://:123") end
 
     assert_raise ArgumentError,

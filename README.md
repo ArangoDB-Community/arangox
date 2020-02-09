@@ -6,15 +6,15 @@ An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).
 
 Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/),
-[Active Failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streamed cursors.
-
-[Documentation](https://hexdocs.pm/arangox/readme.html)
+[active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streamed cursors.
 
 Tested on:
 
-- __ArangoDB__ 3.3.9 - 3.5
-- __Elixir__ 1.6 - 1.9
+- __ArangoDB__ 3.3.9 - 3.6
+- __Elixir__ 1.6 - 1.10
 - __OTP__ 20 - 22
+
+[Documentation](https://hexdocs.pm/arangox/readme.html)
 
 ## Examples
 

@@ -61,13 +61,13 @@ defmodule Arangox.Endpoint do
 
   defp do_tcp(%URI{host: nil}, endpoint) do
     raise ArgumentError, """
-    Missing host in endpoint configuration: #{inspect(endpoint)}\
+    Missing host or port in endpoint configuration: #{inspect(endpoint)}\
     """
   end
 
   defp do_tcp(%URI{port: nil}, endpoint) do
     raise ArgumentError, """
-    Missing port in endpoint configuration: #{inspect(endpoint)}\
+    Missing host or port in endpoint configuration: #{inspect(endpoint)}\
     """
   end
 
