@@ -111,9 +111,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec get(conn, path, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def get(conn, path, headers \\ %{}, opts \\ []) do
-    request(conn, :get, path, "", headers, opts)
+    request(conn, :get, path, "", headers, opts) |> do_result()
   end
 
   @doc """
@@ -132,9 +132,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec head(conn, path, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def head(conn, path, headers \\ %{}, opts \\ []) do
-    request(conn, :head, path, "", headers, opts)
+    request(conn, :head, path, "", headers, opts) |> do_result()
   end
 
   @doc """
@@ -153,9 +153,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec delete(conn, path, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def delete(conn, path, headers \\ %{}, opts \\ []) do
-    request(conn, :delete, path, "", headers, opts)
+    request(conn, :delete, path, "", headers, opts) |> do_result()
   end
 
   @doc """
@@ -174,9 +174,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec post(conn, path, body, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def post(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
-    request(conn, :post, path, body, headers, opts)
+    request(conn, :post, path, body, headers, opts) |> do_result()
   end
 
   @doc """
@@ -195,9 +195,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec put(conn, path, body, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def put(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
-    request(conn, :put, path, body, headers, opts)
+    request(conn, :put, path, body, headers, opts) |> do_result()
   end
 
   @doc """
@@ -216,9 +216,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec patch(conn, path, body, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def patch(conn, path, body \\ "", headers \\ %{}, opts \\ []) do
-    request(conn, :patch, path, body, headers, opts)
+    request(conn, :patch, path, body, headers, opts) |> do_result()
   end
 
   @doc """
@@ -237,9 +237,9 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.execute/4`.
   """
   @spec options(conn, path, headers, [DBConnection.option()]) ::
-          {:ok, Request.t(), Response.t()} | {:error, any}
+          {:ok, Response.t()} | {:error, any}
   def options(conn, path, headers \\ %{}, opts \\ []) do
-    request(conn, :options, path, "", headers, opts)
+    request(conn, :options, path, "", headers, opts) |> do_result()
   end
 
   @doc """
@@ -277,6 +277,9 @@ defmodule Arangox do
 
     DBConnection.execute!(conn, request, nil, opts)
   end
+
+  defp do_result({:ok, _request, response}), do: {:ok, response}
+  defp do_result({:error, exception}), do: {:error, exception}
 
   @doc """
   Acquires a connection from a pool and runs a series of requests or cursors with it.

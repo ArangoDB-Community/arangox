@@ -179,7 +179,7 @@ defmodule ArangoxTest do
   test "headers option" do
     header = {"header", "value"}
     {:ok, conn} = Arangox.start_link(opts(headers: Map.new([header])))
-    {:ok, %Request{headers: headers}, %Response{}} = Arangox.get(conn, "/_admin/time")
+    {:ok, %Request{headers: headers}, %Response{}} = Arangox.request(conn, :get, "/_admin/time")
 
     assert header in headers
   end
@@ -189,7 +189,7 @@ defmodule ArangoxTest do
     {:ok, conn} = Arangox.start_link(opts(headers: Map.new([header])))
 
     {:ok, %Request{headers: headers}, %Response{}} =
-      Arangox.get(conn, "/_admin/time", %{"header" => "new_value"})
+      Arangox.request(conn, :get, "/_admin/time", "", %{"header" => "new_value"})
 
     assert header not in headers
   end
@@ -210,7 +210,7 @@ defmodule ArangoxTest do
     test "when is loaded" do
       {:ok, conn} = Arangox.start_link(opts(client: Arangox.MintClient))
 
-      assert {:ok, %Request{}, %Response{}} = Arangox.get(conn, "/_admin/time")
+      assert {:ok, %Response{}} = Arangox.get(conn, "/_admin/time")
     end
   end
 
@@ -254,7 +254,7 @@ defmodule ArangoxTest do
     assert {:error, _} = Arangox.request(conn, :invalid_method, "/")
     assert_raise Error, fn -> Arangox.request!(conn, :invalid_method, "/") end
 
-    assert {:ok, %Request{method: :get}, %Response{}} = Arangox.get(conn, "/")
+    assert {:ok, %Request{method: :get}, %Response{}} = Arangox.request(conn, :get, "/")
     assert %Response{} = Arangox.get!(conn, "/")
   end
 

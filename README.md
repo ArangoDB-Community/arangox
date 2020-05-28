@@ -20,6 +20,27 @@ Tested on:
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
+iex> Arangox.get(conn, "/_admin/server/availability")
+{:ok,
+ %Arangox.Response{
+  body: %{"code" => 200, "error" => false, "mode" => "default"},
+  headers: %{},
+  status: 200
+}}
+iex> Arangox.get(conn, "/invalid")
+{:error,
+ %Arangox.Error{
+   endpoint: "http://localhost:8529",
+   error_num: 404,
+   message: "unknown path '/invalid'",
+   status: 404
+ }}
+iex> Arangox.get!(conn, "/_admin/server/availability")
+%Arangox.Response{
+  body: %{"code" => 200, "error" => false, "mode" => "default"},
+  headers: %{},
+  status: 200
+}
 iex> Arangox.request(conn, :get, "/_admin/server/availability")
 {:ok,
  %Arangox.Request{
@@ -32,20 +53,6 @@ iex> Arangox.request(conn, :get, "/_admin/server/availability")
    body: %{"code" => 200, "error" => false, "mode" => "default"},
    headers: %{},
    status: 200
- }}
-iex> Arangox.get!(conn, "/_admin/server/availability")
-%Arangox.Response{
-  body: %{"code" => 200, "error" => false, "mode" => "default"},
-  headers: %{},
-  status: 200
-}
-iex> Arangox.get(conn, "/invalid")
-{:error,
- %Arangox.Error{
-   endpoint: "http://localhost:8529",
-   error_num: 404,
-   message: "unknown path '/invalid'",
-   status: 404
  }}
 iex> Arangox.transaction(conn, fn c ->
 iex>   stream =
@@ -127,14 +134,8 @@ config :arangox, :json_library, Poison
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> Arangox.request(conn, :options, "/")
+iex> Arangox.options(conn, "/")
 {:ok,
- %Arangox.Request{
-   body: "",
-   headers: %{"authorization" => "..."},
-   method: :options,
-   path: "/"
- },
  %Arangox.Response{
    body: nil,
    headers: %{
@@ -235,7 +236,7 @@ obvious reasons:
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> {:ok, request, _response} = Arangox.options(conn, "/")
+iex> {:ok, request, _response} = Arangox.request(conn, :options, "/")
 iex> request.headers
 %{"authorization" => "..."}
 ```
@@ -255,14 +256,14 @@ only if it isn't already prepended. If the start option is not set, nothing is p
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
+iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_admin/time")
 iex> request.path
 "/_admin/time"
 iex> {:ok, conn} = Arangox.start_link(database: "_system", client: Arangox.GunClient)
-iex> {:ok, request, _response} = Arangox.get(conn, "/_admin/time")
+iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_admin/time")
 iex> request.path
 "/_db/_system/_admin/time"
-iex> {:ok, request, _response} = Arangox.get(conn, "/_db/_system/_admin/time")
+iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_db/_system/_admin/time")
 iex> request.path
 "/_db/_system/_admin/time"
 ```
@@ -286,7 +287,7 @@ any of the headers set by Arangox:
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"})
-iex> {:ok, request, _response} = Arangox.get(conn, "/_api/version")
+iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version")
 iex> request.headers
 %{"header" => "value"}
 ```
@@ -296,7 +297,7 @@ or set by Arangox:
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"})
-iex> {:ok, request, _response} = Arangox.get(conn, "/_api/version", %{"header" => "new_value"})
+iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version", "", %{"header" => "new_value"})
 iex> request.headers
 %{"header" => "new_value"}
 ```
