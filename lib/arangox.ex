@@ -52,7 +52,7 @@ defmodule Arangox do
   """
   @spec child_spec([start_option()]) :: Supervisor.child_spec()
   def child_spec(opts \\ []) do
-    ensure_valid!(opts)
+    ensure_opts_valid!(opts)
 
     DBConnection.child_spec(__MODULE__.Connection, opts)
   end
@@ -100,7 +100,7 @@ defmodule Arangox do
   """
   @spec start_link([start_option]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    ensure_valid!(opts)
+    ensure_opts_valid!(opts)
 
     DBConnection.start_link(__MODULE__.Connection, opts)
   end
@@ -420,7 +420,7 @@ defmodule Arangox do
   @spec json_library() :: module()
   def json_library, do: Application.get_env(:arangox, :json_library, Jason)
 
-  defp ensure_valid!(opts) do
+  defp ensure_opts_valid!(opts) do
     if endpoints = Keyword.get(opts, :endpoints) do
       unless is_binary(endpoints) or (is_list(endpoints) and endpoints_valid?(endpoints)) do
         raise ArgumentError, """
