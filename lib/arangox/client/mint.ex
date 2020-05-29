@@ -55,7 +55,7 @@ if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
 
     defp open({:unix, _path}, _ssl?, _options) do
       raise ArgumentError, """
-      Mint doesn't accept unix sockets yet :(
+      Mint doesn't support unix sockets :(
       """
     end
 
