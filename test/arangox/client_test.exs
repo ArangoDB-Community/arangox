@@ -96,7 +96,7 @@ defmodule Arangox.ClientTest do
     end
 
     test "ssl and ssl_opts" do
-      assert {:ok, [:ssl, _port]} = VelocyClient.connect(@ssl, [])
+      assert {:ok, {:ssl, _port}} = VelocyClient.connect(@ssl, [])
 
       assert {:error, _} = VelocyClient.connect(@ssl, ssl_opts: [verify: :verify_peer])
     end

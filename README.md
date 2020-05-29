@@ -70,7 +70,9 @@ iex> end)
 {:ok, [1, 2]}
 ```
 
-## Peer Dependencies
+## Clients
+
+### Velocy
 
 By default, Arangox communicates with _ArangoDB_ via _VelocyStream_, which requires the `:velocy` library:
 
@@ -109,6 +111,24 @@ end
 Arangox.start_link(client: Arangox.GunClient) # or Arangox.MintClient
 ```
 
+```elixir
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
+iex> Arangox.options(conn, "/")
+{:ok,
+ %Arangox.Response{
+   body: nil,
+   headers: %{
+     "allow" => "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+     "connection" => "Keep-Alive",
+     "content-length" => "0",
+     "content-type" => "text/plain; charset=utf-8",
+     "server" => "ArangoDB",
+     "x-content-type-options" => "nosniff"
+   },
+   status: 200
+ }}
+```
+
 __NOTE:__ `:mint` doesn't support unix sockets.
 
 __NOTE:__ Since `:gun` is an Erlang library, you _might_ need to add it as an extra application in `mix.exs`:
@@ -130,25 +150,22 @@ The default json library is `Jason`. To use a different library, set the `:json_
 config :arangox, :json_library, Poison
 ```
 
-### Examples
+### Benchmarks
 
-```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> Arangox.options(conn, "/")
-{:ok,
- %Arangox.Response{
-   body: nil,
-   headers: %{
-     "allow" => "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
-     "connection" => "Keep-Alive",
-     "content-length" => "0",
-     "content-type" => "text/plain; charset=utf-8",
-     "server" => "ArangoDB",
-     "x-content-type-options" => "nosniff"
-   },
-   status: 200
- }}
-```
+__pool size__ 10  
+__parallel processes__ 1000  
+__system__ virtual machine, 1 cpu (not shared), 2GB RAM
+
+| Name         | Latency   |
+| ------------ | --------- |
+| Velocy: GET  | 179.74 ms |
+| Velocy: POST | 201.23 ms |
+| Mint: GET    | 207.00 ms |
+| Mint: POST   | 216.53 ms |
+| Gun: GET     | 222.61 ms |
+| Gun: POST    | 243.65 ms |
+
+<sub>Results generated with [`Benchee`](https://hex.pm/packages/benchee).</sub>
 
 ## Start Options
 

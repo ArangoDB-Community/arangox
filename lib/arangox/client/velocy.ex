@@ -24,6 +24,14 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
     @vst_version_trunc trunc(@vst_version)
     @chunk_header_size 24
 
+    vst_maxsize = Application.get_env(:arangox, :vst_maxsize, 30_720)
+
+    unless vst_maxsize > @chunk_header_size,
+      do: raise(":vst_maxsize must be greater than #{@chunk_header_size}")
+
+    @vst_maxsize vst_maxsize
+    @chunk_without_header_size @vst_maxsize - @chunk_header_size
+
     @doc """
     Returns the configured maximum size (in bytes) for a _VelocyPack_ chunk.
 
@@ -31,31 +39,30 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
 
         config :arangox, :vst_maxsize, 12_345
 
-    Defaults to `30_720`.
+    Cannot be changed during runtime. Defaults to `30_720`.
     """
     @spec vst_maxsize() :: pos_integer()
-    def vst_maxsize, do: Application.get_env(:arangox, :vst_maxsize, 30_720)
+    def vst_maxsize, do: @vst_maxsize
 
     @spec authorize(Connection.t()) :: :ok | {:error, Error.t()}
     def authorize(%Connection{socket: socket, username: un, password: pw} = state) do
-      auth = [@vst_version_trunc, 1000, "plain", un, pw]
-
       with(
-        {:ok, auth} <- VelocyPack.encode(auth),
-        :ok <- send_stream(socket, build_stream(auth)),
-        {:ok, header} <- recv_header(socket),
-        {:ok, stream} <- recv_stream(socket, header),
-        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} <- decode_stream(stream)
+        {:ok, auth} <-
+          VelocyPack.encode([@vst_version_trunc, 1000, "plain", un, pw]),
+        :ok <-
+          send_stream(socket, build_stream(auth)),
+        {:ok, header} <-
+          recv_header(socket),
+        {:ok, stream} <-
+          recv_stream(socket, header),
+        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} <-
+          decode_stream(stream)
       ) do
         :ok
       else
         {:ok, [[@vst_version_trunc, 2, status, _headers] | [body | _]]} ->
           {:error,
-           %Error{
-             status: status,
-             message: body["errorMessage"],
-             endpoint: state.endpoint
-           }}
+           %Error{status: status, message: body["errorMessage"], endpoint: state.endpoint}}
 
         {:error, reason} ->
           {:error, reason}
@@ -71,15 +78,13 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
 
       options = Keyword.merge(transport_opts, packet: :raw, mode: :binary, active: false)
 
-      open(mod, addr, options, connect_timeout)
-    end
-
-    defp open(mod, addr, options, timeout) do
       with(
-        {:ok, port} <- mod.connect(addr_for(addr), port_for(addr), options, timeout),
-        :ok <- mod.send(port, "VST/#{@vst_version}\r\n\r\n")
+        {:ok, port} <-
+          mod.connect(addr_for(addr), port_for(addr), options, connect_timeout),
+        :ok <-
+          mod.send(port, "VST/#{@vst_version}\r\n\r\n")
       ) do
-        {:ok, [mod, port]}
+        {:ok, {mod, port}}
       end
     end
 
@@ -90,45 +95,46 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
     defp port_for({:tcp, _host, port}), do: port
 
     @impl true
-    def request(%Request{} = request, %Connection{socket: socket} = state) do
-      uri = URI.parse(request.path)
-      body = request.body
+    def request(
+          %Request{method: method, path: path, headers: headers, body: body},
+          %Connection{socket: socket, database: database} = state
+        ) do
+      %{path: path, query: query} = URI.parse(path)
+
+      {database, path} =
+        case path do
+          "/_db/" <> rest ->
+            [database, path] = :binary.split(rest, "/")
+
+            {database, "/" <> path}
+
+          _ ->
+            {database || "", path}
+        end
 
       request = [
         @vst_version_trunc,
         1,
-        case uri.path do
-          "/_db/" <> rest ->
-            rest
-            |> String.split("/")
-            |> hd()
-
-          _ ->
-            state.database || ""
-        end,
-        method_for(request.method),
-        case uri.path do
-          "/_db/" <> rest ->
-            rest
-            |> String.split("/")
-            |> tl()
-            |> Enum.join("/")
-            |> (&("/" <> &1)).()
-
-          path ->
-            path
-        end,
-        query_for(uri.query),
-        Map.new(request.headers)
+        database,
+        method_for(method),
+        path,
+        query_for(query),
+        headers_for(headers)
       ]
 
       with(
-        {:ok, request} <- VelocyPack.encode(request),
-        {:ok, body} <- body_for(body),
-        :ok <- send_stream(socket, build_stream(request <> body)),
-        {:ok, header} <- recv_header(socket),
-        {:ok, stream} <- recv_stream(socket, header),
-        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} <- decode_stream(stream)
+        {:ok, request} <-
+          VelocyPack.encode(request),
+        {:ok, body} <-
+          body_for(body),
+        :ok <-
+          send_stream(socket, build_stream(request <> body)),
+        {:ok, header} <-
+          recv_header(socket),
+        {:ok, stream} <-
+          recv_stream(socket, header),
+        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} <-
+          decode_stream(stream)
       ) do
         {:ok, %Response{status: status, headers: headers, body: body_from(body)}, state}
       else
@@ -240,6 +246,9 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
 
     # ------- End Query Parsing Functions --------
 
+    defp headers_for(%{} = headers), do: headers
+    defp headers_for(headers) when is_list(headers), do: :maps.from_list(headers)
+
     defp body_for(""), do: {:ok, ""}
     defp body_for(body), do: VelocyPack.encode(body)
 
@@ -247,20 +256,15 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
     defp body_from([body]), do: body
     defp body_from(body), do: body
 
-    defp build_stream(message, maxsize \\ vst_maxsize()) do
-      unless maxsize > @chunk_header_size,
-        do: raise(":vst_maxsize must be greater than #{@chunk_header_size}")
-
-      case chunk_every(message, maxsize - @chunk_header_size) do
+    defp build_stream(message) do
+      case chunk_every(message, @chunk_without_header_size) do
         [first_chunk | rest_chunks] ->
           n_chunks = length([first_chunk | rest_chunks])
           msg_length = byte_size(message) + n_chunks * @chunk_header_size
 
           rest_chunks =
             for n <- 1..length(rest_chunks), rest_chunks != [] do
-              rest_chunks
-              |> Enum.fetch!(n - 1)
-              |> prepend_chunk(n, 0, 0, msg_length)
+              prepend_chunk(:lists.nth(n, rest_chunks), n, 0, 0, msg_length)
             end
 
           [prepend_chunk(first_chunk, n_chunks, 1, 0, msg_length) | rest_chunks]
@@ -288,20 +292,25 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
       >>
     end
 
-    defp send_stream([mod, port], chunk) when is_binary(chunk), do: mod.send(port, chunk)
+    defp send_stream({mod, port}, chunk) when is_binary(chunk), do: mod.send(port, chunk)
 
-    defp send_stream([mod, port], chunks) when is_list(chunks) do
-      for p <- chunks do
-        mod.send(port, p)
+    defp send_stream({mod, port}, chunks) when is_list(chunks) do
+      for c <- chunks do
+        case mod.send(port, c) do
+          :ok ->
+            :ok
+
+          {_, error} ->
+            throw(error)
+        end
       end
-      |> Enum.filter(&(&1 != :ok))
-      |> case do
-        [] -> :ok
-        errors -> {:error, Enum.map(errors, &elem(&1, 1))}
-      end
+
+      :ok
+    catch
+      error -> {:error, error}
     end
 
-    defp recv_header([mod, port]) do
+    defp recv_header({mod, port}) do
       case mod.recv(port, @chunk_header_size) do
         {:ok,
          <<
@@ -310,7 +319,7 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
            msg_id::little-64,
            msg_length::little-64
          >>} ->
-          <<chunk_n::31, is_first::1>> = :binary.encode_unsigned(chunk_x, :little)
+          <<chunk_n::31, is_first::1>> = <<chunk_x::little-32>>
 
           {:ok, [chunk_length, chunk_n, is_first, msg_id, msg_length]}
 
@@ -319,13 +328,16 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
       end
     end
 
+    # TODO: this could be refactored to decode streams as they are received
     defp recv_stream(socket, [chunk_length, 1, 1, _msg_id, _msg_length]),
       do: recv_chunk(socket, chunk_length)
 
     defp recv_stream(socket, [chunk_length, n_chunks, 1, _msg_id, _msg_length]) do
       with(
-        {:ok, buffer} <- recv_chunk(socket, chunk_length),
-        {:ok, stream} <- recv_stream(socket, n_chunks, buffer)
+        {:ok, buffer} <-
+          recv_chunk(socket, chunk_length),
+        {:ok, stream} <-
+          recv_stream(socket, n_chunks, buffer)
       ) do
         {:ok, stream}
       end
@@ -334,8 +346,10 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
     defp recv_stream(socket, n_chunks, buffer) do
       Enum.reduce_while(1..(n_chunks - 1), buffer, fn n, buffer ->
         with(
-          {:ok, [chunk_length, _, _, _, _]} <- recv_header(socket),
-          {:ok, chunk} <- recv_chunk(socket, chunk_length)
+          {:ok, [chunk_length, _, _, _, _]} <-
+            recv_header(socket),
+          {:ok, chunk} <-
+            recv_chunk(socket, chunk_length)
         ) do
           if n == n_chunks - 1 do
             {:halt, {:ok, buffer <> chunk}}
@@ -349,7 +363,7 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
       end)
     end
 
-    defp recv_chunk([mod, port], chunk_length),
+    defp recv_chunk({mod, port}, chunk_length),
       do: mod.recv(port, chunk_length - @chunk_header_size)
 
     defp decode_stream(stream, acc \\ [])
@@ -381,6 +395,6 @@ if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
     end
 
     @impl true
-    def close(%Connection{socket: [mod, port]}), do: mod.close(port)
+    def close(%Connection{socket: {mod, port}}), do: mod.close(port)
   end
 end
