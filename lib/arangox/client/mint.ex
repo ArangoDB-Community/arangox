@@ -11,7 +11,7 @@ if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
     [__Documentation__](https://hexdocs.pm/mint/Mint.HTTP.html)
     """
 
-    alias Mint.HTTP
+    alias Mint.HTTP1, as: Mint
 
     alias Arangox.{
       Client,
@@ -41,7 +41,7 @@ if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
 
       with(
         {:ok, conn} <- open(addr, ssl?, options),
-        true <- HTTP.open?(conn)
+        true <- Mint.open?(conn)
       ) do
         {:ok, conn}
       else
@@ -62,62 +62,81 @@ if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
     defp open({:tcp, host, port}, ssl?, options) do
       scheme = if ssl?, do: :https, else: :http
 
-      HTTP.connect(scheme, host, port, options)
+      Mint.connect(scheme, host, port, options)
     end
 
     @impl true
-    def request(%Request{} = request, %Connection{} = state) do
+    def request(
+          %Request{method: method, path: path, headers: headers, body: body},
+          %Connection{socket: socket} = state
+        ) do
       {:ok, conn, ref} =
-        HTTP.request(
-          state.socket,
-          request.method |> Atom.to_string() |> String.upcase(),
-          request.path,
-          Enum.into(request.headers, [], fn {k, v} -> {k, v} end),
-          request.body
+        Mint.request(
+          socket,
+          method
+          |> to_string()
+          |> String.upcase(),
+          path,
+          Enum.into(headers, []),
+          body
         )
 
-      {new_conn, result} =
-        case HTTP.recv(conn, 0, :infinity) do
-          {:ok, new_conn, stream} ->
-            {new_conn, stream}
+      case do_recv(conn, ref) do
+        {:ok, new_conn, buffer} ->
+          do_response(ref, buffer, %{state | socket: new_conn})
 
-          {:error, new_conn, exception, _stream} ->
-            {new_conn, exception}
-        end
+        {:error, %_{state: :closed} = new_conn, _, ^ref} ->
+          {:error, :noproc, %{state | socket: new_conn}}
 
-      new_state = %{state | socket: new_conn}
+        {:error, new_conn, exception, ^ref} ->
+          {:error, exception, %{state | socket: new_conn}}
+      end
+    end
 
-      if alive?(new_state) do
-        case result do
-          [
-            {:status, ^ref, status},
-            {:headers, ^ref, headers},
-            {:done, ^ref}
-          ] ->
-            {:ok, %Response{status: status, headers: Map.new(headers)}, new_state}
+    def do_recv(conn, ref, buffer \\ []) do
+      case Mint.recv(conn, 0, :infinity) do
+        {:ok, new_conn, next_buffer} ->
+          if {:done, ref} in next_buffer do
+            {:ok, new_conn, buffer ++ next_buffer}
+          else
+            do_recv(new_conn, ref, buffer ++ next_buffer)
+          end
 
-          [
-            {:status, ^ref, status},
-            {:headers, ^ref, headers},
-            {:data, ^ref, body},
-            {:done, ^ref}
-          ] ->
-            {:ok, %Response{status: status, headers: Map.new(headers), body: body}, new_state}
+        {:error, _, _, ^ref} = error ->
+          error
+      end
+    end
 
-          %_{} = exception ->
-            {:error, exception, new_state}
-        end
-      else
-        {:error, :noproc, new_state}
+    def do_response(ref, buffer, state) do
+      case buffer do
+        [{:status, ^ref, status}, {:headers, ^ref, headers}, {:done, ^ref}] ->
+          {:ok, %Response{status: status, headers: Map.new(headers)}, state}
+
+        [{:status, ^ref, status}, {:headers, ^ref, headers}, {:data, ^ref, body}, {:done, ^ref}] ->
+          {:ok, %Response{status: status, headers: Map.new(headers), body: body}, state}
+
+        [{:status, ^ref, status}, {:headers, ^ref, headers} | rest_buffer] ->
+          body =
+            for kv <- rest_buffer, into: "" do
+              case kv do
+                {:data, ^ref, data} ->
+                  data
+
+                {:done, ^ref} ->
+                  ""
+              end
+            end
+
+          {:ok, %Response{status: status, headers: Map.new(headers), body: body}, state}
       end
     end
 
     @impl true
-    def alive?(%Connection{socket: conn}), do: HTTP.open?(conn)
+    def alive?(%Connection{socket: conn}), do: Mint.open?(conn)
 
     @impl true
     def close(%Connection{socket: conn}) do
-      HTTP.close(conn)
+      Mint.close(conn)
 
       :ok
     end
