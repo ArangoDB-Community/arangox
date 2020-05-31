@@ -8,3 +8,4 @@ alias Arangox.VelocyClient
 alias Arangox.GunClient
 alias Arangox.MintClient
 alias Velocy, as: VelocyPack
+alias Mint.HTTP1, as: Mint
