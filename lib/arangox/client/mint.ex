@@ -70,30 +70,37 @@ if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
           %Request{method: method, path: path, headers: headers, body: body},
           %Connection{socket: socket} = state
         ) do
-      {:ok, conn, ref} =
-        Mint.request(
-          socket,
-          method
-          |> to_string()
-          |> String.upcase(),
-          path,
-          Enum.into(headers, []),
-          body
-        )
+      with(
+        {:ok, new_socket, ref} <-
+          Mint.request(
+            socket,
+            method
+            |> to_string()
+            |> String.upcase(),
+            path,
+            Enum.into(headers, []),
+            body
+          ),
+        {:ok, new_socket, buffer} <-
+          do_recv(new_socket, ref)
+      ) do
+        do_response(ref, buffer, %{state | socket: new_socket})
+      else
+        {:error, new_socket, %_{reason: :closed}} ->
+          {:error, :noproc, %{state | socket: new_socket}}
 
-      case do_recv(conn, ref) do
-        {:ok, new_conn, buffer} ->
-          do_response(ref, buffer, %{state | socket: new_conn})
+        {:error, new_socket, %_{reason: :closed}, _} ->
+          {:error, :noproc, %{state | socket: new_socket}}
 
-        {:error, %_{state: :closed} = new_conn, _, ^ref} ->
-          {:error, :noproc, %{state | socket: new_conn}}
+        {:error, new_socket, exception} ->
+          {:error, exception, %{state | socket: new_socket}}
 
-        {:error, new_conn, exception, ^ref} ->
-          {:error, exception, %{state | socket: new_conn}}
+        {:error, new_socket, exception, _} ->
+          {:error, exception, %{state | socket: new_socket}}
       end
     end
 
-    def do_recv(conn, ref, buffer \\ []) do
+    defp do_recv(conn, ref, buffer \\ []) do
       case Mint.recv(conn, 0, :infinity) do
         {:ok, new_conn, next_buffer} ->
           if {:done, ref} in next_buffer do
@@ -102,12 +109,12 @@ if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
             do_recv(new_conn, ref, buffer ++ next_buffer)
           end
 
-        {:error, _, _, ^ref} = error ->
+        {:error, _, _, _} = error ->
           error
       end
     end
 
-    def do_response(ref, buffer, state) do
+    defp do_response(ref, buffer, state) do
       case buffer do
         [{:status, ^ref, status}, {:headers, ^ref, headers}, {:done, ^ref}] ->
           {:ok, %Response{status: status, headers: Map.new(headers)}, state}
