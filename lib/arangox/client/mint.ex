@@ -1,4 +1,4 @@
-if Code.ensure_compiled(Mint.HTTP) == {:module, Mint.HTTP} do
+if Code.ensure_loaded?(Mint.HTTP1) do
   defmodule Arangox.MintClient do
     @moduledoc """
     An HTTP client implementation of the \

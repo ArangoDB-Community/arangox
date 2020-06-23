@@ -1,4 +1,4 @@
-if Code.ensure_compiled(:gun) == {:module, :gun} do
+if Code.ensure_loaded?(:gun) do
   defmodule Arangox.GunClient do
     @moduledoc """
     An HTTP client implementation of the \

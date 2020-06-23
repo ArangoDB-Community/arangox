@@ -160,7 +160,7 @@ defmodule Arangox.Connection do
     do: {:ok, %{state | username: nil, password: nil}}
 
   defp resolve_auth(%__MODULE__{client: VelocyClient} = state) do
-    case VelocyClient.authorize(state) do
+    case apply(VelocyClient, :authorize, [state]) do
       :ok ->
         {:ok, state}
 

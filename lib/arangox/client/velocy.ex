@@ -1,4 +1,4 @@
-if Code.ensure_compiled(VelocyPack) == {:module, VelocyPack} do
+if Code.ensure_loaded?(VelocyPack) do
   defmodule Arangox.VelocyClient do
     @moduledoc """
     The default client. Implements the \
