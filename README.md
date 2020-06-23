@@ -10,9 +10,9 @@ Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-bina
 
 Tested on:
 
-- __ArangoDB__ 3.3.9 - 3.6
-- __Elixir__ 1.6 - 1.10
-- __OTP__ 20 - 22
+- **ArangoDB** 3.3.9 - 3.6
+- **Elixir** 1.6 - 1.10
+- **OTP** 20 - 23
 
 [Documentation](https://hexdocs.pm/arangox/readme.html)
 
@@ -129,9 +129,9 @@ iex> Arangox.options(conn, "/")
  }}
 ```
 
-__NOTE:__ `:mint` doesn't support unix sockets.
+**NOTE:** `:mint` doesn't support unix sockets.
 
-__NOTE:__ Since `:gun` is an Erlang library, you _might_ need to add it as an extra application in `mix.exs`:
+**NOTE:** Since `:gun` is an Erlang library, you _might_ need to add it as an extra application in `mix.exs`:
 
 ```elixir
 def application() do
@@ -152,9 +152,9 @@ config :arangox, :json_library, Poison
 
 ### Benchmarks
 
-__pool size__ 10  
-__parallel processes__ 1000  
-__system__ virtual machine, 1 cpu (not shared), 2GB RAM
+**pool size** 10  
+**parallel processes** 1000  
+**system** virtual machine, 1 cpu (not shared), 2GB RAM
 
 | Name         | Latency   |
 | ------------ | --------- |
@@ -331,7 +331,7 @@ See [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-co
 for more information on `:tcp_opts`, or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
 
 The `:client_opts` option can be used to pass client-specific options to `:gun` or `:mint`.
-These options are merged with and may override values set by arangox. Some options  cannot be
+These options are merged with and may override values set by arangox. Some options cannot be
 overridden (i.e. `:mint`'s `:mode` option). If `:transport_opts` is set here it will override
 everything given to `:tcp_opts` or `:ssl_opts`, regardless of whether or not a connection is
 encrypted.
