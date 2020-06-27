@@ -10,7 +10,7 @@ Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-bina
 
 Tested on:
 
-- **ArangoDB** 3.3.9 - 3.6
+- **ArangoDB** 3.4 - 3.6
 - **Elixir** 1.6 - 1.10
 - **OTP** 20 - 23
 
