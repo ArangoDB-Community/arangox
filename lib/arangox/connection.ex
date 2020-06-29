@@ -346,7 +346,7 @@ defmodule Arangox.Connection do
       {:ok, _request, %Response{status: 200} = response, state} <-
         handle_execute(
           nil,
-          %Request{method: :put, path: Path.join(@path_trx, id)},
+          %Request{method: :delete, path: Path.join(@path_trx, id)},
           opts,
           %{state | headers: headers}
         )
