@@ -1,6 +1,6 @@
 # Arangox
 
-[![Build Status](https://travis-ci.org/ArangoDB-Community/arangox.svg?branch=master)](https://travis-ci.org/ArangoDB-Community/arangox)
+[![Build Status](https://travis-ci.org/ArangoDB-Community/arangox.svg?branch=dev)](https://travis-ci.org/ArangoDB-Community/arangox)
 
 An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).

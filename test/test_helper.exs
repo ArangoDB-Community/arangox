@@ -1,6 +1,9 @@
 defmodule TestHelper do
   def opts(opts \\ []) do
-    Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
+    Keyword.merge(
+      [show_sensitive_data_on_connection_error: true, queue_target: 1000, queue_interval: 1000],
+      opts
+    )
   end
 
   def unreachable, do: "http://fake_endpoint:1234"
