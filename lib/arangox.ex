@@ -47,6 +47,13 @@ defmodule Arangox do
           | {:client_opts, :gun.opts() | keyword()}
           | DBConnection.start_option()
 
+  @type transaction_option ::
+          {:read, binary() | [binary()]}
+          | {:write, binary() | [binary()]}
+          | {:exclusive, binary() | [binary()]}
+          | {:properties, list() | map()}
+          | DBConnection.option()
+
   @doc """
   Returns a supervisor child specification for a DBConnection pool.
   """
@@ -336,7 +343,7 @@ defmodule Arangox do
         properties: [waitForSync: true]
       ])
   """
-  @spec transaction(conn, (DBConnection.t() -> result), [DBConnection.option()]) ::
+  @spec transaction(conn, (DBConnection.t() -> result), [transaction_option()]) ::
           {:ok, result} | {:error, any}
         when result: var
   defdelegate transaction(conn, fun, opts \\ []), to: DBConnection
