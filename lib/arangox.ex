@@ -360,7 +360,7 @@ defmodule Arangox do
   @doc """
   Aborts a transaction for the given reason.
 
-  Delegates to `DBConnection.abort/2`.
+  Delegates to `DBConnection.rollback/2`.
 
   ## Example
 
