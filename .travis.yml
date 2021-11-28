@@ -6,15 +6,13 @@ before_script:
   - docker-compose up -d
 matrix:
   include:
-    - elixir: 1.9
-      otp_release: 22.0
+    - elixir: "1.6"
       script:
         - MIX_ENV=test mix do deps.get, credo --strict, test
-    - elixir: 1.10
-      otp_release: 22.0
+    - elixir: "1.12"
       script:
         - mix format --check-formatted
         - MIX_ENV=test mix do deps.get, credo --strict, test
 branches:
-  - master
-  - dev
+  only:
+    - master
