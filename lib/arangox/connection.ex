@@ -9,7 +9,9 @@ defimpl DBConnection.Query, for: BitString do
 end
 
 defmodule Arangox.Connection do
-  @moduledoc false
+  @moduledoc """
+  `DBConnection` implementation for `Arangox`.
+  """
 
   use DBConnection
 
