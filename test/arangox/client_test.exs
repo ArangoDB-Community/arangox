@@ -157,7 +157,7 @@ defmodule Arangox.ClientTest do
     end
 
     test "tcp_opts option" do
-      catch_exit(GunClient.connect(@default, tcp_opts: [verify: :verify_peer]))
+      assert {:error, _} = GunClient.connect(@default, tcp_opts: [verify: :verify_peer])
     end
 
     test "connect_timeout option" do

@@ -54,7 +54,7 @@ defmodule Arangox.MixProject do
       {:db_connection, "~> 2.2"},
       {:velocy, "~> 0.1", optional: true},
       {:jason, "> 0.0.0", optional: true},
-      {:gun, "~> 1.3.0", optional: true},
+      {:gun, "~> 1.3.3", optional: true},
       {:mint, ">= 0.4.0 and < 2.0.0", optional: true},
       {:ex_doc, "> 0.0.0", only: :dev, runtime: false},
       {:credo, "~> 1.4", only: [:dev, :test], runtime: false}
