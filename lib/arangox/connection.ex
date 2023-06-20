@@ -467,11 +467,11 @@ defmodule Arangox.Connection do
   end
 
   @impl true
-  def handle_execute(_q, %Request{} = request, _opts, %__MODULE__{} = state) do
+  def handle_execute(_q, %Request{} = request, opts, %__MODULE__{} = state) do
     request =
       request
       |> merge_headers(state.headers)
-      |> maybe_prepend_database(state)
+      |> maybe_prepend_database(state, opts)
       |> maybe_encode_body(state)
 
     case Client.request(request, state) do
@@ -533,17 +533,27 @@ defmodule Arangox.Connection do
 
   defp sanitize_headers(%{headers: _headers} = struct) when is_map(struct), do: struct
 
+  defp maybe_prepend_database(%Request{path: path} = request, state, opts) do
+    case Keyword.get(opts, :database) do
+      nil ->
+        do_db_prepend(request, state)
+
+      db ->
+        %{request | path: "/_db/" <> db <> path}
+    end
+  end
+
   # Only prepends when not velocy or nil or path already contains /_db/
-  defp maybe_prepend_database(%Request{} = request, %{client: VelocyClient}),
+  defp do_db_prepend(%Request{} = request, %{client: VelocyClient}),
     do: request
 
-  defp maybe_prepend_database(%Request{} = request, %{database: nil}),
+  defp do_db_prepend(%Request{} = request, %{database: nil}),
     do: request
 
-  defp maybe_prepend_database(%Request{path: "/_db/" <> _} = request, %{database: _db}),
+  defp do_db_prepend(%Request{path: "/_db/" <> _} = request, %{database: _db}),
     do: request
 
-  defp maybe_prepend_database(%Request{path: path} = request, %{database: db}),
+  defp do_db_prepend(%Request{path: path} = request, %{database: db}),
     do: %{request | path: "/_db/" <> db <> path}
 
   # Only encodes when not velocy or empty string

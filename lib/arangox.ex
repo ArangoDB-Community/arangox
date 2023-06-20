@@ -327,6 +327,7 @@ defmodule Arangox do
     * `:read` - An array of collection names or a single collection name as a binary.
     * `:write` - An array of collection names or a single collection name as a binary.
     * `:exclusive` - An array of collection names or a single collection name as a binary.
+    * `:database` - Sets what database to run the transaction on
     * `:properties` - A list or map of additional body attributes to append to the request
     body when beginning a transaction.
 
@@ -387,6 +388,7 @@ defmodule Arangox do
   Accepts any of the options accepted by `DBConnection.stream/4`, as well as any of the
   following:
 
+    * `:database` - Sets what database to run the cursor query on
     * `:properties` - A list or map of additional body attributes to append to the
     request body when creating the cursor.
 
