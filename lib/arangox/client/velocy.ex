@@ -24,7 +24,7 @@ if Code.ensure_loaded?(VelocyPack) do
     @vst_version_trunc trunc(@vst_version)
     @chunk_header_size 24
 
-    vst_maxsize = Application.get_env(:arangox, :vst_maxsize, 30_720)
+    vst_maxsize = Application.compile_env(:arangox, :vst_maxsize, 30_720)
 
     unless vst_maxsize > @chunk_header_size,
       do: raise(":vst_maxsize must be greater than #{@chunk_header_size}")
