@@ -570,6 +570,19 @@ defmodule Arangox.Connection do
 
   defp maybe_decode_body(%_{body: nil} = struct, %__MODULE__{}), do: struct
 
+  defp maybe_decode_body(
+         %_{body: body, headers: %{"content-type" => "application/x-arango-dump"}} = struct,
+         %__MODULE__{}
+       ) do
+    content =
+      body
+      |> String.split("\n")
+      |> Enum.filter(fn line -> String.length(line) > 0 end)
+      |> Enum.map(fn line -> Arangox.json_library().decode!(line) end)
+
+    %{struct | body: content}
+  end
+
   defp maybe_decode_body(%_{body: body} = struct, %__MODULE__{}) do
     %{struct | body: Arangox.json_library().decode!(body)}
   end
