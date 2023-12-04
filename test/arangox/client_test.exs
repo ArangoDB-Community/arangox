@@ -166,14 +166,14 @@ defmodule Arangox.ClientTest do
 
     test "client_opts option" do
       assert {:error, _} =
-               GunClient.connect(@ssl, client_opts: %{transport_opts: [verify: :verify_peer]})
+               GunClient.connect(@ssl, client_opts: %{tls_opts: [verify: :verify_peer]})
     end
 
     test "client_opts takes precedence" do
       assert {:error, _} =
                GunClient.connect(@ssl,
-                 transport_opts: [verify: :verify_none],
-                 client_opts: %{transport_opts: [verify: :verify_peer]}
+                 tls_opts: [verify: :verify_none],
+                 client_opts: %{tls_opts: [verify: :verify_peer]}
                )
     end
   end

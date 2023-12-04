@@ -27,8 +27,8 @@ if Code.ensure_loaded?(:gun) do
     def connect(%Endpoint{addr: addr, ssl?: ssl?}, opts) do
       transport = if ssl?, do: :tls, else: :tcp
       connect_timeout = Keyword.get(opts, :connect_timeout, 5_000)
-      transport_opts = if ssl?, do: :ssl_opts, else: :tcp_opts
-      transport_opts = Keyword.get(opts, transport_opts, [])
+      tcp_opts = Keyword.get(opts, :tcp_opts, [])
+      tls_opts = Keyword.get(opts, :ssl_opts, [])
       client_opts = Keyword.get(opts, :client_opts, %{})
 
       options = %{
@@ -36,7 +36,8 @@ if Code.ensure_loaded?(:gun) do
         http_opts: %{keepalive: :infinity},
         retry: 0,
         transport: transport,
-        transport_opts: transport_opts,
+        tcp_opts: tcp_opts,
+        tls_opts: tls_opts,
         connect_timeout: connect_timeout
       }
 
