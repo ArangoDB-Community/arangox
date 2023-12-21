@@ -136,7 +136,7 @@ iex> Arangox.options(conn, "/")
 ```elixir
 def application() do
   [
-    extra_applications: [:logger, :gun])
+    extra_applications: [:logger, :gun]
   ]
 end
 ```
