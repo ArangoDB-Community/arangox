@@ -20,40 +20,21 @@ Tested on:
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
-iex> Arangox.get(conn, "/_admin/server/availability")
-{:ok,
- %Arangox.Response{
-  body: %{"code" => 200, "error" => false, "mode" => "default"},
-  headers: %{},
-  status: 200
-}}
-iex> Arangox.get(conn, "/invalid")
-{:error,
- %Arangox.Error{
-   endpoint: "http://localhost:8529",
-   error_num: 404,
-   message: "unknown path '/invalid'",
-   status: 404
- }}
-iex> Arangox.get!(conn, "/_admin/server/availability")
-%Arangox.Response{
-  body: %{"code" => 200, "error" => false, "mode" => "default"},
-  headers: %{},
-  status: 200
-}
-iex> Arangox.request(conn, :get, "/_admin/server/availability")
-{:ok,
- %Arangox.Request{
-   body: "",
-   headers: %{},
-   method: :get,
-   path: "/_admin/server/availability"
- },
- %Arangox.Response{
-   body: %{"code" => 200, "error" => false, "mode" => "default"},
-   headers: %{},
-   status: 200
- }}
+iex> {:ok, %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}}} = Arangox.get(conn, "/_admin/server/availability")
+iex> {:error, %Arangox.Error{status: 404}} = Arangox.get(conn, "/invalid")
+iex> %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}} = Arangox.get!(conn, "/_admin/server/availability")
+iex> {:ok, 
+iex>   %Arangox.Request{
+iex>     body: "",
+iex>     headers: %{},
+iex>     method: :get,
+iex>     path: "/_admin/server/availability"
+iex>   },
+iex>   %Arangox.Response{
+iex>     status: 200, 
+iex>     body: %{"code" => 200, "error" => false, "mode" => "default"}
+iex>   }
+iex> } = Arangox.request(conn, :get, "/_admin/server/availability")
 iex> Arangox.transaction(conn, fn c ->
 iex>   stream =
 iex>     Arangox.cursor(
@@ -113,20 +94,7 @@ Arangox.start_link(client: Arangox.GunClient) # or Arangox.MintClient
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> Arangox.options(conn, "/")
-{:ok,
- %Arangox.Response{
-   body: nil,
-   headers: %{
-     "allow" => "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
-     "connection" => "Keep-Alive",
-     "content-length" => "0",
-     "content-type" => "text/plain; charset=utf-8",
-     "server" => "ArangoDB",
-     "x-content-type-options" => "nosniff"
-   },
-   status: 200
- }}
+iex> {:ok, %Arangox.Response{status: 200, body: nil}} = Arangox.options(conn, "/")
 ```
 
 **NOTE:** `:mint` doesn't support unix sockets.
@@ -222,9 +190,7 @@ iex> {:ok, conn} = Arangox.start_link(endpoints: endpoints, read_only?: true)
 iex> %Arangox.Response{body: body} = Arangox.get!(conn, "/_admin/server/mode")
 iex> body["mode"]
 "readonly"
-iex> {:error, exception} = Arangox.post(conn, "/_api/database", %{name: "newDatabase"})
-iex> exception.message
-"forbidden"
+iex> {:error, %Arangox.Error{status: 403}} = Arangox.post(conn, "/_api/database", %{name: "newDatabase"})
 ```
 
 ## Authentication
@@ -243,9 +209,7 @@ behavior, set the `:auth?` option to `false`.
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(auth?: false, client: Arangox.GunClient)
-iex> {:error, exception} = Arangox.get(conn, "/_admin/server/mode")
-iex> exception.message
-"not authorized to execute this request"
+iex> {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
 ```
 
 The header value is obfuscated in transfomed requests returned by arangox, for
@@ -348,12 +312,7 @@ Request timeouts default to `15_000`.
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link()
-iex> Arangox.get!(conn, "/_admin/server/availability", [], timeout: 15_000)
-%Arangox.Response{
-  body: %{"code" => 200, "error" => false, "mode" => "default"},
-  headers: %{},
-  status: 200
-}
+iex> %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}} = Arangox.get!(conn, "/_admin/server/availability", [], timeout: 15_000)
 ```
 
 ## Contributing
