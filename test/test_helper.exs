@@ -1,6 +1,14 @@
 defmodule TestHelper do
   def opts(opts \\ []) do
-    Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
+    opts_with_defaults = Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
+
+    case Keyword.get(opts_with_defaults, :auth_mode, :not_present) do
+      :not_present ->
+        Keyword.put(opts_with_defaults, :auth, Arangox.Auth.off())
+
+      _ ->
+        opts_with_defaults
+    end
   end
 
   def unreachable, do: "http://fake_endpoint:1234"

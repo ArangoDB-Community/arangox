@@ -30,7 +30,7 @@ defmodule Arangox.Connection do
           endpoint: Arangox.endpoint(),
           failover?: boolean,
           database: binary,
-          auth_mode: Arangox.Auth.t,
+          auth_mode: Arangox.Auth.t(),
           username: binary,
           password: binary,
           jwt_token: binary,
@@ -173,7 +173,9 @@ defmodule Arangox.Connection do
     end
   end
 
-  defp resolve_auth(%__MODULE__{auth_mode: :authentication_basic, username: un, password: pw} = state) do
+  defp resolve_auth(
+         %__MODULE__{auth_mode: :authentication_basic, username: un, password: pw} = state
+       ) do
     base64_encoded = Base.encode64("#{un}:#{pw}")
     {:ok, put_header(state, {"authorization", "Basic #{base64_encoded}"})}
   end

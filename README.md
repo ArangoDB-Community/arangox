@@ -208,7 +208,7 @@ When using an HTTP client, Arangox will generate a _Basic_ authorization header 
 behavior, set the `:auth_mode` option to `Arangox.Auth.off()`.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(auth?: false, client: Arangox.GunClient)
+iex> {:ok, conn} = Arangox.start_link(auth_mode: Arangox.Auth.off(), client: Arangox.GunClient)
 iex> {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
 ```
 

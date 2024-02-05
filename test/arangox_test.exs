@@ -65,9 +65,9 @@ defmodule ArangoxTest do
   end
 
   test "connecting with bogus mode" do
-    assert_raise ArgumentError,  fn ->
+    assert_raise ArgumentError, fn ->
       Arangox.start_link(opts(auth_mode: "bogus"))
-      end
+    end
   end
 
   test "connecting with auth disabled" do
