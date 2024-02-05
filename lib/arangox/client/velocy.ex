@@ -45,7 +45,7 @@ if Code.ensure_loaded?(VelocyPack) do
     def vst_maxsize, do: @vst_maxsize
 
     @spec authorize(Connection.t()) :: :ok | {:error, Error.t()}
-    def authorize(%Connection{socket: socket, username: un, password: pw} = state) do
+    def authorize(%Connection{socket: socket, auth_mode: {:authentication_basic, un, pw}} = state) do
       with(
         {:ok, auth} <-
           VelocyPack.encode([@vst_version_trunc, 1000, "plain", un, pw]),

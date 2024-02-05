@@ -31,8 +31,6 @@ defmodule Arangox.Connection do
           failover?: boolean,
           database: binary,
           auth_mode: Arangox.Auth.t(),
-          username: binary,
-          password: binary,
           headers: Arangox.headers(),
           disconnect_on_error_codes: [integer],
           read_only?: boolean,
@@ -50,9 +48,7 @@ defmodule Arangox.Connection do
     :failover?,
     :database,
     :cursors,
-    auth_mode: Arangox.Auth.basic(),
-    username: "root",
-    password: "",
+    auth_mode: {Arangox.Auth.basic(), "root", ""},
     headers: %{},
     disconnect_on_error_codes: [401, 405, 503, 505],
     read_only?: false
@@ -159,7 +155,7 @@ defmodule Arangox.Connection do
   end
 
   defp resolve_auth(%__MODULE__{auth_mode: :authentication_off} = state),
-    do: {:ok, %{state | username: nil, password: nil}}
+    do: {:ok, state}
 
   defp resolve_auth(%__MODULE__{client: VelocyClient} = state) do
     case apply(VelocyClient, :authorize, [state]) do
@@ -171,9 +167,7 @@ defmodule Arangox.Connection do
     end
   end
 
-  defp resolve_auth(
-         %__MODULE__{auth_mode: :authentication_basic, username: un, password: pw} = state
-       ) do
+  defp resolve_auth(%__MODULE__{auth_mode: {:authentication_basic, un, pw}} = state) do
     base64_encoded = Base.encode64("#{un}:#{pw}")
     {:ok, put_header(state, {"authorization", "Basic #{base64_encoded}"})}
   end

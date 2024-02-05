@@ -36,8 +36,6 @@ defmodule Arangox do
           | {:endpoints, list(endpoint)}
           | {:auth_mode, Arangox.Auth.t()}
           | {:database, binary}
-          | {:username, binary}
-          | {:password, binary}
           | {:headers, headers}
           | {:read_only?, boolean}
           | {:connect_timeout, timeout}
@@ -86,8 +84,6 @@ defmodule Arangox do
     * `:auth_mode` - Configure whether to resolve authorization. Defaults to Arangox.Auth.basic()`.
     Options are: `Arangox.Auth.off()`,
     `{Arangox.Auth.basic(), username, password}`, `{Arangox.Auth.jwt(), jwt_token}`.
-    * `:username` - Defaults to `"root"`.
-    * `:password` - Defaults to `""`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
     * `:connect_timeout` - Sets the timeout for establishing connections with a database.

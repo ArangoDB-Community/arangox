@@ -2,12 +2,16 @@ defmodule TestHelper do
   def opts(opts \\ []) do
     opts_with_defaults = Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
 
-    case Keyword.get(opts_with_defaults, :auth_mode, :not_present) do
-      :not_present ->
-        Keyword.put(opts_with_defaults, :auth, Arangox.Auth.off())
-
-      _ ->
-        opts_with_defaults
+    # Case if our test code has provided username and password
+    if Keyword.has_key?(opts_with_defaults, :username) and
+         Keyword.has_key?(opts_with_defaults, :password) do
+      Keyword.put(
+        opts_with_defaults,
+        :auth_mode,
+        {Arangox.Auth.basic(), opts_with_defaults[:username], opts_with_defaults[:password]}
+      )
+    else
+      opts_with_defaults
     end
   end
 
