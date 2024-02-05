@@ -187,7 +187,7 @@ defmodule ArangoxTest do
   test "auth resolution with an http client and invalid JWT token" do
     {:ok, conn1} =
       Arangox.start_link(
-        opts(auth_mode: :authentication_jwt, jwt_token: "invalid", client: GunClient)
+        opts(auth_mode: {:authentication_jwt, "invalid"}, client: GunClient)
       )
 
     assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
@@ -204,7 +204,7 @@ defmodule ArangoxTest do
 
     {:ok, conn2} =
       Arangox.start_link(
-        opts(auth_mode: :authentication_jwt, jwt_token: body1["jwt"], client: GunClient)
+        opts(auth_mode: {Arangox.Auth.jwt(), body1["jwt"]}, client: GunClient)
       )
 
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")

@@ -38,7 +38,6 @@ defmodule Arangox do
           | {:database, binary}
           | {:username, binary}
           | {:password, binary}
-          | {:jwt_token, binary}
           | {:headers, headers}
           | {:read_only?, boolean}
           | {:connect_timeout, timeout}
@@ -84,12 +83,11 @@ defmodule Arangox do
     * `:disconnect_on_error_codes` - A list of status codes that will trigger a forced disconnect.
     Only integers within the range `400..599` are affected. Defaults to
     `[401, 405, 503, 505]`.
-    * `:auth_mode` - Configure whether to resolve authorization (with the `:username` and
-    `:password` options or `:jwt_token` option). Defaults to Arangox.Auth.basic()`. Options are: `Arangox.Auth.off()`,
-    `Arangox.Auth.basic()`, `Arangox.Auth.jwt()`.
+    * `:auth_mode` - Configure whether to resolve authorization. Defaults to Arangox.Auth.basic()`.
+    Options are: `Arangox.Auth.off()`,
+    `{Arangox.Auth.basic(), username, password}`, `{Arangox.Auth.jwt(), jwt_token}`.
     * `:username` - Defaults to `"root"`.
     * `:password` - Defaults to `""`.
-    * `:jwt_token` - Defaults to `""`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
     * `:connect_timeout` - Sets the timeout for establishing connections with a database.
@@ -449,12 +447,7 @@ defmodule Arangox do
     end
 
     if auth_mode = Keyword.get(opts, :auth_mode) do
-      unless auth_mode in Arangox.Auth.allTypes() do
-        raise ArgumentError, """
-        The :auth_mode option expects one of the following atoms: :auth_off, :auth_basic_auth, :auth_jwt,\
-        got: #{inspect(auth_mode)}
-        """
-      end
+      Arangox.Auth.validate(auth_mode)
     end
 
     if client = Keyword.get(opts, :client) do

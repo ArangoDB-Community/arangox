@@ -33,7 +33,6 @@ defmodule Arangox.Connection do
           auth_mode: Arangox.Auth.t(),
           username: binary,
           password: binary,
-          jwt_token: binary,
           headers: Arangox.headers(),
           disconnect_on_error_codes: [integer],
           read_only?: boolean,
@@ -54,7 +53,6 @@ defmodule Arangox.Connection do
     auth_mode: Arangox.Auth.basic(),
     username: "root",
     password: "",
-    jwt_token: nil,
     headers: %{},
     disconnect_on_error_codes: [401, 405, 503, 505],
     read_only?: false
@@ -180,7 +178,7 @@ defmodule Arangox.Connection do
     {:ok, put_header(state, {"authorization", "Basic #{base64_encoded}"})}
   end
 
-  defp resolve_auth(%__MODULE__{auth_mode: :authentication_jwt, jwt_token: jwt_token} = state) do
+  defp resolve_auth(%__MODULE__{auth_mode: {:authentication_jwt, jwt_token}} = state) do
     {:ok, put_header(state, {"authorization", "Bearer #{jwt_token}"})}
   end
 
