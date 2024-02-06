@@ -10,8 +10,6 @@ defmodule ArangoxTest do
     Response
   }
 
-  doctest Arangox
-
   @unreachable TestHelper.unreachable()
   @default TestHelper.default()
   @no_auth TestHelper.no_auth()
