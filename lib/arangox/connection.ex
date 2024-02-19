@@ -48,7 +48,7 @@ defmodule Arangox.Connection do
     :failover?,
     :database,
     :cursors,
-    auth: {:basic, "root", ""},
+    auth: :off,
     headers: %{},
     disconnect_on_error_codes: [401, 405, 503, 505],
     read_only?: false

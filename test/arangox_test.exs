@@ -11,8 +11,8 @@ defmodule ArangoxTest do
   }
 
   @unreachable TestHelper.unreachable()
+  @auth TestHelper.auth()
   @default TestHelper.default()
-  @no_auth TestHelper.no_auth()
   @ssl TestHelper.ssl()
   @failover_1 TestHelper.failover_1()
   @failover_2 TestHelper.failover_2()
@@ -41,7 +41,7 @@ defmodule ArangoxTest do
   @tag capture_log: false
   test "disconnect_on_error_codes option" do
     {:ok, conn_empty} =
-      Arangox.start_link(opts(disconnect_on_error_codes: [], auth: :off))
+      Arangox.start_link(opts(endpoints: [@auth], disconnect_on_error_codes: [], auth: :off))
 
     refute capture_log(fn ->
              Arangox.get(conn_empty, "/_admin/server/mode")
@@ -49,7 +49,7 @@ defmodule ArangoxTest do
            end) =~ "disconnected"
 
     {:ok, conn_401} =
-      Arangox.start_link(opts(disconnect_on_error_codes: [401], auth: :off))
+      Arangox.start_link(opts(endpoints: [@auth], disconnect_on_error_codes: [401], auth: :off))
 
     assert capture_log(fn ->
              Arangox.get(conn_401, "/_admin/server/mode")
@@ -69,15 +69,17 @@ defmodule ArangoxTest do
   end
 
   test "connecting with auth disabled" do
-    {:ok, conn1} = Arangox.start_link(opts(auth: :off))
+    {:ok, conn1} = Arangox.start_link(opts(endpoints: [@auth], auth: :off))
     assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
 
-    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@no_auth], auth: :off))
+    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@default], auth: :off))
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")
   end
 
   test "connecting with ssl" do
-    {:ok, conn} = Arangox.start_link(opts(endpoints: [@ssl]))
+    {:ok, conn} =
+      Arangox.start_link(opts(auth: :basic, username: "root", password: "", endpoints: [@ssl]))
+
     Arangox.get!(conn, "/_admin/time")
   end
 
@@ -162,37 +164,53 @@ defmodule ArangoxTest do
   end
 
   test "auth resolution with velocy client" do
-    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: ""))
+    {:ok, conn1} = Arangox.start_link(opts(endpoints: [@auth], username: "root", password: ""))
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
-    {:ok, conn2} = Arangox.start_link(opts(username: "root", password: "invalid"))
+
+    {:ok, conn2} =
+      Arangox.start_link(opts(endpoints: [@auth], username: "root", password: "invalid"))
+
     assert {:error, %DBConnection.ConnectionError{}} = Arangox.get(conn2, "/_admin/server/mode")
-    {:ok, conn3} = Arangox.start_link(opts(username: "invalid", password: ""))
+    {:ok, conn3} = Arangox.start_link(opts(endpoints: [@auth], username: "invalid", password: ""))
     assert {:error, %DBConnection.ConnectionError{}} = Arangox.get(conn3, "/_admin/server/mode")
   end
 
   test "auth resolution with an http client" do
-    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: "", client: GunClient))
+    {:ok, conn1} =
+      Arangox.start_link(
+        opts(endpoints: [@auth], username: "root", password: "", client: GunClient)
+      )
+
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
 
     {:ok, conn2} =
-      Arangox.start_link(opts(username: "root", password: "invalid", client: GunClient))
+      Arangox.start_link(
+        opts(endpoints: [@auth], username: "root", password: "invalid", client: GunClient)
+      )
 
     assert {:error, %Error{status: 401}} = Arangox.get(conn2, "/_admin/server/mode")
-    {:ok, conn3} = Arangox.start_link(opts(username: "invalid", password: "", client: GunClient))
+
+    {:ok, conn3} =
+      Arangox.start_link(
+        opts(endpoints: [@auth], username: "invalid", password: "", client: GunClient)
+      )
+
     assert {:error, %Error{status: 401}} = Arangox.get(conn3, "/_admin/server/mode")
   end
 
   test "auth resolution with an http client and invalid JWT token" do
     {:ok, conn1} =
-      Arangox.start_link(
-        opts(auth: {:jwt, "invalid"}, client: GunClient)
-      )
+      Arangox.start_link(opts(endpoints: [@auth], auth: {:jwt, "invalid"}, client: GunClient))
 
     assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
   end
 
   test "auth resolution with an http client and valid JWT token" do
-    {:ok, conn1} = Arangox.start_link(opts(username: "root", password: "", client: GunClient))
+    {:ok, conn1} =
+      Arangox.start_link(
+        opts(endpoints: [@auth], username: "root", password: "", client: GunClient)
+      )
+
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
 
     assert %Response{status: 200, body: body1} =
@@ -201,9 +219,7 @@ defmodule ArangoxTest do
     assert Map.has_key?(body1, "jwt")
 
     {:ok, conn2} =
-      Arangox.start_link(
-        opts(auth: {:jwt, body1["jwt"]}, client: GunClient)
-      )
+      Arangox.start_link(opts(auth: {:jwt, body1["jwt"]}, client: GunClient))
 
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")
   end
@@ -254,7 +270,7 @@ defmodule ArangoxTest do
     {:ok, _} =
       Arangox.start_link(
         opts(
-          endpoints: [@unreachable, @unreachable, @default],
+          endpoints: [@unreachable, @unreachable, @auth],
           failover_callback: fun
         )
       )
@@ -262,7 +278,7 @@ defmodule ArangoxTest do
     {:ok, _} =
       Arangox.start_link(
         opts(
-          endpoints: [@unreachable, @unreachable, @default],
+          endpoints: [@unreachable, @unreachable, @auth],
           failover_callback: tuple
         )
       )
@@ -291,7 +307,8 @@ defmodule ArangoxTest do
   end
 
   test "transaction/3" do
-    {:ok, conn1} = Arangox.start_link(opts())
+    {:ok, conn1} =
+      Arangox.start_link(opts(endpoints: [@auth], username: "root", password: "", auth: :basic))
 
     assert {:ok, %Response{}} =
              Arangox.transaction(
@@ -300,7 +317,7 @@ defmodule ArangoxTest do
                timeout: 15_000
              )
 
-    {:ok, conn2} = Arangox.start_link(opts(auth: :off))
+    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@auth], auth: :off))
 
     assert {:error, :rollback} =
              Arangox.transaction(

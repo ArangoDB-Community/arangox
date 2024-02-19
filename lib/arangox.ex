@@ -81,7 +81,7 @@ defmodule Arangox do
     * `:disconnect_on_error_codes` - A list of status codes that will trigger a forced disconnect.
     Only integers within the range `400..599` are affected. Defaults to
     `[401, 405, 503, 505]`.
-    * `:auth` - Configure whether to resolve authorization. Defaults to :basic`.
+    * `:auth` - Configure whether to resolve authorization. Defaults to :off`.
     Options are: `:off`,
     `{:basic, username, password}`, `{:jwt, bearer}`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover

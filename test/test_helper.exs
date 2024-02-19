@@ -1,6 +1,12 @@
 defmodule TestHelper do
   def opts(opts \\ []) do
-    opts_with_defaults = Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
+    default_opts = [
+      show_sensitive_data_on_connection_error: true,
+      auth: :off,
+      endpoints: [default()]
+    ]
+
+    opts_with_defaults = Keyword.merge(default_opts, opts)
 
     # Case if our test code has provided username and password
     if Keyword.has_key?(opts_with_defaults, :username) and
@@ -16,8 +22,9 @@ defmodule TestHelper do
   end
 
   def unreachable, do: "http://fake_endpoint:1234"
-  def default, do: "http://localhost:8529"
-  def no_auth, do: "http://localhost:8001"
+  # default is pointing to instance with disabled authentication
+  def default, do: "http://localhost:8001"
+  def auth, do: "http://localhost:8529"
   def ssl, do: "ssl://localhost:8002"
   def failover_1, do: "http://localhost:8003"
   def failover_2, do: "http://localhost:8004"
