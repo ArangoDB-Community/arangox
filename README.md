@@ -19,7 +19,7 @@ Tested on:
 ## Examples
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
+iex> {:ok, conn} = Arangox.start_link(pool_size: 10, endpoints: ["http://localhost:8001"])
 iex> {:ok, %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}}} = Arangox.get(conn, "/_admin/server/availability")
 iex> {:error, %Arangox.Error{status: 404}} = Arangox.get(conn, "/invalid")
 iex> %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}} = Arangox.get!(conn, "/_admin/server/availability")
@@ -150,8 +150,7 @@ Is equivalent to:
 ```elixir
 options = [
   endpoints: "http://localhost:8529",
-  username: "root",
-  password: "",
+  auth: :off,
   pool_size: 1
 ]
 Arangox.start_link(options)
@@ -216,10 +215,17 @@ The header value is obfuscated in transfomed requests returned by arangox, for
 obvious reasons:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> {:ok, request, _response} = Arangox.request(conn, :options, "/")
-iex> request.headers
+iex > {:ok, conn} =
+  Arangox.start_link(
+    client: Arangox.GunClient,
+    endpoints: ["http://localhost:8529"],
+    auth: {:basic, "root", ""}
+  )
+
+iex > {:ok, request, _response} = Arangox.request(conn, :options, "/")
+iex > request.headers
 %{"authorization" => "..."}
+
 ```
 
 ## Databases
@@ -236,17 +242,27 @@ When using an HTTP client, arangox will prepend `/_db/:value` to the path of eve
 only if it isn't already prepended. If the start option is not set, nothing is prepended.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
-iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_admin/time")
-iex> request.path
+iex > {:ok, conn} =
+  Arangox.start_link(client: Arangox.GunClient, endpoints: ["http://localhost:8001"])
+
+iex > {:ok, request, _response} = Arangox.request(conn, :get, "/_admin/time")
+iex > request.path
 "/_admin/time"
-iex> {:ok, conn} = Arangox.start_link(database: "_system", client: Arangox.GunClient)
-iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_admin/time")
-iex> request.path
+
+iex > {:ok, conn} =
+  Arangox.start_link(
+    database: "_system",
+    client: Arangox.GunClient,
+    endpoints: ["http://localhost:8001"]
+  )
+
+iex > {:ok, request, _response} = Arangox.request(conn, :get, "/_admin/time")
+iex > request.path
 "/_db/_system/_admin/time"
-iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_db/_system/_admin/time")
-iex> request.path
+iex > {:ok, request, _response} = Arangox.request(conn, :get, "/_db/_system/_admin/time")
+iex > request.path
 "/_db/_system/_admin/time"
+
 ```
 
 ## Headers
@@ -267,17 +283,20 @@ Headers given to the start option are merged with every request, but will not ov
 any of the headers set by Arangox:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"})
-iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version")
-iex> request.headers
+iex > {:ok, conn} =
+  Arangox.start_link(headers: %{"header" => "value"}, endpoints: ["http://localhost:8001"])
+
+iex > {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version")
+iex > request.headers
 %{"header" => "value"}
+
 ```
 
 Headers passed to requests will override any of the headers given to the start option
 or set by Arangox:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"})
+iex> {:ok, conn} = Arangox.start_link(headers: %{"header" => "value"}, endpoints: ["http://localhost:8001"])
 iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version", "", %{"header" => "new_value"})
 iex> request.headers
 %{"header" => "new_value"}
