@@ -21,7 +21,7 @@ defmodule Arangox.Auth do
       _ ->
         raise ArgumentError, """
         The :auth expects one of the following options: `:off`,\
-        `:basic`, `:jwt`,\
+        `{:basic, username, password}`, `{:jwt, bearer}`,\
         got: #{inspect(auth)}
         """
     end
