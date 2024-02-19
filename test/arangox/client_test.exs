@@ -12,8 +12,14 @@ defmodule Arangox.ClientTest do
     VelocyClient
   }
 
-  @default Endpoint.new(TestHelper.default())
+  @auth Endpoint.new(TestHelper.auth())
   @ssl Endpoint.new(TestHelper.ssl())
+
+  def default_opts do
+    [
+      auth: {:basic, "root", ""},
+    ]
+  end
 
   describe "internal api:" do
     test "connect/3" do
@@ -41,8 +47,8 @@ defmodule Arangox.ClientTest do
 
   describe "velocy client:" do
     test "implementation" do
-      assert {:ok, socket} = VelocyClient.connect(@default, [])
-      state = struct(Connection, socket: socket)
+      assert {:ok, socket} = VelocyClient.connect(@auth, default_opts())
+      state = struct(Connection, socket: socket, auth: {:basic, "root", ""})
       assert VelocyClient.alive?(state)
 
       assert :ok = VelocyClient.authorize(state)
@@ -73,8 +79,9 @@ defmodule Arangox.ClientTest do
     test "building and receiving multiple chunks (large requests and responses)" do
       Application.put_env(:arangox, :vst_maxsize, 30)
 
-      {:ok, socket} = VelocyClient.connect(@default, [])
-      state = struct(Connection, socket: socket)
+      opts = default_opts()
+      {:ok, socket} = VelocyClient.connect(@auth, opts)
+      state = struct(Connection, socket: socket, auth: {:basic, "root", ""})
       :ok = VelocyClient.authorize(state)
       body = for _ <- 1..100, into: "", do: "a"
 
@@ -102,16 +109,18 @@ defmodule Arangox.ClientTest do
     end
 
     test "tcp_opts option" do
-      catch_exit(VelocyClient.connect(@default, tcp_opts: [verify: :verify_peer]))
+      catch_exit(VelocyClient.connect(@auth, tcp_opts: [verify: :verify_peer]))
     end
 
     # test "connect_timeout option" do
-    #   assert {:error, :timeout} = VelocyClient.connect(@default, connect_timeout: 0)
+    #   assert {:error, :timeout} = VelocyClient.connect(@auth, connect_timeout: 0)
     # end
 
     test "arangox's transport opts can't be overridden" do
+      opts = default_opts()
+      opts = Keyword.merge(opts, [packet: :raw, mode: :binary, active: false])
       assert {:ok, socket} =
-               VelocyClient.connect(@default, packet: :raw, mode: :binary, active: false)
+               VelocyClient.connect(@auth, opts)
 
       state = struct(Connection, socket: socket)
       assert VelocyClient.alive?(state)
@@ -123,7 +132,7 @@ defmodule Arangox.ClientTest do
 
   describe "gun client:" do
     test "implementation" do
-      assert {:ok, pid} = GunClient.connect(@default, [])
+      assert {:ok, pid} = GunClient.connect(@auth, [])
       state = struct(Connection, socket: pid)
       assert GunClient.alive?(state)
 
@@ -157,11 +166,11 @@ defmodule Arangox.ClientTest do
     end
 
     test "tcp_opts option" do
-      assert {:error, _} = GunClient.connect(@default, tcp_opts: [verify: :verify_peer])
+      assert {:error, _} = GunClient.connect(@auth, tcp_opts: [verify: :verify_peer])
     end
 
     test "connect_timeout option" do
-      assert {:error, :timeout} = GunClient.connect(@default, connect_timeout: 0)
+      assert {:error, :timeout} = GunClient.connect(@auth, connect_timeout: 0)
     end
 
     test "client_opts option" do
@@ -180,7 +189,7 @@ defmodule Arangox.ClientTest do
 
   describe "mint client:" do
     test "implementation" do
-      assert {:ok, conn} = MintClient.connect(@default, [])
+      assert {:ok, conn} = MintClient.connect(@auth, [])
       state = struct(Connection, socket: conn)
       assert MintClient.alive?(state)
 
@@ -199,13 +208,13 @@ defmodule Arangox.ClientTest do
     end
 
     test "tcp_opts option" do
-      catch_exit(MintClient.connect(@default, tcp_opts: [verify: :verify_peer]))
+      catch_exit(MintClient.connect(@auth, tcp_opts: [verify: :verify_peer]))
     end
 
     # Only fails in travis-ci :(
     # test "connect_timeout option" do
     #   assert {:error, %TransportError{reason: :timeout}} =
-    #            MintClient.connect(@default, connect_timeout: 0)
+    #            MintClient.connect(@auth, connect_timeout: 0)
     # end
 
     test "client_opts option" do
@@ -226,7 +235,7 @@ defmodule Arangox.ClientTest do
 
     test "mode is always :passive" do
       assert {:ok, %_{mode: :passive}} =
-               MintClient.connect(@default, client_opts: [mode: :active])
+               MintClient.connect(@auth, client_opts: [mode: :active])
     end
   end
 end
