@@ -6,7 +6,8 @@ An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).
 
 Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/),
-[active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streamed cursors.
+[active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html),
+transactions and streamed cursors.
 
 Tested on:
 
@@ -203,13 +204,14 @@ This can be disabled by setting the `:auth` option to `:off`.
 
 ### HTTP
 
-When using an HTTP client, Arangox will generate a _Basic_ authorization header with the
-`:username` and `:password` options and add it to every request. To prevent this
-behavior, set the `:auth` option to `:off`.
+When using an HTTP client, Arangox will generate a _Basic_ authorization header in case the `:auth`
+option is set to `{:basic, username, password}` or to `{:jwt, bearer}`. In that case it will be
+attached to every request. If the `:auth` option is not explicitly set, no authorization header
+will be added to requests.
 
 ```elixir
 iex > {:ok, conn} =
-  Arangox.start_link(auth: :off, client: Arangox.GunClient, endpoints: "http://localhost:8001")
+  Arangox.start_link(client: Arangox.GunClient, endpoints: "http://localhost:8001")
 
 iex > {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
 
@@ -295,7 +297,8 @@ encrypted connections respectively. When using `:gun` or `:mint`, these options 
 directly to the `:transport_opts` connect option.
 
 See [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-connect_option)
-for more information on `:tcp_opts`, or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
+for more information on `:tcp_opts`,
+or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
 
 The `:client_opts` option can be used to pass client-specific options to `:gun` or `:mint`.
 These options are merged with and may override values set by arangox. Some options cannot be
@@ -309,7 +312,9 @@ information.
 
 ## Request Options
 
-Request options are handled by and passed directly to `:db_connection`. See [execute/4](https://hexdocs.pm/db_connection/DBConnection.html#execute/4) in the `:db_connection` docs for supported options.
+Request options are handled by and passed directly to `:db_connection`.
+See [execute/4](https://hexdocs.pm/db_connection/DBConnection.html#execute/4) in the `:db_connection` docs for supported
+options.
 
 Request timeouts default to `15_000`.
 

@@ -82,7 +82,7 @@ defmodule Arangox.Connection do
 
   @impl true
   def connect(opts) do
-    client = Keyword.get(opts, :client, VelocyClient)
+    client = Keyword.get(opts, :client, Arangox.MintClient)
     endpoints = Keyword.get(opts, :endpoints, "http://localhost:8529")
 
     with(
@@ -154,9 +154,6 @@ defmodule Arangox.Connection do
     exception
   end
 
-  defp resolve_auth(%__MODULE__{auth: :off} = state),
-    do: {:ok, state}
-
   defp resolve_auth(%__MODULE__{client: VelocyClient} = state) do
     case apply(VelocyClient, :authorize, [state]) do
       :ok ->
@@ -174,6 +171,10 @@ defmodule Arangox.Connection do
 
   defp resolve_auth(%__MODULE__{auth: {:jwt, bearer}} = state) do
     {:ok, put_header(state, {"authorization", "Bearer #{bearer}"})}
+  end
+
+  defp resolve_auth(%__MODULE__{} = state) do
+    {:ok, state}
   end
 
   defp check_availability(%__MODULE__{read_only?: true} = state) do

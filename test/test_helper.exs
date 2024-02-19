@@ -2,7 +2,6 @@ defmodule TestHelper do
   def opts(opts \\ []) do
     default_opts = [
       show_sensitive_data_on_connection_error: true,
-      auth: :off,
       endpoints: [default()]
     ]
 

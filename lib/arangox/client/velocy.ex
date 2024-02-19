@@ -69,6 +69,15 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    def authorize(%Connection{auth: :off}) do
+      {:error,
+       "Implementation of VelocyClient always requires authorization, but none was provided."}
+    end
+
+    def authorize(%Connection{auth: {:jwt, _bearer}}) do
+      {:error, "Implementation of VelocyClient only does support Basic authentication."}
+    end
+
     @impl true
     def connect(%Endpoint{addr: addr, ssl?: ssl?}, opts) do
       mod = if ssl?, do: :ssl, else: :gen_tcp
