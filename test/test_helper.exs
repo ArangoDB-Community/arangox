@@ -7,8 +7,8 @@ defmodule TestHelper do
          Keyword.has_key?(opts_with_defaults, :password) do
       Keyword.put(
         opts_with_defaults,
-        :auth_mode,
-        {Arangox.Auth.basic(), opts_with_defaults[:username], opts_with_defaults[:password]}
+        :auth,
+        {:basic, opts_with_defaults[:username], opts_with_defaults[:password]}
       )
     else
       opts_with_defaults

@@ -41,7 +41,7 @@ defmodule ArangoxTest do
   @tag capture_log: false
   test "disconnect_on_error_codes option" do
     {:ok, conn_empty} =
-      Arangox.start_link(opts(disconnect_on_error_codes: [], auth_mode: Arangox.Auth.off()))
+      Arangox.start_link(opts(disconnect_on_error_codes: [], auth: :off))
 
     refute capture_log(fn ->
              Arangox.get(conn_empty, "/_admin/server/mode")
@@ -49,7 +49,7 @@ defmodule ArangoxTest do
            end) =~ "disconnected"
 
     {:ok, conn_401} =
-      Arangox.start_link(opts(disconnect_on_error_codes: [401], auth_mode: Arangox.Auth.off()))
+      Arangox.start_link(opts(disconnect_on_error_codes: [401], auth: :off))
 
     assert capture_log(fn ->
              Arangox.get(conn_401, "/_admin/server/mode")
@@ -64,15 +64,15 @@ defmodule ArangoxTest do
 
   test "connecting with bogus mode" do
     assert_raise ArgumentError, fn ->
-      Arangox.start_link(opts(auth_mode: "bogus"))
+      Arangox.start_link(opts(auth: "bogus"))
     end
   end
 
   test "connecting with auth disabled" do
-    {:ok, conn1} = Arangox.start_link(opts(auth_mode: :authentication_off))
+    {:ok, conn1} = Arangox.start_link(opts(auth: :off))
     assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
 
-    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@no_auth], auth_mode: :authentication_off))
+    {:ok, conn2} = Arangox.start_link(opts(endpoints: [@no_auth], auth: :off))
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")
   end
 
@@ -185,7 +185,7 @@ defmodule ArangoxTest do
   test "auth resolution with an http client and invalid JWT token" do
     {:ok, conn1} =
       Arangox.start_link(
-        opts(auth_mode: {:authentication_jwt, "invalid"}, client: GunClient)
+        opts(auth: {:jwt, "invalid"}, client: GunClient)
       )
 
     assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
@@ -202,7 +202,7 @@ defmodule ArangoxTest do
 
     {:ok, conn2} =
       Arangox.start_link(
-        opts(auth_mode: {Arangox.Auth.jwt(), body1["jwt"]}, client: GunClient)
+        opts(auth: {:jwt, body1["jwt"]}, client: GunClient)
       )
 
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")
@@ -300,7 +300,7 @@ defmodule ArangoxTest do
                timeout: 15_000
              )
 
-    {:ok, conn2} = Arangox.start_link(opts(auth_mode: :authentication_off))
+    {:ok, conn2} = Arangox.start_link(opts(auth: :off))
 
     assert {:error, :rollback} =
              Arangox.transaction(

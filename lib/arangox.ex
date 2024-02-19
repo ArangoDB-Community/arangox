@@ -34,7 +34,7 @@ defmodule Arangox do
   @type start_option ::
           {:client, module}
           | {:endpoints, list(endpoint)}
-          | {:auth_mode, Arangox.Auth.t()}
+          | {:auth, Arangox.Auth.t()}
           | {:database, binary}
           | {:headers, headers}
           | {:read_only?, boolean}
@@ -81,9 +81,9 @@ defmodule Arangox do
     * `:disconnect_on_error_codes` - A list of status codes that will trigger a forced disconnect.
     Only integers within the range `400..599` are affected. Defaults to
     `[401, 405, 503, 505]`.
-    * `:auth_mode` - Configure whether to resolve authorization. Defaults to Arangox.Auth.basic()`.
-    Options are: `Arangox.Auth.off()`,
-    `{Arangox.Auth.basic(), username, password}`, `{Arangox.Auth.jwt(), jwt_token}`.
+    * `:auth` - Configure whether to resolve authorization. Defaults to :basic`.
+    Options are: `:off`,
+    `{:basic, username, password}`, `{:jwt, bearer}`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
     * `:connect_timeout` - Sets the timeout for establishing connections with a database.
@@ -442,8 +442,8 @@ defmodule Arangox do
       end
     end
 
-    if auth_mode = Keyword.get(opts, :auth_mode) do
-      Arangox.Auth.validate(auth_mode)
+    if auth = Keyword.get(opts, :auth) do
+      Arangox.Auth.validate(auth)
     end
 
     if client = Keyword.get(opts, :client) do

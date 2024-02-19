@@ -199,16 +199,16 @@ iex> {:error, %Arangox.Error{status: 403}} = Arangox.post(conn, "/_api/database"
 
 When using the default client, authorization is resolved with the `:username`
 and `:password` options after a connection is established (authorization headers are not used).
-This can be disabled by setting the `:auth_mode` option to `Arangox.Auth.off()`.
+This can be disabled by setting the `:auth` option to `:off`.
 
 ### HTTP
 
 When using an HTTP client, Arangox will generate a _Basic_ authorization header with the
 `:username` and `:password` options and add it to every request. To prevent this
-behavior, set the `:auth_mode` option to `Arangox.Auth.off()`.
+behavior, set the `:auth` option to `:off`.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(auth_mode: Arangox.Auth.off(), client: Arangox.GunClient)
+iex> {:ok, conn} = Arangox.start_link(auth: :off, client: Arangox.GunClient)
 iex> {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
 ```
 

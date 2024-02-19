@@ -30,7 +30,7 @@ defmodule Arangox.Connection do
           endpoint: Arangox.endpoint(),
           failover?: boolean,
           database: binary,
-          auth_mode: Arangox.Auth.t(),
+          auth: Arangox.Auth.t(),
           headers: Arangox.headers(),
           disconnect_on_error_codes: [integer],
           read_only?: boolean,
@@ -48,7 +48,7 @@ defmodule Arangox.Connection do
     :failover?,
     :database,
     :cursors,
-    auth_mode: {Arangox.Auth.basic(), "root", ""},
+    auth: {:basic, "root", ""},
     headers: %{},
     disconnect_on_error_codes: [401, 405, 503, 505],
     read_only?: false
@@ -154,7 +154,7 @@ defmodule Arangox.Connection do
     exception
   end
 
-  defp resolve_auth(%__MODULE__{auth_mode: :authentication_off} = state),
+  defp resolve_auth(%__MODULE__{auth: :off} = state),
     do: {:ok, state}
 
   defp resolve_auth(%__MODULE__{client: VelocyClient} = state) do
@@ -167,13 +167,13 @@ defmodule Arangox.Connection do
     end
   end
 
-  defp resolve_auth(%__MODULE__{auth_mode: {:authentication_basic, un, pw}} = state) do
+  defp resolve_auth(%__MODULE__{auth: {:basic, un, pw}} = state) do
     base64_encoded = Base.encode64("#{un}:#{pw}")
     {:ok, put_header(state, {"authorization", "Basic #{base64_encoded}"})}
   end
 
-  defp resolve_auth(%__MODULE__{auth_mode: {:authentication_jwt, jwt_token}} = state) do
-    {:ok, put_header(state, {"authorization", "Bearer #{jwt_token}"})}
+  defp resolve_auth(%__MODULE__{auth: {:jwt, bearer}} = state) do
+    {:ok, put_header(state, {"authorization", "Bearer #{bearer}"})}
   end
 
   defp check_availability(%__MODULE__{read_only?: true} = state) do
