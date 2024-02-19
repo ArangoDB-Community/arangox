@@ -208,15 +208,18 @@ When using an HTTP client, Arangox will generate a _Basic_ authorization header 
 behavior, set the `:auth` option to `:off`.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(auth: :off, client: Arangox.GunClient)
-iex> {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
+iex > {:ok, conn} =
+  Arangox.start_link(auth: :off, client: Arangox.GunClient, endpoints: "http://localhost:8001")
+
+iex > {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
+
 ```
 
 The header value is obfuscated in transfomed requests returned by arangox, for
 obvious reasons:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, auth: {:basic, "root", ""})
 iex> {:ok, request, _response} = Arangox.request(conn, :options, "/")
 iex> request.headers
 %{"authorization" => "..."}
