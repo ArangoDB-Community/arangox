@@ -24,7 +24,7 @@ iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
 iex> {:ok, %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}}} = Arangox.get(conn, "/_admin/server/availability")
 iex> {:error, %Arangox.Error{status: 404}} = Arangox.get(conn, "/invalid")
 iex> %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}} = Arangox.get!(conn, "/_admin/server/availability")
-iex> {:ok, 
+iex> {:ok,
 iex>   %Arangox.Request{
 iex>     body: "",
 iex>     headers: %{},
@@ -32,7 +32,7 @@ iex>     method: :get,
 iex>     path: "/_admin/server/availability"
 iex>   },
 iex>   %Arangox.Response{
-iex>     status: 200, 
+iex>     status: 200,
 iex>     body: %{"code" => 200, "error" => false, "mode" => "default"}
 iex>   }
 iex> } = Arangox.request(conn, :get, "/_admin/server/availability")
@@ -151,8 +151,6 @@ Is equivalent to:
 ```elixir
 options = [
   endpoints: "http://localhost:8529",
-  username: "root",
-  password: "",
   pool_size: 1
 ]
 Arangox.start_link(options)
@@ -198,27 +196,25 @@ iex> {:error, %Arangox.Error{status: 403}} = Arangox.post(conn, "/_api/database"
 
 ### Velocy
 
-When using the default client, authorization is resolved with the `:username`
-and `:password` options after a connection is established (authorization headers are not used).
-This can be disabled by setting the `:auth` option to `:off`.
+ArangoDB's VelocyStream endpoints _do not_ read authorization headers, authentication configuration _must_ be 
+provided as options to `Arangox.start_link/1`. 
+
+As a consequence, if you're using bearer auth, there are a couple of caveats to bear in mind:
+
+* New JWT tokens can only be requested in a seperate connection (i.e. during startup before the primary pool
+is initialized)
+* Refreshed tokens can only be authorized by restarting a connection pool
 
 ### HTTP
 
-When using an HTTP client, Arangox will generate a _Basic_ authorization header in case the `:auth`
-option is set to `{:basic, username, password}` or to `{:jwt, bearer}`. In that case it will be
-attached to every request. If the `:auth` option is not explicitly set, no authorization header
-will be added to requests.
+When using an HTTP client, Arangox will generate a _Basic_ or _Bearer_ authorization header if the `:auth` option is set to `{:basic, username, password}` or to `{:bearer, token}` respectively, and append it to every request. If the `:auth` option is not explicitly set, no authorization header will be appended.
 
 ```elixir
-iex > {:ok, conn} =
-  Arangox.start_link(client: Arangox.GunClient, endpoints: "http://localhost:8001")
-
-iex > {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
-
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, endpoints: "http://localhost:8001")
+iex> {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
 ```
 
-The header value is obfuscated in transfomed requests returned by arangox, for
-obvious reasons:
+The header value is obfuscated in transfomed requests returned by arangox, for obvious reasons:
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, auth: {:basic, "root", ""})
@@ -238,7 +234,7 @@ _ArangoDB_ will assume the `_system` database.
 ### HTTP
 
 When using an HTTP client, arangox will prepend `/_db/:value` to the path of every request
-only if it isn't already prepended. If the start option is not set, nothing is prepended.
+only if one isn't already prepended. If a `:database` option is not set, nothing is prepended.
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)

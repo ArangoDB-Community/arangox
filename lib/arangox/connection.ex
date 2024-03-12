@@ -48,7 +48,7 @@ defmodule Arangox.Connection do
     :failover?,
     :database,
     :cursors,
-    auth: :off,
+    :auth,
     headers: %{},
     disconnect_on_error_codes: [401, 405, 503, 505],
     read_only?: false
@@ -82,7 +82,7 @@ defmodule Arangox.Connection do
 
   @impl true
   def connect(opts) do
-    client = Keyword.get(opts, :client, Arangox.MintClient)
+    client = Keyword.get(opts, :client, Arangox.VelocyClient)
     endpoints = Keyword.get(opts, :endpoints, "http://localhost:8529")
 
     with(
@@ -155,7 +155,7 @@ defmodule Arangox.Connection do
   end
 
   defp resolve_auth(%__MODULE__{client: VelocyClient} = state) do
-    case apply(VelocyClient, :authorize, [state]) do
+    case apply(VelocyClient, :maybe_authenticate, [state]) do
       :ok ->
         {:ok, state}
 
@@ -169,8 +169,8 @@ defmodule Arangox.Connection do
     {:ok, put_header(state, {"authorization", "Basic #{base64_encoded}"})}
   end
 
-  defp resolve_auth(%__MODULE__{auth: {:jwt, bearer}} = state) do
-    {:ok, put_header(state, {"authorization", "Bearer #{bearer}"})}
+  defp resolve_auth(%__MODULE__{auth: {:bearer, token}} = state) do
+    {:ok, put_header(state, {"authorization", "Bearer #{token}"})}
   end
 
   defp resolve_auth(%__MODULE__{} = state) do

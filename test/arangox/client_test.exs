@@ -51,7 +51,7 @@ defmodule Arangox.ClientTest do
       state = struct(Connection, socket: socket, auth: {:basic, "root", ""})
       assert VelocyClient.alive?(state)
 
-      assert :ok = VelocyClient.authorize(state)
+      assert :ok = VelocyClient.maybe_authenticate(state)
 
       assert {:ok, %Response{status: 200}, ^state} =
                VelocyClient.request(%Request{method: :get, path: "/_api/database/current"}, state)
@@ -82,7 +82,7 @@ defmodule Arangox.ClientTest do
       opts = default_opts()
       {:ok, socket} = VelocyClient.connect(@auth, opts)
       state = struct(Connection, socket: socket, auth: {:basic, "root", ""})
-      :ok = VelocyClient.authorize(state)
+      :ok = VelocyClient.maybe_authenticate(state)
       body = for _ <- 1..100, into: "", do: "a"
 
       assert {:ok, %Response{status: 200}, ^state} =

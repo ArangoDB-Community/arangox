@@ -1,23 +1,11 @@
 defmodule TestHelper do
   def opts(opts \\ []) do
     default_opts = [
+      pool_size: 10,
       show_sensitive_data_on_connection_error: true,
-      endpoints: [default()]
     ]
 
-    opts_with_defaults = Keyword.merge(default_opts, opts)
-
-    # Case if our test code has provided username and password
-    if Keyword.has_key?(opts_with_defaults, :username) and
-         Keyword.has_key?(opts_with_defaults, :password) do
-      Keyword.put(
-        opts_with_defaults,
-        :auth,
-        {:basic, opts_with_defaults[:username], opts_with_defaults[:password]}
-      )
-    else
-      opts_with_defaults
-    end
+    Keyword.merge(default_opts, opts)
   end
 
   def unreachable, do: "http://fake_endpoint:1234"

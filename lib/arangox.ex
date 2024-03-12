@@ -5,6 +5,7 @@ defmodule Arangox do
              |> Enum.join("\n")
 
   alias __MODULE__.{
+    Auth,
     Error,
     GunClient,
     MintClient,
@@ -81,9 +82,8 @@ defmodule Arangox do
     * `:disconnect_on_error_codes` - A list of status codes that will trigger a forced disconnect.
     Only integers within the range `400..599` are affected. Defaults to
     `[401, 405, 503, 505]`.
-    * `:auth` - Configure whether to resolve authorization. Defaults to :off`.
-    Options are: `:off`,
-    `{:basic, username, password}`, `{:jwt, bearer}`.
+    * `:auth` - Configure whether to resolve authorization.
+    Options are: `{:basic, username, password}`, `{:bearer, token}`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
     * `:connect_timeout` - Sets the timeout for establishing connections with a database.
@@ -443,7 +443,7 @@ defmodule Arangox do
     end
 
     if auth = Keyword.get(opts, :auth) do
-      Arangox.Auth.validate(auth)
+      Auth.validate(auth)
     end
 
     if client = Keyword.get(opts, :client) do

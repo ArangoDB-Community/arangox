@@ -62,7 +62,7 @@ defmodule ArangoxTest do
     Arangox.get!(conn, "/_admin/time")
   end
 
-  test "connecting with bogus mode" do
+  test "connecting with bogus auth" do
     assert_raise ArgumentError, fn ->
       Arangox.start_link(opts(auth: "bogus"))
     end
@@ -78,7 +78,7 @@ defmodule ArangoxTest do
 
   test "connecting with ssl" do
     {:ok, conn} =
-      Arangox.start_link(opts(auth: :basic, username: "root", password: "", endpoints: [@ssl]))
+      Arangox.start_link(opts(auth: {:basic, "root", ""}, endpoints: [@ssl], ssl_opts: [verify: :verify_none]))
 
     Arangox.get!(conn, "/_admin/time")
   end
@@ -167,7 +167,7 @@ defmodule ArangoxTest do
   test "auth resolution with velocy client" do
     {:ok, conn1} =
       Arangox.start_link(
-        opts(endpoints: [@auth], username: "root", password: "", client: Arangox.VelocyClient)
+        opts(endpoints: [@auth], auth: {:basic, "root", ""}, client: Arangox.VelocyClient)
       )
 
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
@@ -176,8 +176,7 @@ defmodule ArangoxTest do
       Arangox.start_link(
         opts(
           endpoints: [@auth],
-          username: "root",
-          password: "invalid",
+          auth: {:basic, "root", "invalid"},
           client: Arangox.VelocyClient
         )
       )
@@ -186,7 +185,7 @@ defmodule ArangoxTest do
 
     {:ok, conn3} =
       Arangox.start_link(
-        opts(endpoints: [@auth], username: "invalid", password: "", client: Arangox.VelocyClient)
+        opts(endpoints: [@auth], auth: {:basic, "invalid", ""}, client: Arangox.VelocyClient)
       )
 
     assert {:error, %DBConnection.ConnectionError{}} = Arangox.get(conn3, "/_admin/server/mode")
@@ -195,7 +194,7 @@ defmodule ArangoxTest do
   test "auth resolution with an http client" do
     {:ok, conn1} =
       Arangox.start_link(
-        opts(endpoints: [@auth], username: "root", password: "", client: GunClient)
+        opts(endpoints: [@auth], auth: {:basic, "root", ""}, client: GunClient)
       )
 
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
@@ -215,17 +214,17 @@ defmodule ArangoxTest do
     assert {:error, %Error{status: 401}} = Arangox.get(conn3, "/_admin/server/mode")
   end
 
-  test "auth resolution with an http client and invalid JWT token" do
+  test "auth resolution with an http client and invalid Bearer token" do
     {:ok, conn1} =
-      Arangox.start_link(opts(endpoints: [@auth], auth: {:jwt, "invalid"}, client: GunClient))
+      Arangox.start_link(opts(endpoints: [@auth], auth: {:bearer, "invalid"}, client: GunClient))
 
     assert {:error, %Error{status: 401}} = Arangox.get(conn1, "/_admin/server/mode")
   end
 
-  test "auth resolution with an http client and valid JWT token" do
+  test "auth resolution with an http client and valid Bearer token" do
     {:ok, conn1} =
       Arangox.start_link(
-        opts(endpoints: [@auth], username: "root", password: "", client: GunClient)
+        opts(endpoints: [@auth], auth: {:basic, "root", ""}, client: GunClient)
       )
 
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")
@@ -236,7 +235,7 @@ defmodule ArangoxTest do
     assert Map.has_key?(body1, "jwt")
 
     {:ok, conn2} =
-      Arangox.start_link(opts(auth: {:jwt, body1["jwt"]}, client: GunClient))
+      Arangox.start_link(opts(auth: {:bearer, body1["jwt"]}, client: GunClient))
 
     assert %Response{status: 200} = Arangox.get!(conn2, "/_admin/server/mode")
   end
