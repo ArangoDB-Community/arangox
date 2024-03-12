@@ -6,7 +6,8 @@ An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).
 
 Supports [VelocyStream](https://www.arangodb.com/2017/08/velocystream-async-binary-protocol/),
-[active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html), transactions and streamed cursors.
+[active failover](https://www.arangodb.com/docs/stable/architecture-deployment-modes-active-failover-architecture.html),
+transactions and streamed cursors.
 
 Tested on:
 
@@ -23,7 +24,7 @@ iex> {:ok, conn} = Arangox.start_link(pool_size: 10)
 iex> {:ok, %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}}} = Arangox.get(conn, "/_admin/server/availability")
 iex> {:error, %Arangox.Error{status: 404}} = Arangox.get(conn, "/invalid")
 iex> %Arangox.Response{status: 200, body: %{"code" => 200, "error" => false, "mode" => "default"}} = Arangox.get!(conn, "/_admin/server/availability")
-iex> {:ok, 
+iex> {:ok,
 iex>   %Arangox.Request{
 iex>     body: "",
 iex>     headers: %{},
@@ -31,7 +32,7 @@ iex>     method: :get,
 iex>     path: "/_admin/server/availability"
 iex>   },
 iex>   %Arangox.Response{
-iex>     status: 200, 
+iex>     status: 200,
 iex>     body: %{"code" => 200, "error" => false, "mode" => "default"}
 iex>   }
 iex> } = Arangox.request(conn, :get, "/_admin/server/availability")
@@ -150,8 +151,6 @@ Is equivalent to:
 ```elixir
 options = [
   endpoints: "http://localhost:8529",
-  username: "root",
-  password: "",
   pool_size: 1
 ]
 Arangox.start_link(options)
@@ -197,26 +196,28 @@ iex> {:error, %Arangox.Error{status: 403}} = Arangox.post(conn, "/_api/database"
 
 ### Velocy
 
-When using the default client, authorization is resolved with the `:username`
-and `:password` options after a connection is established (authorization headers are not used).
-This can be disabled by setting the `:auth?` option to `false`.
+ArangoDB's VelocyStream endpoints _do not_ read authorization headers, authentication configuration _must_ be 
+provided as options to `Arangox.start_link/1`. 
+
+As a consequence, if you're using bearer auth, there are a couple of caveats to bear in mind:
+
+* New JWT tokens can only be requested in a seperate connection (i.e. during startup before the primary pool
+is initialized)
+* Refreshed tokens can only be authorized by restarting a connection pool
 
 ### HTTP
 
-When using an HTTP client, Arangox will generate a _Basic_ authorization header with the
-`:username` and `:password` options and add it to every request. To prevent this
-behavior, set the `:auth?` option to `false`.
+When using an HTTP client, Arangox will generate a _Basic_ or _Bearer_ authorization header if the `:auth` option is set to `{:basic, username, password}` or to `{:bearer, token}` respectively, and append it to every request. If the `:auth` option is not explicitly set, no authorization header will be appended.
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(auth?: false, client: Arangox.GunClient)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, endpoints: "http://localhost:8001")
 iex> {:error, %Arangox.Error{status: 401}} = Arangox.get(conn, "/_admin/server/mode")
 ```
 
-The header value is obfuscated in transfomed requests returned by arangox, for
-obvious reasons:
+The header value is obfuscated in transfomed requests returned by arangox, for obvious reasons:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
+iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient, auth: {:basic, "root", ""})
 iex> {:ok, request, _response} = Arangox.request(conn, :options, "/")
 iex> request.headers
 %{"authorization" => "..."}
@@ -233,7 +234,7 @@ _ArangoDB_ will assume the `_system` database.
 ### HTTP
 
 When using an HTTP client, arangox will prepend `/_db/:value` to the path of every request
-only if it isn't already prepended. If the start option is not set, nothing is prepended.
+only if one isn't already prepended. If a `:database` option is not set, nothing is prepended.
 
 ```elixir
 iex> {:ok, conn} = Arangox.start_link(client: Arangox.GunClient)
@@ -292,7 +293,8 @@ encrypted connections respectively. When using `:gun` or `:mint`, these options 
 directly to the `:transport_opts` connect option.
 
 See [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-connect_option)
-for more information on `:tcp_opts`, or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
+for more information on `:tcp_opts`,
+or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
 
 The `:client_opts` option can be used to pass client-specific options to `:gun` or `:mint`.
 These options are merged with and may override values set by arangox. Some options cannot be
@@ -306,7 +308,9 @@ information.
 
 ## Request Options
 
-Request options are handled by and passed directly to `:db_connection`. See [execute/4](https://hexdocs.pm/db_connection/DBConnection.html#execute/4) in the `:db_connection` docs for supported options.
+Request options are handled by and passed directly to `:db_connection`.
+See [execute/4](https://hexdocs.pm/db_connection/DBConnection.html#execute/4) in the `:db_connection` docs for supported
+options.
 
 Request timeouts default to `15_000`.
 

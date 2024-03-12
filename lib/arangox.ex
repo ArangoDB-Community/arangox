@@ -5,6 +5,7 @@ defmodule Arangox do
              |> Enum.join("\n")
 
   alias __MODULE__.{
+    Auth,
     Error,
     GunClient,
     MintClient,
@@ -34,10 +35,8 @@ defmodule Arangox do
   @type start_option ::
           {:client, module}
           | {:endpoints, list(endpoint)}
-          | {:auth?, boolean}
+          | {:auth, Arangox.Auth.t()}
           | {:database, binary}
-          | {:username, binary}
-          | {:password, binary}
           | {:headers, headers}
           | {:read_only?, boolean}
           | {:connect_timeout, timeout}
@@ -83,10 +82,8 @@ defmodule Arangox do
     * `:disconnect_on_error_codes` - A list of status codes that will trigger a forced disconnect.
     Only integers within the range `400..599` are affected. Defaults to
     `[401, 405, 503, 505]`.
-    * `:auth?` - Configure whether or not to resolve authorization (with the `:username` and
-    `:password` options). Defaults to `true`.
-    * `:username` - Defaults to `"root"`.
-    * `:password` - Defaults to `""`.
+    * `:auth` - Configure whether to resolve authorization.
+    Options are: `{:basic, username, password}`, `{:bearer, token}`.
     * `:read_only?` - Read-only pools will only connect to _followers_ in an active failover
     setup and add an _x-arango-allow-dirty-read_ header to every request. Defaults to `false`.
     * `:connect_timeout` - Sets the timeout for establishing connections with a database.
@@ -285,7 +282,10 @@ defmodule Arangox do
     DBConnection.execute!(conn, request, nil, opts)
   end
 
-  defp do_result({:ok, _request, response}), do: {:ok, response}
+  defp do_result({:ok, _request, response}) do
+    {:ok, response}
+  end
+
   defp do_result({:error, exception}), do: {:error, exception}
 
   @doc """
@@ -440,6 +440,10 @@ defmodule Arangox do
         got: #{inspect(endpoints)}
         """
       end
+    end
+
+    if auth = Keyword.get(opts, :auth) do
+      Auth.validate(auth)
     end
 
     if client = Keyword.get(opts, :client) do

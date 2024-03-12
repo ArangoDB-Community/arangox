@@ -44,13 +44,19 @@ if Code.ensure_loaded?(VelocyPack) do
     @spec vst_maxsize() :: pos_integer()
     def vst_maxsize, do: @vst_maxsize
 
-    @spec authorize(Connection.t()) :: :ok | {:error, Error.t()}
-    def authorize(%Connection{socket: socket, username: un, password: pw} = state) do
+    @spec maybe_authenticate(Connection.t()) :: :ok | {:error, Error.t()}
+    def maybe_authenticate(%Connection{auth: {:basic, username, password}} = state),
+      do: do_maybe_authenticate(state, [@vst_version_trunc, 1000, "plain", username, password])
+    def maybe_authenticate(%Connection{auth: {:bearer, token}} = state),
+      do: do_maybe_authenticate(state, [@vst_version_trunc, 1000, "jwt", token])
+    def maybe_authenticate(%Connection{}), do: :ok
+
+    defp do_maybe_authenticate(%Connection{socket: socket, endpoint: endpoint}, auth_msg) do
       with(
-        {:ok, auth} <-
-          VelocyPack.encode([@vst_version_trunc, 1000, "plain", un, pw]),
+        {:ok, encoded_message} <-
+          VelocyPack.encode(auth_msg),
         :ok <-
-          send_stream(socket, build_stream(auth)),
+          send_stream(socket, build_stream(encoded_message)),
         {:ok, header} <-
           recv_header(socket),
         {:ok, stream} <-
@@ -62,7 +68,7 @@ if Code.ensure_loaded?(VelocyPack) do
       else
         {:ok, [[@vst_version_trunc, 2, status, _headers] | [body | _]]} ->
           {:error,
-           %Error{status: status, message: body["errorMessage"], endpoint: state.endpoint}}
+           %Error{status: status, message: body["errorMessage"], endpoint: endpoint}}
 
         {:error, reason} ->
           {:error, reason}

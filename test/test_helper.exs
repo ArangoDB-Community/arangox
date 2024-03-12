@@ -1,11 +1,17 @@
 defmodule TestHelper do
   def opts(opts \\ []) do
-    Keyword.merge([show_sensitive_data_on_connection_error: true], opts)
+    default_opts = [
+      pool_size: 10,
+      show_sensitive_data_on_connection_error: true,
+    ]
+
+    Keyword.merge(default_opts, opts)
   end
 
   def unreachable, do: "http://fake_endpoint:1234"
+  # default is pointing to instance with disabled authentication
   def default, do: "http://localhost:8529"
-  def no_auth, do: "http://localhost:8001"
+  def auth, do: "http://localhost:8001"
   def ssl, do: "ssl://localhost:8002"
   def failover_1, do: "http://localhost:8003"
   def failover_2, do: "http://localhost:8004"
