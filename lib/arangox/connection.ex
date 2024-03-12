@@ -240,9 +240,6 @@ defmodule Arangox.Connection do
   @impl true
   def checkout(%__MODULE__{} = state), do: {:ok, state}
 
-  @impl true
-  def checkin(state), do: {:ok, state}
-
   # Transaction handlers
 
   @impl true
