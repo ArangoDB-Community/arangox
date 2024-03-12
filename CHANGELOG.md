@@ -6,6 +6,6 @@
   * Added support for ArangoDB JWT authentication via bearer tokens
 
 * Breaking changes
-  * `auth` start option now only accepts `{:basic, username, password}` or `{:bearer, token`
+  * `auth` start option now only accepts `{:basic, username, password}` or `{:bearer, token}`
   * No longer authenticates with "root:" by default
   * Requires Elixir v1.7+.

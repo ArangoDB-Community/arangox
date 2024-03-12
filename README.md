@@ -1,6 +1,6 @@
 # Arangox
 
-[![Build Status](https://travis-ci.com/ArangoDB-Community/arangox.svg?branch=master)](https://travis-ci.com/ArangoDB-Community/arangox)
+[![](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml/badge.svg?branch=main&event=push)](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml)
 
 An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).
@@ -11,11 +11,11 @@ transactions and streamed cursors.
 
 Tested on:
 
-- **ArangoDB** 3.4 - 3.8
-- **Elixir** 1.6 - 1.12
-- **OTP** 20 - 24
+- **ArangoDB** 3.11
+- **Elixir** 1.16
+- **OTP** 26
 
-[Documentation](https://hexdocs.pm/arangox/readme.html)
+[HexDocs](https://hexdocs.pm/arangox/readme.html)
 
 ## Examples
 
