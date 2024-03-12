@@ -118,7 +118,10 @@ defmodule Arangox.Connection do
 
   defp do_connect(client, [], opts) do
     {:error,
-     new(nil, client, nil, true, opts)
+     __MODULE__
+     |> struct(opts)
+     |> Map.put(:client, client)
+     |> Map.put(:failover?, true)
      |> exception("all endpoints are unavailable")
      |> failover_callback(opts)}
   end
