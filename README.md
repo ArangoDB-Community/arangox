@@ -1,6 +1,7 @@
 # Arangox
 
-[![](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml/badge.svg?branch=main&event=push)](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml)
+[![Version](https://img.shields.io/hexpm/v/arangox.svg)](https://hex.pm/packages/arangox)
+[![CI](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml/badge.svg?branch=main&event=push)](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml)
 
 An implementation of [`DBConnection`](https://hex.pm/packages/db_connection) for
 [ArangoDB](https://www.arangodb.com).
