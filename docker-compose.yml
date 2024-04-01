@@ -23,7 +23,7 @@ services:
         - --ssl.keyfile=var/lib/arangox/test/cert.pem
 
   resilient_single:
-      image: arangodb/arangodb
+      image: arangodb/arangodb:3.11
       ports:
         - '8003:8529'
         - '8004:8539'
