@@ -1,10 +1,30 @@
 defmodule Arangox.MixProject do
   use Mix.Project
 
-  @version "0.7.0"
+  # OTP 26 is where `:ssl` began verifying peers by default. This driver holds
+  # no TLS opinion of its own — options reach the transport as written, and the
+  # transport's defaults are what apply — so on an older release a TLS pool
+  # would silently accept any certificate presented to it. Refusing to build is
+  # the only way that fact does not become a quiet one. OTP 24 and 25 are both
+  # past end of life.
+  @minimum_otp 26
+
+  if String.to_integer(System.otp_release()) < @minimum_otp do
+    Mix.raise("""
+    arangox requires OTP #{@minimum_otp} or later, and this is OTP #{System.otp_release()}.
+
+    Before OTP #{@minimum_otp}, `:ssl` defaulted to `verify: :verify_none`. Since this driver
+    passes transport options through rather than supplying its own, a TLS
+    connection on this release would accept any certificate without saying so.
+    """)
+  end
+
+  @version "0.8.0"
   @description """
-  ArangoDB 3.11 driver for Elixir with connection pooling, support for \
-  VelocyStream, active failover, transactions and streamed cursors.
+  An implementation of DBConnection for ArangoDB. Velocy and JSON over HTTP/2,
+  the new AQL plan cache, resource APIs covering ArangoDB's HTTP surface,
+  and pools, transactions and cursors via DBConnection. VelocyStream and Active Failover
+  remain for 3.11.
   """
   @source_url "https://github.com/ArangoDB-Community/arangox"
   @homepage_url "https://www.arangodb.com"
@@ -13,7 +33,8 @@ defmodule Arangox.MixProject do
     [
       app: :arangox,
       version: @version,
-      elixir: ">= 1.7.0",
+      elixir: "~> 1.15",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       name: "Arangox",
       description: @description,
@@ -21,22 +42,45 @@ defmodule Arangox.MixProject do
       homepage_url: @homepage_url,
       package: package(),
       docs: docs(),
-      deps: deps()
+      deps: deps(),
+      aliases: aliases(),
+      dialyzer: dialyzer()
+    ]
+  end
+
+  # Dialyzer runs in CI. The ignore file carries one entry, with the reason
+  # written out; see `.dialyzer_ignore.exs`.
+  defp dialyzer do
+    [
+      ignore_warnings: ".dialyzer_ignore.exs",
+      list_unused_filters: true
     ]
   end
 
   # Run "mix help compile.app" to learn about applications.
   def application do
-    [extra_applications: [:logger] ++ extras(Mix.env())]
+    [extra_applications: [:logger]]
   end
 
-  defp extras(:prod), do: []
-  defp extras(_), do: [:gun]
+  def cli do
+    [preferred_envs: ["test.integration": :test]]
+  end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  defp aliases do
+    ["test.integration": "test --only integration"]
+  end
 
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url},
+      # Without this list the tarball ships priv/ — the vendored error table
+      # and its generator script, which only regeneration of
+      # `lib/arangox/errno.ex` needs. Nothing under priv/ is read at runtime.
+      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 
@@ -51,12 +95,20 @@ defmodule Arangox.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:db_connection, "~> 2.6"},
-      {:velocy, "~> 0.1", optional: true},
+      {:db_connection, "~> 2.10"},
+      # TEMPORARY: the local clone carries fixes for four defects in
+      # 0.1.7 — dates decoded as unsigned, `from_unix!` raising out of
+      # `decode/2`, unbounded variable-length integers, and `encode/2` raising
+      # for unencodable terms. Restore to `{:velocy, "~> 0.1.8", optional: true}`
+      # once that release is published.
+      {:velocy, path: "/Users/suazi/Repos/velocy_pack", optional: true, override: true},
       {:gun, "~> 2.0", optional: true},
-      {:mint, "~> 1.5", optional: true},
-      {:jason, "> 0.0.0", optional: true},
-      {:ex_doc, "> 0.0.0", only: :dev, runtime: false},
+      {:mint, "~> 1.9", optional: true},
+      {:jason, "~> 1.4", optional: true},
+      {:plug, "~> 1.16", only: [:test]},
+      {:plug_cowboy, "~> 2.7", only: [:test]},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
     ]
   end
 end

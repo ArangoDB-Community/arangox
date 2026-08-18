@@ -7,7 +7,7 @@ defmodule Arangox.RequestTest do
   @response %Response{status: 000, headers: []}
 
   test "body must default to \"\" and headers to %{}" do
-    assert @request == %{@request | body: "", headers: %{}}
+    assert @request == %{@request | body: "", headers: []}
   end
 
   describe "DBConnection.Query protocol:" do
