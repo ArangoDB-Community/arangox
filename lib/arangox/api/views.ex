@@ -14,6 +14,21 @@ defmodule Arangox.Api.Views do
 
   Returns an object containing a listing of all Views in the current database,
   regardless of their type.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => [%{
+          "globallyUniqueId" => string,
+          "id" => string,
+          "name" => string,
+          "type" => string
+        }]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -97,6 +112,19 @@ defmodule Arangox.Api.Views do
   Get information about a View
 
   Returns the basic information about a specific View.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "name" => string,
+        "type" => string
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, view_name, opts \\ []) do
@@ -124,6 +152,36 @@ defmodule Arangox.Api.Views do
   Get the properties of a View
 
   Returns an object containing the definition of the View identified by `view-name`.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cleanupIntervalStep" => integer,
+        "code" => integer,
+        "commitIntervalMsec" => integer,
+        "consolidationIntervalMsec" => integer,
+        "consolidationPolicy" => %{
+          "maxSkewThreshold" => float,
+          "minDeletionRatio" => float,
+          "segmentsBytesMax" => integer,
+          "type" => string
+        },
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "links" => %{},
+        "name" => string,
+        "optimizeTopK" => [],
+        "primarySort" => [],
+        "primarySortCompression" => string,
+        "storedValues" => [],
+        "type" => string,
+        "writebufferActive" => integer,
+        "writebufferIdle" => integer,
+        "writebufferSizeMax" => integer
+      }
   """
   @spec properties(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def properties(conn, view_name, opts \\ []) do

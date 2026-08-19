@@ -164,6 +164,33 @@ defmodule Arangox.Api.Replication do
   This information comes from `Plan/Collections/{DB-Name}/*` in the Agency,
   just that the `indexes` attribute there is relocated to adjust it to
   the data format of arangodump.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "collections" => [%{
+          "allInSync" => boolean,
+          "indexes" => [],
+          "isReady" => boolean,
+          "parameters" => %{...}  # 28 keys, among them "cacheEnabled", "computedValues", "deleted", "distributeShardsLike", "globallyUniqueId", "id", "internalValidatorType", "isDisjoint",
+          "planVersion" => integer
+        }],
+        "properties" => %{
+          "id" => string,
+          "isSystem" => boolean,
+          "name" => string,
+          "path" => string,
+          "replicationFactor" => integer,
+          "replicationVersion" => string,
+          "sharding" => string,
+          "writeConcern" => integer
+        },
+        "state" => string,
+        "tick" => string,
+        "views" => []
+      }
   """
   @spec cluster_inventory(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def cluster_inventory(conn, opts \\ []) do
@@ -526,6 +553,26 @@ defmodule Arangox.Api.Replication do
   - `lastServedTick`: last tick value served to this client via the WAL tailing API
 
   - `time`: date and time when this client last called the WAL tailing API
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "clients" => [],
+        "server" => %{
+          "engine" => string,
+          "serverId" => string,
+          "version" => string
+        },
+        "state" => %{
+          "lastLogTick" => string,
+          "lastUncommittedLogTick" => string,
+          "running" => boolean,
+          "time" => string,
+          "totalEvents" => integer
+        }
+      }
   """
   @spec logger_state(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def logger_state(conn, opts \\ []) do
@@ -663,6 +710,19 @@ defmodule Arangox.Api.Replication do
 
   > **INFO:**
   This method is not supported on a Coordinator in a cluster deployment.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "server" => %{
+          "serverId" => string,
+          "version" => string
+        },
+        "tick" => string,
+        "time" => string
+      }
   """
   @spec wal_last_tick(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def wal_last_tick(conn, opts \\ []) do
@@ -698,6 +758,20 @@ defmodule Arangox.Api.Replication do
   - `tickMax`: maximum tick available
   - `time`: the server time as string in format `YYYY-MM-DDTHH:MM:SSZ`
   - `server`: An object with fields `version` and `serverId`
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "server" => %{
+          "serverId" => string,
+          "version" => string
+        },
+        "tickMax" => string,
+        "tickMin" => string,
+        "time" => string
+      }
   """
   @spec wal_range(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def wal_range(conn, opts \\ []) do
@@ -824,6 +898,17 @@ defmodule Arangox.Api.Replication do
 
   > **INFO:**
   This method is not supported on a Coordinator in a cluster deployment.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      [%{
+        "db" => string,
+        "tick" => string,
+        "tid" => string,
+        "type" => integer
+      }]
   """
   @spec wal_tail(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def wal_tail(conn, opts \\ []) do

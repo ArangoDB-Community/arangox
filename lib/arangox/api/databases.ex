@@ -16,6 +16,16 @@ defmodule Arangox.Api.Databases do
 
   > **INFO:**
   Retrieving the list of databases is only possible from within the `_system` database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => [string]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -44,6 +54,16 @@ defmodule Arangox.Api.Databases do
 
   Retrieves the list of all databases the current user can access without
   specifying a different username or password.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => [string]
+      }
   """
   @spec all_user_accessible(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_user_accessible(conn, opts \\ []) do
@@ -76,6 +96,16 @@ defmodule Arangox.Api.Databases do
 
   > **INFO:**
   Creating a new database is only possible from within the `_system` database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => boolean
+      }
   """
   @spec create(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def create(conn, body, opts \\ []) do
@@ -114,6 +144,21 @@ defmodule Arangox.Api.Databases do
   - `sharding`: the default sharding method for collections created in this database
   - `replicationFactor`: the default replication factor for collections in this database
   - `writeConcern`: the default write concern for collections in this database
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{
+          "id" => string,
+          "isSystem" => boolean,
+          "name" => string,
+          "path" => string
+        }
+      }
   """
   @spec current(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def current(conn, opts \\ []) do
@@ -145,6 +190,16 @@ defmodule Arangox.Api.Databases do
   > **INFO:**
   Dropping a database is only possible from within the `_system` database.
   The `_system` database itself cannot be dropped.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => boolean
+      }
   """
   @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def delete(conn, database_name, opts \\ []) do

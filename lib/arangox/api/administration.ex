@@ -25,6 +25,16 @@ defmodule Arangox.Api.Administration do
   during startup.
 
   This endpoint requires *administrate* access to the `_system` database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => []
+      }
   """
   @spec all_crash_dumps(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_crash_dumps(conn, opts \\ []) do
@@ -66,6 +76,14 @@ defmodule Arangox.Api.Administration do
   Retrieving the array of all endpoints is allowed in the system database
   only. Calling this action in any other database will make the server return
   an error.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      [%{
+        "endpoint" => string
+      }]
   """
   @spec all_endpoints(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_endpoints(conn, opts \\ []) do
@@ -105,6 +123,12 @@ defmodule Arangox.Api.Administration do
   write access to the `_system` database.
   - `public`: Every user with read access to the `_system` database can
   access this endpoint.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{...}  # 475 keys, among them "activities.only-superuser-enabled", "activities.registry-cleanup-timeout", "agency.activate", "agency.compaction-keep-size", "agency.compaction-step-size", "agency.disaster-recovery-id", "agency.election-timeout-max", "agency.election-timeout-min"
   """
   @spec available_startup_options(Arangox.conn(), keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -212,6 +236,16 @@ defmodule Arangox.Api.Administration do
 
   Returns the database version that this server requires.
   The version is returned in the `version` attribute of the result.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "version" => string
+      }
   """
   @spec database_version(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def database_version(conn, opts \\ []) do
@@ -273,6 +307,14 @@ defmodule Arangox.Api.Administration do
   Get the deployment ID
 
   Get the unique identifier of this ArangoDB deployment.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "id" => string
+      }
   """
   @spec deployment_id(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def deployment_id(conn, opts \\ []) do
@@ -350,6 +392,12 @@ defmodule Arangox.Api.Administration do
   write access to the `_system` database.
   - `public`: Every user with read access to the `_system` database can
   access this endpoint.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{...}  # 471 keys, among them "activities.only-superuser-enabled", "activities.registry-cleanup-timeout", "agency.activate", "agency.compaction-keep-size", "agency.compaction-step-size", "agency.disaster-recovery-id", "agency.election-timeout-max", "agency.election-timeout-min"
   """
   @spec effective_startup_options(Arangox.conn(), keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -378,6 +426,25 @@ defmodule Arangox.Api.Administration do
   Get the storage engine type
 
   Returns the storage engine the server is configured to use.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "endianness" => string,
+        "name" => string,
+        "supports" => %{
+          "aliases" => %{
+            "indexes" => %{
+              "hash" => string,
+              "skiplist" => string,
+              "zkd" => string
+            }
+          },
+          "indexes" => [string]
+        }
+      }
   """
   @spec engine(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def engine(conn, opts \\ []) do
@@ -406,6 +473,12 @@ defmodule Arangox.Api.Administration do
 
   Returns detailed statistics related to the RocksDB storage engine activity,
   including figures about data size, cache usage, individual column families, etc.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{...}  # 69 keys, among them "cache.active-tables", "cache.allocated", "cache.edge-compression-ratio", "cache.free-memory-tasks-duration-total", "cache.free-memory-tasks-total", "cache.hit-rate-lifetime", "cache.hit-rate-recent", "cache.limit"
   """
   @spec engine_stats(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def engine_stats(conn, opts \\ []) do
@@ -485,6 +558,22 @@ defmodule Arangox.Api.Administration do
 
   In the Community Edition before v3.12.5, only `{"license":"none"}`
   is returned.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "diskUsage" => %{
+          "bytesLimit" => integer,
+          "bytesUsed" => integer,
+          "limitReached" => boolean,
+          "secondsUntilReadOnly" => integer,
+          "secondsUntilShutDown" => integer,
+          "status" => string
+        },
+        "upgrading" => boolean
+      }
   """
   @spec license(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def license(conn, opts \\ []) do
@@ -524,6 +613,19 @@ defmodule Arangox.Api.Administration do
   [`--server.options-api` startup option](https://docs.arango.ai/arangodb/3.12/components/arangodb-server/options/#--serveroptions-api)
   setting, so that the Arango Contextual Data Platform web interface for
   instance can always access the public options.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cluster.api-jwt-policy" => string,
+        "cluster.max-number-of-shards" => integer,
+        "cluster.max-replication-factor" => integer,
+        "cluster.min-replication-factor" => integer,
+        "database.extended-names" => boolean,
+        "server.session-timeout" => integer
+      }
   """
   @spec public_startup_options(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def public_startup_options(conn, opts \\ []) do
@@ -592,6 +694,16 @@ defmodule Arangox.Api.Administration do
 
   This is a public API so it does *not* require authentication. It is meant to be
   used only in the context of server monitoring.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "mode" => string
+      }
   """
   @spec server_availability(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def server_availability(conn, opts \\ []) do
@@ -624,6 +736,16 @@ defmodule Arangox.Api.Administration do
   Creating or dropping of databases and collections will also fail with error code `11` (_ERROR_FORBIDDEN_).
 
   This API requires authentication.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "mode" => string
+      }
   """
   @spec server_mode(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def server_mode(conn, opts \\ []) do
@@ -785,6 +907,33 @@ defmodule Arangox.Api.Administration do
   Get server status information
 
   Returns status information about the server.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "foxxApi" => boolean,
+        "host" => string,
+        "hostname" => string,
+        "license" => string,
+        "mode" => string,
+        "operationMode" => string,
+        "pid" => integer,
+        "server" => string,
+        "serverInfo" => %{
+          "maintenance" => boolean,
+          "progress" => %{
+            "feature" => string,
+            "phase" => string,
+            "recoveryTick" => integer
+          },
+          "readOnly" => boolean,
+          "role" => string,
+          "writeOpsEnabled" => boolean
+        },
+        "version" => string
+      }
   """
   @spec status(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def status(conn, opts \\ []) do
@@ -820,6 +969,60 @@ defmodule Arangox.Api.Administration do
   accessed from inside the `_system` database. In addition, there is a policy
   control startup option `--server.support-info-api` that controls if and to whom
   the API is made available.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "date" => string,
+        "deployment" => %{
+          "type" => string
+        },
+        "host" => %{
+          "build" => string,
+          "cpuStats" => %{
+            "idlePercent" => float,
+            "iowaitPercent" => float,
+            "systemPercent" => float,
+            "userPercent" => float
+          },
+          "engineStats" => %{
+            "cache.allocated" => integer,
+            "cache.limit" => integer,
+            "rocksdb.block-cache-capacity" => integer,
+            "rocksdb.block-cache-usage" => integer,
+            "rocksdb.estimate-live-data-size" => integer,
+            "rocksdb.estimate-num-keys" => integer,
+            "rocksdb.free-disk-space" => integer,
+            "rocksdb.live-sst-files-size" => integer,
+            "rocksdb.total-disk-space" => integer
+          },
+          "license" => string,
+          "maintenance" => boolean,
+          "numberOfCores" => %{
+            "overridden" => boolean,
+            "value" => integer
+          },
+          "os" => string,
+          "physicalMemory" => %{
+            "overridden" => boolean,
+            "value" => integer
+          },
+          "platform" => string,
+          "processStats" => %{
+            "fileDescrtors" => integer,
+            "fileDescrtorsLimit" => integer,
+            "numberOfThreads" => integer,
+            "processUptime" => float,
+            "residentSetSize" => integer,
+            "virtualSize" => integer
+          },
+          "readOnly" => boolean,
+          "role" => string,
+          "version" => string
+        }
+      }
   """
   @spec support_info(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def support_info(conn, opts \\ []) do
@@ -848,6 +1051,16 @@ defmodule Arangox.Api.Administration do
 
   The call returns an object with the `time` attribute. This contains the
   current system time as a Unix timestamp with microsecond precision.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "time" => float
+      }
   """
   @spec time(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def time(conn, opts \\ []) do
@@ -875,6 +1088,19 @@ defmodule Arangox.Api.Administration do
   Get the server version
 
   Returns the server name and version number.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "apiVersions" => [string],
+        "deprecatedApiVersions" => [],
+        "license" => string,
+        "requestedApiVersion" => string,
+        "server" => string,
+        "version" => string
+      }
   """
   @spec version(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def version(conn, opts \\ []) do

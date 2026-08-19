@@ -18,6 +18,27 @@ defmodule Arangox.Api.Analyzers do
   - `type`: the Analyzer type
   - `properties`: the properties used to configure the specified type
   - `features`: the set of features to set on the Analyzer generated fields
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => [%{
+          "features" => [string],
+          "name" => string,
+          "properties" => %{
+            "accent" => boolean,
+            "case" => string,
+            "locale" => string,
+            "stemming" => boolean,
+            "stopwords" => []
+          },
+          "type" => string
+        }]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -111,6 +132,19 @@ defmodule Arangox.Api.Analyzers do
   - `type`: the Analyzer type
   - `properties`: the properties used to configure the specified type
   - `features`: the set of features to set on the Analyzer generated fields
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "features" => [],
+        "name" => string,
+        "properties" => %{},
+        "type" => string
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, analyzer_name, opts \\ []) do

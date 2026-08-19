@@ -54,6 +54,17 @@ defmodule Arangox.Api.Transactions do
 
   List the currently running Stream Transactions.
   In a cluster, the list contains the transactions from all Coordinators.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "transactions" => [%{
+          "id" => string,
+          "state" => string
+        }]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -195,6 +206,16 @@ defmodule Arangox.Api.Transactions do
   an error.
   Any other errors will be returned with any of the return codes
   *HTTP 400*, *HTTP 409*, or *HTTP 500*.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => integer
+      }
   """
   @spec execute_javascript(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def execute_javascript(conn, body, opts \\ []) do
@@ -229,6 +250,19 @@ defmodule Arangox.Api.Transactions do
   transaction returns its final status (`committed` or `aborted`). Once
   the server garbage-collects this record, the same identifier becomes
   unknown and the endpoint returns `404`.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{
+          "id" => string,
+          "status" => string
+        }
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, transaction_id, opts \\ []) do

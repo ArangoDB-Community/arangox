@@ -62,6 +62,7 @@ defmodule Arangox.TestSupport.ApiSurface do
         %{
           fun: name,
           arity: length(args),
+          args: arg_names(args),
           bang?: bang?(name),
           method: Keyword.fetch!(spec, :method) |> literal!(file, name, :method),
           segments: segments(Keyword.fetch!(spec, :segments), file, name),
@@ -84,6 +85,15 @@ defmodule Arangox.TestSupport.ApiSurface do
 
   defp bang?(name), do: name |> Atom.to_string() |> String.ends_with?("!")
 
+  # The positional arguments an operation takes, in order, without `conn` and
+  # without the trailing `opts \\ []`.
+  defp arg_names(args) do
+    args
+    |> Enum.reject(&match?({:\\, _, _}, &1))
+    |> Enum.map(fn {name, _meta, _ctx} -> name end)
+    |> Enum.reject(&(&1 == :conn))
+  end
+
   # The adapter call, if this body is one. Anything else — a bang form's
   # `case`, a helper — has no spec.
   defp call_spec({{:., _, [{:__aliases__, _, [:Client]}, :request]}, _, [_conn, spec]})
@@ -101,6 +111,11 @@ defmodule Arangox.TestSupport.ApiSurface do
     Enum.map(list, fn
       literal when is_binary(literal) ->
         {:literal, literal}
+
+      # A parameter that is itself a path keeps its separators; it still
+      # occupies one slot in the address.
+      {:path, {arg, _meta, ctx}} when is_atom(arg) and is_atom(ctx) ->
+        {:arg, arg}
 
       {arg, _meta, context} when is_atom(arg) and is_atom(context) ->
         {:arg, arg}

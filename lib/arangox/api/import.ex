@@ -23,6 +23,19 @@ defmodule Arangox.Api.Import do
 
   Importing into an edge collection requires `_from` and `_to` on every
   document.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "created" => integer,
+        "empty" => integer,
+        "error" => boolean,
+        "errors" => integer,
+        "ignored" => integer,
+        "updated" => integer
+      }
   """
   @spec data(Arangox.conn(), binary, binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def data(conn, collection, body, opts \\ []) do

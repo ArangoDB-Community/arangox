@@ -13,6 +13,21 @@ defmodule Arangox.Api.Tasks do
   List all tasks
 
   Fetches all existing tasks on the server.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      [%{
+        "command" => string,
+        "created" => float,
+        "database" => string,
+        "id" => string,
+        "name" => string,
+        "offset" => float,
+        "period" => integer,
+        "type" => string
+      }]
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do

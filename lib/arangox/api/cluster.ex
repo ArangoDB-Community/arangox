@@ -18,6 +18,18 @@ defmodule Arangox.Api.Cluster do
   Coordinator in the cluster. This method only works on Coordinators in
   cluster mode. In case of an error the `error` attribute is set to
   `true`.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "endpoints" => [%{
+          "endpoint" => string
+        }],
+        "error" => boolean
+      }
   """
   @spec all_endpoints(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_endpoints(conn, opts \\ []) do
@@ -77,10 +89,10 @@ defmodule Arangox.Api.Cluster do
   """
   @spec dbserver_maintenance(Arangox.conn(), binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
-  def dbserver_maintenance(conn, db__server_id, opts \\ []) do
+  def dbserver_maintenance(conn, dbserver_id, opts \\ []) do
     Client.request(conn,
       method: :get,
-      segments: ["_admin", "cluster", "maintenance", db__server_id],
+      segments: ["_admin", "cluster", "maintenance", dbserver_id],
       opts: opts
     )
   end
@@ -91,8 +103,8 @@ defmodule Arangox.Api.Cluster do
   See `dbserver_maintenance/2`.
   """
   @spec dbserver_maintenance!(Arangox.conn(), binary, keyword) :: term
-  def dbserver_maintenance!(conn, db__server_id, opts \\ []) do
-    case dbserver_maintenance(conn, db__server_id, opts) do
+  def dbserver_maintenance!(conn, dbserver_id, opts \\ []) do
+    case dbserver_maintenance(conn, dbserver_id, opts) do
       {:ok, body} -> body
       {:error, exception} -> raise exception
     end
@@ -164,6 +176,135 @@ defmodule Arangox.Api.Cluster do
     - `Leader`: ID of the Agent this node regards as leader.
     - `Leading`: Whether this Agent is the leader (true) or not (false).
     - `LastAckedTime`: Time since last `acked` in seconds.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "ClusterId" => string,
+        "Health" => %{
+          "AGNT-45e0a050-ce4d-4da8-9fde-36c6a917c66d" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "LastAckedTime" => integer,
+            "Leader" => string,
+            "Leading" => boolean,
+            "Role" => string,
+            "Status" => string,
+            "Version" => string
+          },
+          "AGNT-a8209bbc-1afd-45ef-90f5-dc208c57004f" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "LastAckedTime" => float,
+            "Leader" => string,
+            "Leading" => boolean,
+            "Role" => string,
+            "Status" => string,
+            "Version" => string
+          },
+          "AGNT-f24d169c-d8c8-43cf-9089-c28251402983" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "LastAckedTime" => float,
+            "Leader" => string,
+            "Leading" => boolean,
+            "Role" => string,
+            "Status" => string,
+            "Version" => string
+          },
+          "CRDN-42a57593-b942-49b0-84af-7231d373f272" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "Host" => string,
+            "LastAckedTime" => string,
+            "Role" => string,
+            "ShortName" => string,
+            "Status" => string,
+            "SyncStatus" => string,
+            "SyncTime" => string,
+            "Timestamp" => string,
+            "Version" => string
+          },
+          "CRDN-76cb69cd-2d7d-4294-8b8a-41a859aa70f5" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "Host" => string,
+            "LastAckedTime" => string,
+            "Role" => string,
+            "ShortName" => string,
+            "Status" => string,
+            "SyncStatus" => string,
+            "SyncTime" => string,
+            "Timestamp" => string,
+            "Version" => string
+          },
+          "CRDN-7db819e9-ec25-4a0a-9c39-e3f99e5a3de8" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "Host" => string,
+            "LastAckedTime" => string,
+            "Role" => string,
+            "ShortName" => string,
+            "Status" => string,
+            "SyncStatus" => string,
+            "SyncTime" => string,
+            "Timestamp" => string,
+            "Version" => string
+          },
+          "PRMR-36e455fd-7f1a-4516-9f40-497fbfc420d7" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "Host" => string,
+            "LastAckedTime" => string,
+            "Role" => string,
+            "ShortName" => string,
+            "Status" => string,
+            "SyncStatus" => string,
+            "SyncTime" => string,
+            "Timestamp" => string,
+            "Version" => string
+          },
+          "PRMR-61e7bb1b-77c3-4910-b7f9-589bc482db6f" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "Host" => string,
+            "LastAckedTime" => string,
+            "Role" => string,
+            "ShortName" => string,
+            "Status" => string,
+            "SyncStatus" => string,
+            "SyncTime" => string,
+            "Timestamp" => string,
+            "Version" => string
+          },
+          "PRMR-9fc93aee-322f-4ae3-9b20-116477c50f41" => %{
+            "CanBeDeleted" => boolean,
+            "Endpoint" => string,
+            "Engine" => string,
+            "Host" => string,
+            "LastAckedTime" => string,
+            "Role" => string,
+            "ShortName" => string,
+            "Status" => string,
+            "SyncStatus" => string,
+            "SyncTime" => string,
+            "Timestamp" => string,
+            "Version" => string
+          }
+        },
+        "code" => integer,
+        "error" => boolean
+      }
   """
   @spec health(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def health(conn, opts \\ []) do
@@ -192,6 +333,37 @@ defmodule Arangox.Api.Cluster do
 
   Computes the current cluster imbalance and returns the result.
   It additionally shows the amount of ongoing and pending move shard operations.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{
+          "leader" => %{
+            "imbalance" => float,
+            "leaderDupl" => [integer],
+            "numberShards" => [integer],
+            "targetWeight" => [float],
+            "totalShards" => integer,
+            "totalWeight" => integer,
+            "weightUsed" => [integer]
+          },
+          "pendingMoveShards" => integer,
+          "shards" => %{
+            "imbalance" => integer,
+            "numberShards" => [integer],
+            "sizeUsed" => [integer],
+            "targetSize" => [integer],
+            "totalShards" => integer,
+            "totalShardsFromSystemCollections" => integer,
+            "totalUsed" => integer
+          },
+          "todoMoveShards" => integer
+        }
+      }
   """
   @spec imbalance(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def imbalance(conn, opts \\ []) do
@@ -255,6 +427,16 @@ defmodule Arangox.Api.Cluster do
 
   Returns the ID of a server in a cluster. The request will fail if the
   server is not running in cluster mode.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "id" => string
+      }
   """
   @spec server_id(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def server_id(conn, opts \\ []) do
@@ -283,6 +465,17 @@ defmodule Arangox.Api.Cluster do
 
   Returns the role of a server in a cluster.
   The server role is returned in the `role` attribute of the result.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "mode" => string,
+        "role" => string
+      }
   """
   @spec server_role(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def server_role(conn, opts \\ []) do
@@ -318,10 +511,10 @@ defmodule Arangox.Api.Cluster do
   """
   @spec set_dbserver_maintenance(Arangox.conn(), binary, term, keyword) ::
           {:ok, term} | {:error, Exception.t()}
-  def set_dbserver_maintenance(conn, db__server_id, body, opts \\ []) do
+  def set_dbserver_maintenance(conn, dbserver_id, body, opts \\ []) do
     Client.request(conn,
       method: :put,
-      segments: ["_admin", "cluster", "maintenance", db__server_id],
+      segments: ["_admin", "cluster", "maintenance", dbserver_id],
       body: body,
       opts: opts
     )
@@ -333,8 +526,8 @@ defmodule Arangox.Api.Cluster do
   See `set_dbserver_maintenance/3`.
   """
   @spec set_dbserver_maintenance!(Arangox.conn(), binary, term, keyword) :: term
-  def set_dbserver_maintenance!(conn, db__server_id, body, opts \\ []) do
-    case set_dbserver_maintenance(conn, db__server_id, body, opts) do
+  def set_dbserver_maintenance!(conn, dbserver_id, body, opts \\ []) do
+    case set_dbserver_maintenance(conn, dbserver_id, body, opts) do
       {:ok, body} -> body
       {:error, exception} -> raise exception
     end

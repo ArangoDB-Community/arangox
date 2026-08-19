@@ -25,6 +25,19 @@ defmodule Arangox.Api.Foxx do
 
   - `name`: a string identifying the service type
   - `version`: a semver-compatible version string
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      [%{
+        "development" => boolean,
+        "legacy" => boolean,
+        "mount" => string,
+        "name" => string,
+        "provides" => %{},
+        "version" => string
+      }]
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do

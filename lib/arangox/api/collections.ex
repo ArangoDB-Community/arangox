@@ -14,6 +14,23 @@ defmodule Arangox.Api.Collections do
 
   Returns basic information for all collections in the current database,
   optionally excluding system collections.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => [%{
+          "globallyUniqueId" => string,
+          "id" => string,
+          "isSystem" => boolean,
+          "name" => string,
+          "status" => integer,
+          "type" => integer
+        }]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -61,6 +78,23 @@ defmodule Arangox.Api.Collections do
 
   > **INFO:**
   Including user-defined attributes will make the checksumming slower.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "checksum" => string,
+        "code" => integer,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "isSystem" => boolean,
+        "name" => string,
+        "revision" => string,
+        "status" => integer,
+        "type" => integer
+      }
   """
   @spec checksum(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def checksum(conn, collection_name, opts \\ []) do
@@ -124,6 +158,39 @@ defmodule Arangox.Api.Collections do
   Get the document count of a collection
 
   Get the number of documents in a collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheEnabled" => boolean,
+        "code" => integer,
+        "computedValues" => null,
+        "count" => integer,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "internalValidatorType" => integer,
+        "isSmartChild" => boolean,
+        "isSystem" => boolean,
+        "keyOptions" => %{
+          "allowUserKeys" => boolean,
+          "lastValue" => integer,
+          "type" => string
+        },
+        "name" => string,
+        "objectId" => string,
+        "schema" => null,
+        "status" => integer,
+        "statusString" => string,
+        "supportsRBAC" => boolean,
+        "syncByRevision" => boolean,
+        "type" => integer,
+        "usesRevisionsAsDocumentIds" => boolean,
+        "waitForSync" => boolean,
+        "writeConcern" => integer
+      }
   """
   @spec count(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def count(conn, collection_name, opts \\ []) do
@@ -152,6 +219,38 @@ defmodule Arangox.Api.Collections do
 
   Creates a new collection with a given name. The request must contain an
   object with the following attributes.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheEnabled" => boolean,
+        "code" => integer,
+        "computedValues" => null,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "internalValidatorType" => integer,
+        "isSmartChild" => boolean,
+        "isSystem" => boolean,
+        "keyOptions" => %{
+          "allowUserKeys" => boolean,
+          "lastValue" => integer,
+          "type" => string
+        },
+        "name" => string,
+        "objectId" => string,
+        "schema" => null,
+        "status" => integer,
+        "statusString" => string,
+        "supportsRBAC" => boolean,
+        "syncByRevision" => boolean,
+        "type" => integer,
+        "usesRevisionsAsDocumentIds" => boolean,
+        "waitForSync" => boolean,
+        "writeConcern" => integer
+      }
   """
   @spec create(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def create(conn, body, opts \\ []) do
@@ -184,6 +283,16 @@ defmodule Arangox.Api.Collections do
   Drop a collection
 
   Delete the collection identified by `collection-name` and all its documents.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "id" => string
+      }
   """
   @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def delete(conn, collection_name, opts \\ []) do
@@ -213,6 +322,49 @@ defmodule Arangox.Api.Collections do
 
   Get the number of documents and additional statistical information
   about the collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheEnabled" => boolean,
+        "code" => integer,
+        "computedValues" => null,
+        "count" => integer,
+        "error" => boolean,
+        "figures" => %{
+          "cacheInUse" => boolean,
+          "cacheSize" => integer,
+          "cacheUsage" => integer,
+          "documentsSize" => integer,
+          "indexes" => %{
+            "count" => integer,
+            "size" => integer
+          }
+        },
+        "globallyUniqueId" => string,
+        "id" => string,
+        "internalValidatorType" => integer,
+        "isSmartChild" => boolean,
+        "isSystem" => boolean,
+        "keyOptions" => %{
+          "allowUserKeys" => boolean,
+          "lastValue" => integer,
+          "type" => string
+        },
+        "name" => string,
+        "objectId" => string,
+        "schema" => null,
+        "status" => integer,
+        "statusString" => string,
+        "supportsRBAC" => boolean,
+        "syncByRevision" => boolean,
+        "type" => integer,
+        "usesRevisionsAsDocumentIds" => boolean,
+        "waitForSync" => boolean,
+        "writeConcern" => integer
+      }
   """
   @spec figures(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def figures(conn, collection_name, opts \\ []) do
@@ -241,6 +393,21 @@ defmodule Arangox.Api.Collections do
   Get the collection information
 
   Returns the basic information about a specific collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "isSystem" => boolean,
+        "name" => string,
+        "status" => integer,
+        "type" => integer
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, collection_name, opts \\ []) do
@@ -268,6 +435,14 @@ defmodule Arangox.Api.Collections do
   Get the available key generators
 
   Returns the available key generators for collections.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "keyGenerators" => [string]
+      }
   """
   @spec key_generators(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def key_generators(conn, opts \\ []) do
@@ -376,6 +551,38 @@ defmodule Arangox.Api.Collections do
   Get the properties of a collection
 
   Returns all properties of the specified collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheEnabled" => boolean,
+        "code" => integer,
+        "computedValues" => null,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "internalValidatorType" => integer,
+        "isSmartChild" => boolean,
+        "isSystem" => boolean,
+        "keyOptions" => %{
+          "allowUserKeys" => boolean,
+          "lastValue" => integer,
+          "type" => string
+        },
+        "name" => string,
+        "objectId" => string,
+        "schema" => null,
+        "status" => integer,
+        "statusString" => string,
+        "supportsRBAC" => boolean,
+        "syncByRevision" => boolean,
+        "type" => integer,
+        "usesRevisionsAsDocumentIds" => boolean,
+        "waitForSync" => boolean,
+        "writeConcern" => integer
+      }
   """
   @spec properties(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def properties(conn, collection_name, opts \\ []) do
@@ -438,6 +645,21 @@ defmodule Arangox.Api.Collections do
 
   If renaming the collection succeeds, then the collection is also renamed in
   all graph definitions inside the `_graphs` collection in the current database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "isSystem" => boolean,
+        "name" => string,
+        "status" => integer,
+        "type" => integer
+      }
   """
   @spec rename(Arangox.conn(), binary, term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def rename(conn, collection_name, body, opts \\ []) do
@@ -508,6 +730,39 @@ defmodule Arangox.Api.Collections do
   The response contains the collection's latest used revision ID.
   The revision ID is a server-generated string that clients can use to
   check whether data in a collection has changed since the last revision check.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheEnabled" => boolean,
+        "code" => integer,
+        "computedValues" => null,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "internalValidatorType" => integer,
+        "isSmartChild" => boolean,
+        "isSystem" => boolean,
+        "keyOptions" => %{
+          "allowUserKeys" => boolean,
+          "lastValue" => integer,
+          "type" => string
+        },
+        "name" => string,
+        "objectId" => string,
+        "revision" => string,
+        "schema" => null,
+        "status" => integer,
+        "statusString" => string,
+        "supportsRBAC" => boolean,
+        "syncByRevision" => boolean,
+        "type" => integer,
+        "usesRevisionsAsDocumentIds" => boolean,
+        "waitForSync" => boolean,
+        "writeConcern" => integer
+      }
   """
   @spec revision(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def revision(conn, collection_name, opts \\ []) do
@@ -543,6 +798,12 @@ defmodule Arangox.Api.Collections do
 
   > **INFO:**
   This method is only available in cluster deployments on Coordinators.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{...}  # 28 keys, among them "cacheEnabled", "code", "computedValues", "error", "globallyUniqueId", "id", "internalValidatorType", "isDisjoint"
   """
   @spec shards(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def shards(conn, collection_name, opts \\ []) do
@@ -571,6 +832,21 @@ defmodule Arangox.Api.Collections do
   Truncate a collection
 
   Removes all documents from the collection, but leaves the indexes intact.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "globallyUniqueId" => string,
+        "id" => string,
+        "isSystem" => boolean,
+        "name" => string,
+        "status" => integer,
+        "type" => integer
+      }
   """
   @spec truncate(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def truncate(conn, collection_name, opts \\ []) do

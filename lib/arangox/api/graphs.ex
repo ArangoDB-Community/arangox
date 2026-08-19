@@ -43,6 +43,27 @@ defmodule Arangox.Api.Graphs do
   List all graphs
 
   Lists all graphs stored in this database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "graphs" => [%{
+          "_id" => string,
+          "_key" => string,
+          "_rev" => string,
+          "edgeDefinitions" => [%{
+            "collection" => string,
+            "from" => [string],
+            "to" => [string]
+          }],
+          "name" => string,
+          "orphanCollections" => []
+        }]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -70,6 +91,16 @@ defmodule Arangox.Api.Graphs do
   List edge collections
 
   Lists all edge collections within this graph.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "collections" => [string],
+        "error" => boolean
+      }
   """
   @spec all_edge_collections(Arangox.conn(), binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -98,6 +129,16 @@ defmodule Arangox.Api.Graphs do
   List node collections
 
   Lists all node collections within this graph, including orphan collections.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "collections" => [string],
+        "error" => boolean
+      }
   """
   @spec all_vertex_collections(Arangox.conn(), binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -417,6 +458,27 @@ defmodule Arangox.Api.Graphs do
   Selects information for a given graph.
   Returns the edge definitions as well as the orphan collections,
   or returns an error if the graph does not exist.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "graph" => %{
+          "_id" => string,
+          "_key" => string,
+          "_rev" => string,
+          "edgeDefinitions" => [%{
+            "collection" => string,
+            "from" => [string],
+            "to" => [string]
+          }],
+          "name" => string,
+          "orphanCollections" => []
+        }
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, graph, opts \\ []) do
@@ -472,6 +534,20 @@ defmodule Arangox.Api.Graphs do
   Get a node
 
   Gets a node from the given collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "vertex" => %{
+          "_id" => string,
+          "_key" => string,
+          "_rev" => string
+        }
+      }
   """
   @spec get_vertex(Arangox.conn(), binary, binary, binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -672,6 +748,40 @@ defmodule Arangox.Api.Graphs do
 
   Returns an array of edges starting or ending in the node identified by
   `vertex`.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "edges" => [%{
+          "_from" => string,
+          "_id" => string,
+          "_key" => string,
+          "_rev" => string,
+          "_to" => string
+        }],
+        "error" => boolean,
+        "stats" => %{
+          "cacheHits" => integer,
+          "cacheMisses" => integer,
+          "cursorsCreated" => integer,
+          "cursorsRearmed" => integer,
+          "documentLookups" => integer,
+          "executionTime" => float,
+          "filtered" => integer,
+          "httpRequests" => integer,
+          "intermediateCommits" => integer,
+          "peakMemoryUsage" => integer,
+          "scannedFull" => integer,
+          "scannedIndex" => integer,
+          "searchParallelism" => integer,
+          "seeks" => integer,
+          "writesExecuted" => integer,
+          "writesIgnored" => integer
+        }
+      }
   """
   @spec vertex_edges(Arangox.conn(), binary, binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}

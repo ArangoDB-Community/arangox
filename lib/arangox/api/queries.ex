@@ -21,6 +21,12 @@ defmodule Arangox.Api.Queries do
   `PUT /_db/{database-name}/_api/query/properties` endpoint.
   If query tracking is disabled for the current database,
   an **empty list** is returned.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      []
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -52,6 +58,16 @@ defmodule Arangox.Api.Queries do
   current database.
 
   The call returns a JSON array with status codes and all user functions found under `result`.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => []
+      }
   """
   @spec all_aql_user_functions(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_aql_user_functions(conn, opts \\ []) do
@@ -85,6 +101,12 @@ defmodule Arangox.Api.Queries do
   This requires read privileges for the current database. In addition, only those
   query plans are returned for which the current user has at least read permissions
   on all collections and Views included in the query.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      []
   """
   @spec all_query_cache_plans(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_query_cache_plans(conn, opts \\ []) do
@@ -113,6 +135,12 @@ defmodule Arangox.Api.Queries do
 
   Returns an array containing the AQL query results currently stored in the query results
   cache of the selected database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      []
   """
   @spec all_query_cache_results(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_query_cache_results(conn, opts \\ []) do
@@ -160,6 +188,12 @@ defmodule Arangox.Api.Queries do
   startup options or at runtime with the `slowQueryThreshold` and
   `slowStreamingQueryThreshold` query tracking properties of the
   `PUT /_db/{database-name}/_api/query/properties` endpoint.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      []
   """
   @spec all_slow(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_slow(conn, opts \\ []) do
@@ -255,6 +289,43 @@ defmodule Arangox.Api.Queries do
   The query details include the query string plus optional query options and
   bind parameters. These values need to be passed in a JSON representation in
   the body of the POST request.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cached" => boolean,
+        "code" => integer,
+        "error" => boolean,
+        "extra" => %{
+          "stats" => %{
+            "cacheHits" => integer,
+            "cacheMisses" => integer,
+            "cursorsCreated" => integer,
+            "cursorsRearmed" => integer,
+            "documentLookups" => integer,
+            "executionTime" => float,
+            "filtered" => integer,
+            "httpRequests" => integer,
+            "intermediateCommits" => integer,
+            "peakMemoryUsage" => integer,
+            "scannedFull" => integer,
+            "scannedIndex" => integer,
+            "searchParallelism" => integer,
+            "seeks" => integer,
+            "writesExecuted" => integer,
+            "writesIgnored" => integer
+          },
+          "warnings" => []
+        },
+        "hasMore" => boolean,
+        "result" => [%{
+          "_id" => string,
+          "_key" => string,
+          "_rev" => string
+        }]
+      }
   """
   @spec create_cursor(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def create_cursor(conn, body, opts \\ []) do
@@ -471,6 +542,49 @@ defmodule Arangox.Api.Queries do
 
   - `variables`: array of variables used in the query (note: this may contain
   internal variables created by the optimizer)
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheable" => boolean,
+        "code" => integer,
+        "error" => boolean,
+        "plan" => %{
+          "asyncPrefetchNodes" => integer,
+          "collections" => [%{
+            "name" => string,
+            "type" => string
+          }],
+          "estimatedCost" => integer,
+          "estimatedNrItems" => integer,
+          "isModificationQuery" => boolean,
+          "nodes" => [%{
+            "bindParameterVariables" => %{},
+            "dependencies" => [],
+            "estimatedCost" => integer,
+            "estimatedNrItems" => integer,
+            "id" => integer,
+            "type" => string
+          }],
+          "rules" => [string],
+          "variables" => [%{
+            "id" => integer,
+            "isFullDocumentFromCollection" => boolean,
+            "name" => string
+          }]
+        },
+        "stats" => %{
+          "executionTime" => float,
+          "peakMemoryUsage" => integer,
+          "plansCreated" => integer,
+          "rules" => %{},
+          "rulesExecuted" => integer,
+          "rulesSkipped" => integer
+        },
+        "warnings" => []
+      }
   """
   @spec explain(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def explain(conn, body, opts \\ []) do
@@ -583,6 +697,23 @@ defmodule Arangox.Api.Queries do
   List all AQL optimizer rules
 
   A list of all optimizer rules and their properties.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      [%{
+        "description" => string,
+        "flags" => %{
+          "canBeDisabled" => boolean,
+          "canCreateAdditionalPlans" => boolean,
+          "clusterOnly" => boolean,
+          "disabledByDefault" => boolean,
+          "enterpriseOnly" => boolean,
+          "hidden" => boolean
+        },
+        "name" => string
+      }]
   """
   @spec optimizer_rules(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def optimizer_rules(conn, opts \\ []) do
@@ -611,6 +742,30 @@ defmodule Arangox.Api.Queries do
 
   This endpoint is for query validation only. To actually query the database,
   see `/api/cursor`.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "ast" => [%{
+          "subNodes" => [%{
+            "subNodes" => [%{
+              "id" => integer,
+              "name" => string,
+              "type" => string
+            }],
+            "type" => string
+          }],
+          "type" => string
+        }],
+        "bindVars" => [],
+        "code" => integer,
+        "collections" => [string],
+        "error" => boolean,
+        "parsed" => boolean,
+        "warnings" => []
+      }
   """
   @spec parse(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def parse(conn, body, opts \\ []) do
@@ -692,6 +847,18 @@ defmodule Arangox.Api.Queries do
   Get the AQL query results cache configuration
 
   Returns the global AQL query results cache configuration.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "includeSystem" => boolean,
+        "maxEntrySize" => integer,
+        "maxResults" => integer,
+        "maxResultsSize" => integer,
+        "mode" => string
+      }
   """
   @spec query_cache_properties(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def query_cache_properties(conn, opts \\ []) do
@@ -750,6 +917,22 @@ defmodule Arangox.Api.Queries do
   Get the AQL query tracking configuration
 
   Returns the current query tracking properties of the specified database.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "enabled" => boolean,
+        "error" => boolean,
+        "maxQueryStringLength" => integer,
+        "maxSlowQueries" => integer,
+        "slowQueryThreshold" => integer,
+        "slowStreamingQueryThreshold" => integer,
+        "trackBindVars" => boolean,
+        "trackSlowQueries" => boolean
+      }
   """
   @spec tracking_properties(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def tracking_properties(conn, opts \\ []) do

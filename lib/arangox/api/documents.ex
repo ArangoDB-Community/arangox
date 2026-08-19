@@ -50,6 +50,16 @@ defmodule Arangox.Api.Documents do
   If the query parameter `returnNew` is `true`, then, for each
   generated document, the complete new document is returned under
   the `new` attribute in the result.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "_id" => string,
+        "_key" => string,
+        "_rev" => string
+      }
   """
   @spec create(Arangox.conn(), binary, term, keyword) :: {:ok, term} | {:error, Exception.t()}
   def create(conn, collection, body, opts \\ []) do
@@ -296,6 +306,16 @@ defmodule Arangox.Api.Documents do
   - `_id`, containing the document identifier with the format `<collection-name>/<document-key>`.
   - `_key`, containing the document key that uniquely identifies a document within the collection.
   - `_rev`, containing the document revision.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "_id" => string,
+        "_key" => string,
+        "_rev" => string
+      }
   """
   @spec get(Arangox.conn(), binary, binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, collection, key, opts \\ []) do
@@ -378,6 +398,12 @@ defmodule Arangox.Api.Documents do
   Like `GET`, but only returns the header fields and not the body. You
   can use this call to get the current revision of a document or check if
   the document was deleted.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      string
   """
   @spec header(Arangox.conn(), binary, binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def header(conn, collection, key, opts \\ []) do
@@ -460,6 +486,17 @@ defmodule Arangox.Api.Documents do
 
   If the document does not exist, then a *HTTP 404* is returned and the
   body of the response contains an error document.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "_id" => string,
+        "_key" => string,
+        "_oldRev" => string,
+        "_rev" => string
+      }
   """
   @spec replace(Arangox.conn(), binary, binary, term, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -650,6 +687,17 @@ defmodule Arangox.Api.Documents do
 
   If the document does not exist, then a *HTTP 404* is returned and the
   body of the response contains an error document.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "_id" => string,
+        "_key" => string,
+        "_oldRev" => string,
+        "_rev" => string
+      }
   """
   @spec update(Arangox.conn(), binary, binary, term, keyword) ::
           {:ok, term} | {:error, Exception.t()}

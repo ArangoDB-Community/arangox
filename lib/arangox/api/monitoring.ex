@@ -26,6 +26,19 @@ defmodule Arangox.Api.Monitoring do
   the API is disabled, all requests will be responded to with HTTP 403. If the
   API is enabled, accessing it requires admin privileges, or even superuser
   privileges, depending on the value of the `--log.api-enabled` startup option.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "level" => [integer],
+        "lid" => [integer],
+        "text" => [string],
+        "timestamp" => [integer],
+        "topic" => [string],
+        "totalAmount" => integer
+      }
   """
   @spec log(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def log(conn, opts \\ []) do
@@ -72,6 +85,21 @@ defmodule Arangox.Api.Monitoring do
   the API is disabled, all requests will be responded to with HTTP 403. If the
   API is enabled, accessing it requires admin privileges, or even superuser
   privileges, depending on the value of the `--log.api-enabled` startup option.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "messages" => [%{
+          "date" => string,
+          "id" => integer,
+          "level" => string,
+          "message" => string,
+          "topic" => string
+        }],
+        "total" => integer
+      }
   """
   @spec log_entries(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def log_entries(conn, opts \\ []) do
@@ -116,6 +144,12 @@ defmodule Arangox.Api.Monitoring do
   the API is disabled, all requests will be responded to with HTTP 403. If the
   API is enabled, accessing it requires admin privileges, or even superuser
   privileges, depending on the value of the `--log.api-enabled` startup option.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{...}  # 55 keys, among them "agency", "agencycomm", "agencystore", "aql", "arangosearch", "audit-authentication", "audit-authorization", "audit-collection"
   """
   @spec log_level(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def log_level(conn, opts \\ []) do
@@ -154,6 +188,12 @@ defmodule Arangox.Api.Monitoring do
 
   The API then needs to be added to the Prometheus configuration file
   for collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      string
   """
   @spec metrics(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def metrics(conn, opts \\ []) do
@@ -198,6 +238,12 @@ defmodule Arangox.Api.Monitoring do
 
   The API then needs to be added to the Prometheus configuration file
   for collection.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      string
   """
   @spec metrics_v2(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def metrics_v2(conn, opts \\ []) do
@@ -239,6 +285,23 @@ defmodule Arangox.Api.Monitoring do
   Whether API calls are recorded is independently controlled by the
   `--server.api-call-recording` startup option.
   The endpoint returns an empty list of calls if turned off.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{
+          "calls" => [%{
+            "database" => string,
+            "path" => string,
+            "requestType" => string,
+            "timeStamp" => string
+          }]
+        }
+      }
   """
   @spec recent_api_calls(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def recent_api_calls(conn, opts \\ []) do
@@ -279,6 +342,26 @@ defmodule Arangox.Api.Monitoring do
   Whether AQL queries are recorded is independently controlled by the
   `--server.aql-query-recording` startup option.
   The endpoint returns an empty list of queries if turned off.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{
+          "queries" => [%{
+            "bindVars" => %{
+              "@collection" => string,
+              "vertex" => string
+            },
+            "database" => string,
+            "query" => string,
+            "timeStamp" => string
+          }]
+        }
+      }
   """
   @spec recent_aql_queries(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def recent_aql_queries(conn, opts \\ []) do
@@ -472,6 +555,152 @@ defmodule Arangox.Api.Monitoring do
   expect in a cluster setup using a single Coordinator querying this Coordinator.
   Just with the difference that cluster transactions have no notion of
   intermediate commits and will not increase the value.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "client" => %{
+          "bytesReceived" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => integer
+          },
+          "bytesSent" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => integer
+          },
+          "connectionTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "httpConnections" => integer,
+          "ioTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "queueTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "requestTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "totalTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          }
+        },
+        "clientUser" => %{
+          "bytesReceived" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => integer
+          },
+          "bytesSent" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => integer
+          },
+          "connectionTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "httpConnections" => integer,
+          "ioTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "queueTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "requestTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          },
+          "totalTime" => %{
+            "count" => integer,
+            "counts" => [integer],
+            "sum" => float
+          }
+        },
+        "code" => integer,
+        "enabled" => boolean,
+        "error" => boolean,
+        "http" => %{
+          "requestsAsync" => integer,
+          "requestsDelete" => integer,
+          "requestsGet" => integer,
+          "requestsHead" => integer,
+          "requestsOptions" => integer,
+          "requestsOther" => integer,
+          "requestsPatch" => integer,
+          "requestsPost" => integer,
+          "requestsPut" => integer,
+          "requestsSuperuser" => integer,
+          "requestsTotal" => integer,
+          "requestsUser" => integer
+        },
+        "server" => %{
+          "physicalMemory" => integer,
+          "threads" => %{
+            "blocked" => integer,
+            "direct-exec" => integer,
+            "in-progress" => integer,
+            "queued" => integer,
+            "scheduler-threads" => integer
+          },
+          "transactions" => %{
+            "aborted" => integer,
+            "committed" => integer,
+            "dirtyReadOnly" => integer,
+            "intermediateCommits" => integer,
+            "readOnly" => integer,
+            "started" => integer
+          },
+          "uptime" => float,
+          "v8Context" => %{
+            "available" => integer,
+            "busy" => integer,
+            "dirty" => integer,
+            "free" => integer,
+            "max" => integer,
+            "memory" => [%{
+              "contextId" => integer,
+              "countOfTimes" => integer,
+              "heapMax" => integer,
+              "heapMin" => integer,
+              "invocations" => integer,
+              "tMax" => float
+            }],
+            "min" => integer
+          }
+        },
+        "system" => %{
+          "majorPageFaults" => integer,
+          "minorPageFaults" => integer,
+          "numberOfThreads" => integer,
+          "residentSize" => integer,
+          "residentSizePercent" => float,
+          "systemTime" => float,
+          "userTime" => float,
+          "virtualSize" => integer
+        },
+        "time" => float
+      }
   """
   @spec statistics(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def statistics(conn, opts \\ []) do
@@ -524,6 +753,28 @@ defmodule Arangox.Api.Monitoring do
   - `type`: Either `current`, `accumulated`, or `distribution`.
   - `cuts`: The distribution vector.
   - `units`: Units in which the figure is measured.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "figures" => [%{
+          "description" => string,
+          "group" => string,
+          "identifier" => string,
+          "name" => string,
+          "type" => string,
+          "units" => string
+        }],
+        "groups" => [%{
+          "description" => string,
+          "group" => string,
+          "name" => string
+        }]
+      }
   """
   @spec statistics_description(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def statistics_description(conn, opts \\ []) do
@@ -559,6 +810,12 @@ defmodule Arangox.Api.Monitoring do
   the API is disabled, all requests will be responded to with HTTP 403. If the
   API is enabled, accessing it requires admin privileges, or even superuser
   privileges, depending on the value of the `--log.api-enabled` startup option.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{}
   """
   @spec structured_log(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def structured_log(conn, opts \\ []) do
@@ -592,6 +849,12 @@ defmodule Arangox.Api.Monitoring do
   to `enabled-per-shard` to make DB-Servers collect per-shard
   usage metrics, or to `enabled-per-shard-per-user` to make DB-Servers collect
   usage metrics per shard and per user whenever a shard is accessed.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      null
   """
   @spec usage_metrics(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def usage_metrics(conn, opts \\ []) do

@@ -42,6 +42,10 @@ defmodule Arangox.Api.Client do
       carrying `/` or `?` becomes part of that segment instead of altering the
       path. A control character is refused outright — it is never a legitimate
       part of a name.
+    * a few parameters are themselves paths — an index identifier is
+      `collection/number` — and are declared as such by the operation. Their
+      separators survive; everything between them is still encoded, so such a
+      value can add path depth but cannot introduce a query or a fragment.
     * query and header names and values must not carry carriage return, line
       feed, or null.
     * an `authorization` or `host` header is refused: the pool's endpoint and
@@ -113,7 +117,11 @@ defmodule Arangox.Api.Client do
   # move the rejection to the server.
   defp path(segments) do
     Enum.reduce_while(segments, {:ok, ""}, fn segment, {:ok, acc} ->
-      value = to_string(segment)
+      {value, encode} =
+        case segment do
+          {:path, v} -> {to_string(v), &encode_path/1}
+          v -> {to_string(v), &encode_segment/1}
+        end
 
       if control_byte?(value) do
         {:halt,
@@ -124,10 +132,15 @@ defmodule Arangox.Api.Client do
                 "echoed here because it may be a credential or a transaction identifier"
           }}}
       else
-        {:cont, {:ok, acc <> "/" <> URI.encode(value, &URI.char_unreserved?/1)}}
+        {:cont, {:ok, acc <> "/" <> encode.(value)}}
       end
     end)
   end
+
+  defp encode_segment(value), do: URI.encode(value, &URI.char_unreserved?/1)
+
+  # Separators are kept, each part between them encoded.
+  defp encode_path(value), do: value |> String.split("/") |> Enum.map_join("/", &encode_segment/1)
 
   defp control_byte?(<<byte, _rest::binary>>) when byte < 0x20 or byte == 0x7F, do: true
   defp control_byte?(<<_byte, rest::binary>>), do: control_byte?(rest)

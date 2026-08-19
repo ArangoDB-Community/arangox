@@ -16,6 +16,47 @@ defmodule Arangox.Api.Indexes do
   index descriptions for the given collection. The same information is also
   available in the `identifiers` attribute as an object with the index identifiers
   as object keys.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "identifiers" => %{
+          "capture_1787176566/0" => %{
+            "fields" => [string],
+            "id" => string,
+            "name" => string,
+            "selectivityEstimate" => integer,
+            "sparse" => boolean,
+            "type" => string,
+            "unique" => boolean
+          },
+          "capture_1787176566/284576" => %{
+            "cacheEnabled" => boolean,
+            "deduplicate" => boolean,
+            "estimates" => boolean,
+            "fields" => [string],
+            "id" => string,
+            "name" => string,
+            "selectivityEstimate" => integer,
+            "sparse" => boolean,
+            "type" => string,
+            "unique" => boolean
+          }
+        },
+        "indexes" => [%{
+          "fields" => [string],
+          "id" => string,
+          "name" => string,
+          "selectivityEstimate" => integer,
+          "sparse" => boolean,
+          "type" => string,
+          "unique" => boolean
+        }]
+      }
   """
   @spec all(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, collection, opts \\ []) do
@@ -153,7 +194,7 @@ defmodule Arangox.Api.Indexes do
   def delete(conn, index_id, opts \\ []) do
     Client.request(conn,
       method: :delete,
-      segments: ["_api", "index", index_id],
+      segments: ["_api", "index", {:path, index_id}],
       opts: opts
     )
   end
@@ -184,12 +225,31 @@ defmodule Arangox.Api.Indexes do
   All other attributes are type-dependent. For example, some indexes provide
   `unique` or `sparse` flags, whereas others don't. Some indexes also provide
   a selectivity estimate in the `selectivityEstimate` attribute of the result.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "cacheEnabled" => boolean,
+        "code" => integer,
+        "deduplicate" => boolean,
+        "error" => boolean,
+        "estimates" => boolean,
+        "fields" => [string],
+        "id" => string,
+        "name" => string,
+        "selectivityEstimate" => integer,
+        "sparse" => boolean,
+        "type" => string,
+        "unique" => boolean
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, index_id, opts \\ []) do
     Client.request(conn,
       method: :get,
-      segments: ["_api", "index", index_id],
+      segments: ["_api", "index", {:path, index_id}],
       opts: opts
     )
   end

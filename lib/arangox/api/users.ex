@@ -23,6 +23,20 @@ defmodule Arangox.Api.Users do
   - `active`: Whether the user account is able to log in to the database system.
   - `extra`: A JSON object with extra user information. It is used by the web
   interface to store graph viewer settings and saved queries.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => [%{
+          "active" => boolean,
+          "extra" => %{},
+          "user" => string
+        }]
+      }
   """
   @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def all(conn, opts \\ []) do
@@ -61,6 +75,16 @@ defmodule Arangox.Api.Users do
 
   In case you specified `full`, the result will contain the permissions
   for the databases as well as the permissions for the collections.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{}
+      }
   """
   @spec all_databases(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def all_databases(conn, user, opts \\ []) do
@@ -89,6 +113,16 @@ defmodule Arangox.Api.Users do
   Get a user&rsquo;s collection access level
 
   Returns the collection access level for a specific collection
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => string
+      }
   """
   @spec collection_permissions(Arangox.conn(), binary, binary, binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -146,6 +180,16 @@ defmodule Arangox.Api.Users do
   Get a user&rsquo;s database access level
 
   Fetch the database access level for a specific database
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => string
+      }
   """
   @spec database_permissions(Arangox.conn(), binary, binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -273,6 +317,18 @@ defmodule Arangox.Api.Users do
   Fetches data about the specified user. You can fetch information about
   yourself or you need the *Administrate* server access level in order to
   execute this REST call.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "active" => boolean,
+        "code" => integer,
+        "error" => boolean,
+        "extra" => %{},
+        "user" => string
+      }
   """
   @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
   def get(conn, user, opts \\ []) do

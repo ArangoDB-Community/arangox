@@ -21,6 +21,14 @@ defmodule Arangox.Api.Authentication do
   to the `_system` database if you want to list the access tokens for a
   different user. You can always list your own access tokens,
   regardless of database access levels.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "tokens" => []
+      }
   """
   @spec all_access_tokens(Arangox.conn(), binary, keyword) ::
           {:ok, term} | {:error, Exception.t()}
@@ -192,6 +200,21 @@ defmodule Arangox.Api.Authentication do
 
   To utilize the API a superuser JWT token is necessary, otherwise the response
   will be _HTTP 403 Forbidden_.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{
+          "active" => %{
+            "sha256" => string
+          },
+          "passive" => []
+        }
+      }
   """
   @spec server_jwt_secrets(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def server_jwt_secrets(conn, opts \\ []) do

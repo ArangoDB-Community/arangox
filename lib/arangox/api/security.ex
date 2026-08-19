@@ -101,6 +101,16 @@ defmodule Arangox.Api.Security do
     JSON string with the SHA256 of the private key.
 
   This API requires authentication.
+
+  ## Returns
+
+  Recorded against ArangoDB 3.12.10:
+
+      %{
+        "code" => integer,
+        "error" => boolean,
+        "result" => %{}
+      }
   """
   @spec server_tls(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def server_tls(conn, opts \\ []) do
