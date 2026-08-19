@@ -19,6 +19,11 @@ Supported:
 - **Elixir** 1.15+
 - **OTP** 26+
 
+> **Where this is going.** 1.0 replaces the `DBConnection` foundation with
+> `http_connection`, which is what unlocks HTTP/2 multiplexing and fuller
+> HTTP/2 support generally. That swap is breaking, so the 0.x line carries the
+> stability promise until then and 1.0 is reserved for it.
+
 ## Examples
 
 ```elixir
@@ -100,14 +105,15 @@ def deps do
 end
 ```
 
-```elixir
-Arangox.start_link(client: Arangox.MintClient)
-```
+Mint is the default, so nothing needs selecting:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(client: Arangox.MintClient)
+iex> {:ok, conn} = Arangox.start_link()
 iex> {:ok, %Arangox.Response{status: 200, body: nil}} = Arangox.options(conn, "/")
 ```
+
+`:client` is how you pick a *different* one — `Arangox.GunClient` or
+`Arangox.VelocyClient`, both below.
 
 HTTP/1.1 is the default on both schemes. HTTP/2 is available per pool, settled
 by ALPN on TLS and asserted by prior knowledge on cleartext, which ArangoDB has
@@ -129,8 +135,9 @@ bound.) **And multiplexing is not exploited**:
 comes from `:pool_size`, not from streams sharing a connection.
 
 So today HTTP/2 costs a size bound and buys header compression on a driver
-whose headers are four small fields. Both bounds lift with the transport
-rework in 1.0, which is when it becomes worth defaulting to.
+whose headers are four small fields. Fuller HTTP/2 support — streamed request
+bodies and real multiplexing — comes with the transport rework in 1.0, which
+is when it becomes worth defaulting to.
 
 `Arangox.MintClient` supports unix domain sockets (`"http://unix:/tmp/arangodb.sock"`).
 
@@ -294,10 +301,10 @@ handle — on whichever pooled connection happens to serve that request:
 {:ok, %Arangox.Response{}} = Arangox.commit_transaction(conn, trx)   # or Arangox.abort_transaction/2
 ```
 
-The handle's identifier is a **bearer capability**: anyone who can reach the
-deployment and holds it can commit, abort, or write into the transaction. Do
-not log it or let it cross a trust boundary — `inspect/1` redacts it for
-exactly that reason.
+Treat the transaction id like a password. Anyone who has it can add writes to
+your transaction, commit it, or throw it away, because the server does not
+check who is asking. Keep it out of logs and don't pass it to another service.
+Arangox hides it when you inspect a transaction, for this reason.
 
 `Arangox.transaction/3` remains as the block form built on the same mechanics,
 committing on return and aborting if the function raises or exits (see the
@@ -305,41 +312,58 @@ example at the top).
 
 ## Resource API
 
-Every operation in ArangoDB's HTTP API is available as a typed function under
-`Arangox.Api.*` — 243 operations across 22 modules, one per API tag:
+Every operation in ArangoDB's HTTP API is available as a function under
+`Arangox.Api.*` — 230 operations across 22 modules, one module per API tag.
+The connection comes first, path parameters follow, and everything else is an
+option:
 
 ```elixir
-{:ok, %Arangox.Response{body: body}} =
-  Arangox.Api.Collections.create_collection("mydb", %{name: "products"}, conn: conn)
-
-{:ok, %Arangox.Response{}} =
-  Arangox.Api.Documents.get_document("mydb", "products", key,
-    conn: conn,
-    transaction: trx
-  )
+{:ok, collection} = Arangox.Api.Collections.create(conn, %{name: "products"})
+{:ok, document}   = Arangox.Api.Documents.get(conn, "products", key)
+{:ok, created}    = Arangox.Api.Documents.create(conn, "products", %{a: 1}, return_new: true)
 ```
 
-Every `Arangox.Api` call runs through the driver's pool and carries its error
-contract and per-request options (`:database`, `:transaction`, `:timeout`).
-The function signatures do not expose the API's header parameters: pass
-revision preconditions such as `if-match` and `if-none-match` through
-`headers:`, and join a stream transaction with `transaction:` rather than an
-`x-arango-trx-id` header. Reading several documents by key in one request is
-`Arangox.Api.Documents.get_documents/4`, which always sends `onlyget=true` —
-the flag the server uses to tell that read apart from a bulk replace on the
-same URL.
+A call answers the decoded body, not a response struct. Any error status —
+`404` included — answers `{:error, %Arangox.Error{}}` carrying the status and
+ArangoDB's own `errorNum`. Every operation has a bang twin that returns the
+body and raises instead:
 
-This surface is spec-derived but owned: hand-maintained source, verified by
-the integration test suite against the OpenAPI document the tested server
-itself serves, operation by operation. The raw request functions
-(`Arangox.get/4`, `Arangox.post/5`, ...) remain available and supported; the
-resource layer is an addition, not a replacement.
+```elixir
+{:error, %Arangox.Error{status: 404}} = Arangox.Api.Documents.get(conn, "products", "gone")
+document = Arangox.Api.Documents.get!(conn, "products", key)
+```
+
+Options are Elixir-shaped and translated on the way out, so you write
+`return_new: true` and ArangoDB receives `returnNew=true`. Alongside an
+operation's own parameters, every call takes:
+
+- `:database` — which database to run against, falling back to the pool's
+  `:database` and then to `_system`
+- `:headers` — extra headers as `{name, value}` tuples, for things the
+  signatures don't expose such as `if-match`
+- every per-request option `Arangox.request/6` takes, including
+  `:transaction`, `:timeout` and `:request_timeout`
+
+```elixir
+Arangox.Api.Documents.get(conn, "products", key, database: "shop", transaction: trx)
+```
+
+Two details worth knowing. Reading several documents by key is
+`Arangox.Api.Documents.get_many/4`, which always sends `onlyget=true` — the
+flag the server uses to tell that read apart from a bulk replace on the same
+URL, and which arangox therefore does not let you set. And
+`Arangox.Api.Documents.header/4` answers the document's revision rather than a
+body, because that is what a `HEAD` request carries.
+
+This surface is spec-derived but owned: hand-maintained source, checked by the
+integration suite against the API description the tested server itself serves,
+address by address. The raw request functions (`Arangox.get/4`,
+`Arangox.post/5`, ...) remain available and supported; the resource layer is an
+addition, not a replacement.
 
 ## Start Options
 
-Arangox assumes a default for the `:endpoints` option, and
-[`db_connection`](https://hex.pm/packages/db_connection) assumes a default
-`:pool_size` of `1`, so the following:
+Arangox assumes defaults for `:endpoints` and `:pool_size`, so this:
 
 ```elixir
 Arangox.start_link()
@@ -350,10 +374,14 @@ Is equivalent to:
 ```elixir
 options = [
   endpoints: "http://localhost:8529",
-  pool_size: 1
+  pool_size: 10
 ]
 Arangox.start_link(options)
 ```
+
+The pool size is how much concurrency you get. HTTP/1.1 carries one request per
+connection at a time, so ten connections means ten requests at a time and a
+pool of one would serialize your whole application.
 
 ## Endpoints
 
@@ -456,93 +484,56 @@ iex> request.path
 
 ## Headers
 
-Since 0.8, request headers are lists of `{name, value}` string tuples, and only
-that — maps are no longer accepted, at the `:headers` start option or on a
+Headers are lists of `{name, value}` string tuples, both on the pool and on a
 request:
 
 ```elixir
-[{"header", "value"}]
+{:ok, conn} = Arangox.start_link(headers: [{"x-app", "checkout"}])
+Arangox.get(conn, "/_api/version", [{"x-request-id", id}])
 ```
 
-The driver sends them in a fixed order and otherwise leaves them alone:
-
-1. the pool's `:headers`, in the order given (with the authorization header
-   the `:auth` option resolves to, and the dirty-read header of a
-   `read_only?: true` pool, appended at connect),
-2. the stream-transaction header, when one applies (see below),
-3. the request's own headers, in the order given,
-4. a `content-type` label when the driver encoded the body as VelocyPack, and
-   the `accept` header of a VelocyPack pool — each appended only when no
-   header of that name, in any casing, is present anywhere above.
-
-Nothing is merged, deduplicated, renamed or re-cased. A request header does
-not *replace* a same-named pool header — both go on the wire, request's last:
+The pool's headers go first, then the request's. Nothing is merged,
+deduplicated, renamed or re-cased — a request header does not replace a
+same-named pool header, both are sent, request last:
 
 ```elixir
-iex> {:ok, conn} = Arangox.start_link(headers: [{"header", "value"}])
-iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version", "", [{"header", "new_value"}])
-iex> {"header", "value"} in request.headers
-true
-iex> {"header", "new_value"} in request.headers
-true
+iex> {:ok, conn} = Arangox.start_link(headers: [{"header", "pool"}])
+iex> {:ok, request, _response} = Arangox.request(conn, :get, "/_api/version", "", [{"header", "request"}])
+iex> request.headers
+[{"header", "pool"}, {"header", "request"}]
 ```
 
-Send the same name twice and it is sent twice. HTTP allows that only for
-list-valued headers, and what a server makes of an unexpected repeat is the
-server's policy — the driver neither prevents nor repairs it.
+Send the same name twice and it is sent twice.
 
-The quirks worth knowing, per client:
-
-  * `Arangox.MintClient` lowercases header *names* on the wire (HTTP/2
-    requires lowercase; Mint applies the same to HTTP/1.1). Values are
-    untouched.
-  * `Arangox.GunClient` sends names as given.
-  * `Arangox.VelocyClient` (deprecated) speaks VelocyStream, whose wire format
-    carries headers as a map: it cannot express a repeated name, so the
-    right-most occurrence wins and the others are dropped. Casing is
-    preserved.
-
-The codec for a request body is selected from the request's *own* headers —
-the first `content-type` entry, any casing, parameters ignored — falling back
-to the pool's `:content_type` option. A `content-type` placed in the pool's
-`:headers` list rides the wire but never selects the codec, so it can label an
-encoded body wrongly: configure the pool codec with `:content_type`, not
-through `:headers`.
-
-A request joins a stream transaction through exactly one `x-arango-trx-id`
-header, supplied by the `:transaction` option or by the in-flight
-`Arangox.transaction/3` on that connection — the option outranks the
-connection's. A request whose own headers already name that header, in any
-casing, runs under its own value alone; the driver adds nothing next to it.
-
-Response headers come back the same shape: a list of `{name, value}` tuples on
-`Arangox.Response`. The HTTP clients hand the parsed lines through — names
-lowercased, order and repeats as the server sent them. The VelocyStream client
-is different by wire format: VelocyStream carries response headers as a map,
-so its list can hold no repeated name, its order is the map's key order rather
-than the server's, and names keep the server's casing.
+Each client differs slightly in what it does with that list on the wire, and
+`Arangox.Response` headers come back as a list too. Those details are on
+`Arangox.MintClient`, `Arangox.GunClient` and `Arangox.VelocyClient`.
 
 ## Transport
 
 The `:connect_timeout` start option defaults to `5_000`.
 
-Transport options can be specified via `:tcp_opts` and `:ssl_opts`, for unencrypted and
-encrypted connections respectively. When using `:gun` or `:mint`, these options are passed
-directly to the `:transport_opts` connect option.
+There are three knobs, at two different levels:
 
-See [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-connect_option)
-for more information on `:tcp_opts`,
-or [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) for `:ssl_opts`.
+- **`:tcp_opts` and `:ssl_opts`** are socket options, for unencrypted and
+  encrypted connections respectively. Arangox routes them to wherever the
+  chosen client wants them. See
+  [`:gen_tcp.connect_option()`](http://erlang.org/doc/man/gen_tcp.html#type-connect_option)
+  and [`:ssl.tls_client_option()`](http://erlang.org/doc/man/ssl.html#type-tls_client_option).
+- **`:client_opts`** is for the HTTP library itself — `:mint` takes a keyword
+  list, `:gun` takes a map. This is where `protocols: [:http2]` goes. See
+  [`connect/4`](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4) in the mint
+  docs or the `gun:opts()` type in the
+  [gun docs](https://ninenines.eu/docs/en/gun/2.1/manual/gun/).
+- **`:transport_opts`** is not an arangox option at all. It is `:mint`'s own
+  key for socket options, nested inside `:client_opts`. You do not normally
+  touch it — `:tcp_opts` and `:ssl_opts` fill it for you.
 
-The `:client_opts` option can be used to pass client-specific options to `:gun` or `:mint`.
-These options are merged with and may override values set by arangox. Some options cannot be
-overridden (i.e. `:mint`'s `:mode` option). If `:transport_opts` is set here it will override
-everything given to `:tcp_opts` or `:ssl_opts`, regardless of whether or not a connection is
-encrypted.
-
-See the `gun:opts()` type in the [gun docs](https://ninenines.eu/docs/en/gun/2.1/manual/gun/)
-or [`connect/4`](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4) in the mint docs for more
-information.
+If you do set `:transport_opts` inside `:client_opts`, arangox merges yours
+over its own key by key rather than replacing the lot, so setting one
+unrelated option cannot silently drop the TLS trust configuration. A few
+options arangox needs for its own framing are forced and cannot be overridden,
+such as `:mint`'s `:mode`.
 
 ## Request Options
 
@@ -569,8 +560,3 @@ docker compose up --detach --wait
 mix test.integration
 ```
 
-## Roadmap
-
-- **1.0**: replace the `DBConnection` foundation with `http_connection`,
-  which is what unlocks HTTP/2 multiplexing. The 0.x API is the stability
-  promise; 1.0 is reserved for that swap.

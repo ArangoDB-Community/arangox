@@ -317,8 +317,17 @@ defmodule Arangox do
     ensure_opts_valid!(opts)
     warn_deprecated_app_config(opts)
 
-    DBConnection.start_link(__MODULE__.Connection, opts)
+    DBConnection.start_link(__MODULE__.Connection, with_pool_size(opts))
   end
+
+  # `DBConnection` defaults to a single connection, which for an HTTP driver
+  # means one request at a time for the whole application: HTTP/1.1 carries one
+  # request per connection, so concurrency here is the pool size and nothing
+  # else. Ten is a working default for a web application; a caller who sets
+  # `:pool_size` still decides.
+  @default_pool_size 10
+
+  defp with_pool_size(opts), do: Keyword.put_new(opts, :pool_size, @default_pool_size)
 
   @doc """
   Runs a GET request against a connection pool.

@@ -38,6 +38,9 @@ for ArangoDB 3.11, which is the last server release that speaks them.
   * `:json_library` and `:vst_maxsize` are per-pool start options. The
     application-config forms still work and warn once per pool; they will
     be removed in the next release.
+  * `:pool_size` defaults to 10 rather than `db_connection`'s 1. HTTP/1.1
+    carries one request per connection at a time, so the pool size is the
+    driver's concurrency and a default of 1 serializes an application.
   * The `:database` option (per pool and per request) is validated: names
     that would alter the request path (`/`, `?`, `#`, `%`, control
     characters) are refused, and extended names (spaces, unicode) are
@@ -63,17 +66,20 @@ for ArangoDB 3.11, which is the last server release that speaks them.
     above rely on that.
 
 * Enhancements
-  * A resource API: 243 operations across 22 `Arangox.Api.*` modules —
-    `Arangox.Api.Collections.create_collection/3`,
-    `Arangox.Api.Documents.get_document/4`, and so on — derived from
-    ArangoDB's OpenAPI description at tag 3.12.10 and owned as hand-maintained
-    source. Every operation runs through the driver's pool and carries its
-    error contract, `:database`, `:transaction`, and timeout options. The
-    integration suite verifies the surface, operation by operation, against
-    the OpenAPI document the tested server itself serves. Reading several
-    documents by key is `Arangox.Api.Documents.get_documents/4`, which always
-    sends `onlyget=true` — the flag that separates it from a bulk replace on
-    the same URL.
+  * A resource API: 230 operations across 22 `Arangox.Api.*` modules —
+    `Arangox.Api.Collections.create/3`, `Arangox.Api.Documents.get/4`, and so
+    on — derived from ArangoDB's API description at tag 3.12.10 and owned as
+    hand-maintained source. The connection is the first argument and path
+    parameters follow it; the database, headers, and every per-request driver
+    option are options. A call answers the decoded body, any error status
+    answers `{:error, %Arangox.Error{}}`, and every operation has a bang twin
+    that raises. Query parameters are written in snake_case and translated to
+    ArangoDB's own spelling on the wire. The integration suite checks the
+    surface against the API description the tested server itself serves,
+    address by address. Reading several documents by key is
+    `Arangox.Api.Documents.get_many/4`, which always sends `onlyget=true` —
+    the flag that separates that read from a bulk replace on the same URL, and
+    which arangox therefore does not let a caller set.
   * Opt-in VelocyPack bodies over HTTP: `content_type: :velocypack` (requires
     the optional `:velocy` dependency) encodes request bodies as VelocyPack
     and asks for the same in return. Responses are decoded by their own
