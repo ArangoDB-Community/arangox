@@ -117,6 +117,36 @@ defmodule Arangox.Api.ClientTest do
       refute entry["query"] in ["c#d", "c"]
     end
 
+    # An ArangoDB index identifier is `collection/number`, so the separator is
+    # structure the server parses: percent-encoding it makes every index read
+    # and delete answer 400. Only a segment declared `{:path, value}` keeps it,
+    # and the parts between the separators are still encoded, so the value
+    # cannot open a query or a fragment.
+    test "a segment declared as a path keeps its separators and encodes the rest" do
+      {conn, server} =
+        connected!(%{
+          "/_api/index/coll/12345" => {200, @json, "{}"},
+          "/_api/index/coll/12%3F34%235" => {200, @json, "{}"}
+        })
+
+      assert {:ok, _} =
+               Client.request(conn,
+                 method: :get,
+                 segments: ["_api", "index", {:path, "coll/12345"}]
+               )
+
+      assert {:ok, _} =
+               Client.request(conn,
+                 method: :get,
+                 segments: ["_api", "index", {:path, "coll/12?34#5"}]
+               )
+
+      assert [plain, escaped] = adapter_requests(server)
+      assert plain["path"] == "/_api/index/coll/12345"
+      assert escaped["path"] == "/_api/index/coll/12%3F34%235"
+      assert escaped["query"] == ""
+    end
+
     test "a declared non-JSON media sends the body raw under that content type" do
       {conn, server} = connected!(%{"/_api/import" => {200, @json, "{}"}})
       body = ~s({"a":1}\n{"a":2}\n)
