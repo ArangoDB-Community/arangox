@@ -1,31 +1,13 @@
 defmodule Arangox.Api.Transactions do
   @moduledoc """
-  Provides API endpoints related to transactions
+  ArangoDB's Transactions operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
-
-  @type abort_stream_transaction_200_json_resp :: %{
-          code: integer,
-          error: boolean,
-          result: Arangox.Api.Transactions.abort_stream_transaction_200_json_resp_result()
-        }
-
-  @type abort_stream_transaction_200_json_resp_result :: %{id: String.t(), status: String.t()}
-
-  @type abort_stream_transaction_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @type abort_stream_transaction_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  alias Arangox.Api.Client
 
   @doc """
   Abort a Stream Transaction
@@ -38,57 +20,62 @@ defmodule Arangox.Api.Transactions do
   this endpoint:
 
   - While the transaction is still tracked: aborting an already-aborted
-    transaction returns `200` (idempotent), and aborting an already-committed
-    transaction returns `400`.
+  transaction returns `200` (idempotent), and aborting an already-committed
+  transaction returns `400`.
   - The first abort against an unknown identifier returns `404` and records
-    it as aborted. Subsequent aborts for the same identifier return `200`
-    until the record is garbage-collected, after which the identifier is
-    again unknown and the next abort once more returns `404`.
-
+  it as aborted. Subsequent aborts for the same identifier return `200`
+  until the record is garbage-collected, after which the identifier is
+  again unknown and the next abort once more returns `404`.
   """
-  @spec abort_stream_transaction(
-          database_name :: String.t(),
-          transaction_id :: String.t(),
-          keyword
-        ) :: {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def abort_stream_transaction(database_name, transaction_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, transaction_id: transaction_id],
-      call: {Arangox.Api.Transactions, :abort_stream_transaction},
-      url: "/_db/#{database_name}/_api/transaction/#{transaction_id}",
+  @spec abort(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def abort(conn, transaction_id, opts \\ []) do
+    Client.request(conn,
       method: :delete,
-      response: [
-        {200, {Arangox.Api.Transactions, :abort_stream_transaction_200_json_resp}},
-        {400, {Arangox.Api.Transactions, :abort_stream_transaction_400_json_resp}},
-        {404, {Arangox.Api.Transactions, :abort_stream_transaction_404_json_resp}}
-      ],
+      segments: ["_api", "transaction", transaction_id],
       opts: opts
-    })
+    )
   end
 
-  @type begin_stream_transaction_201_json_resp :: %{
-          code: integer,
-          error: boolean,
-          result: Arangox.Api.Transactions.begin_stream_transaction_201_json_resp_result()
-        }
+  @doc """
+  Abort a Stream Transaction. Raises on error.
 
-  @type begin_stream_transaction_201_json_resp_result :: %{id: String.t(), status: String.t()}
+  See `abort/2`.
+  """
+  @spec abort!(Arangox.conn(), binary, keyword) :: term
+  def abort!(conn, transaction_id, opts \\ []) do
+    case abort(conn, transaction_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
-  @type begin_stream_transaction_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  @doc """
+  List the running Stream Transactions
 
-  @type begin_stream_transaction_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  List the currently running Stream Transactions.
+  In a cluster, the list contains the transactions from all Coordinators.
+  """
+  @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all(conn, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "transaction"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List the running Stream Transactions. Raises on error.
+
+  See `all/1`.
+  """
+  @spec all!(Arangox.conn(), keyword) :: term
+  def all!(conn, opts \\ []) do
+    case all(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Begin a Stream Transaction
@@ -103,53 +90,29 @@ defmodule Arangox.Api.Transactions do
   until the entire transaction times out.
 
   The transaction description must be passed in the body of the POST request.
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec begin_stream_transaction(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def begin_stream_transaction(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Transactions, :begin_stream_transaction},
-      url: "/_db/#{database_name}/_api/transaction/begin",
-      body: body,
+  @spec begin(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def begin(conn, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      request: [{"application/json", :map}],
-      response: [
-        {201, {Arangox.Api.Transactions, :begin_stream_transaction_201_json_resp}},
-        {400, {Arangox.Api.Transactions, :begin_stream_transaction_400_json_resp}},
-        {404, {Arangox.Api.Transactions, :begin_stream_transaction_404_json_resp}}
-      ],
+      segments: ["_api", "transaction", "begin"],
+      body: body,
       opts: opts
-    })
+    )
   end
 
-  @type commit_stream_transaction_200_json_resp :: %{
-          code: integer,
-          error: boolean,
-          result: Arangox.Api.Transactions.commit_stream_transaction_200_json_resp_result()
-        }
+  @doc """
+  Begin a Stream Transaction. Raises on error.
 
-  @type commit_stream_transaction_200_json_resp_result :: %{id: String.t(), status: String.t()}
-
-  @type commit_stream_transaction_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @type commit_stream_transaction_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  See `begin/2`.
+  """
+  @spec begin!(Arangox.conn(), term, keyword) :: term
+  def begin!(conn, body, opts \\ []) do
+    case begin(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Commit a Stream Transaction
@@ -162,32 +125,31 @@ defmodule Arangox.Api.Transactions do
   this endpoint:
 
   - While the transaction is still tracked: committing an already-committed
-    transaction returns `200` (idempotent), and committing an already-aborted
-    transaction returns `400`.
+  transaction returns `200` (idempotent), and committing an already-aborted
+  transaction returns `400`.
   - Once the server has garbage-collected the transaction's record, the
-    identifier is no longer known and the endpoint returns `404`.
-
+  identifier is no longer known and the endpoint returns `404`.
   """
-  @spec commit_stream_transaction(
-          database_name :: String.t(),
-          transaction_id :: String.t(),
-          keyword
-        ) :: {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def commit_stream_transaction(database_name, transaction_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, transaction_id: transaction_id],
-      call: {Arangox.Api.Transactions, :commit_stream_transaction},
-      url: "/_db/#{database_name}/_api/transaction/#{transaction_id}",
+  @spec commit(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def commit(conn, transaction_id, opts \\ []) do
+    Client.request(conn,
       method: :put,
-      response: [
-        {200, {Arangox.Api.Transactions, :commit_stream_transaction_200_json_resp}},
-        {400, {Arangox.Api.Transactions, :commit_stream_transaction_400_json_resp}},
-        {404, {Arangox.Api.Transactions, :commit_stream_transaction_404_json_resp}}
-      ],
+      segments: ["_api", "transaction", transaction_id],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Commit a Stream Transaction. Raises on error.
+
+  See `commit/2`.
+  """
+  @spec commit!(Arangox.conn(), binary, keyword) :: term
+  def commit!(conn, transaction_id, opts \\ []) do
+    case commit(conn, transaction_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -196,6 +158,7 @@ defmodule Arangox.Api.Transactions do
   > **WARNING:**
   JavaScript Transactions are deprecated from v3.12.0 onward and are
   removed in v4.0.
+
 
   The transaction description must be passed in the body of the POST request.
 
@@ -207,7 +170,7 @@ defmodule Arangox.Api.Transactions do
   following properties:
 
   - `error`: boolean flag to indicate if an error occurred (`false`
-    in this case)
+  in this case)
 
   - `code`: the HTTP status code
 
@@ -232,49 +195,29 @@ defmodule Arangox.Api.Transactions do
   an error.
   Any other errors will be returned with any of the return codes
   *HTTP 400*, *HTTP 409*, or *HTTP 500*.
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec execute_java_script_transaction(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def execute_java_script_transaction(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Transactions, :execute_java_script_transaction},
-      url: "/_db/#{database_name}/_api/transaction",
-      body: body,
+  @spec execute_javascript(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def execute_javascript(conn, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {400, :null}, {404, :null}, {500, :null}],
+      segments: ["_api", "transaction"],
+      body: body,
       opts: opts
-    })
+    )
   end
 
-  @type get_stream_transaction_200_json_resp :: %{
-          code: integer,
-          error: boolean,
-          result: Arangox.Api.Transactions.get_stream_transaction_200_json_resp_result()
-        }
+  @doc """
+  Execute a JavaScript Transaction. Raises on error.
 
-  @type get_stream_transaction_200_json_resp_result :: %{id: String.t(), status: String.t()}
-
-  @type get_stream_transaction_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @type get_stream_transaction_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  See `execute_javascript/2`.
+  """
+  @spec execute_javascript!(Arangox.conn(), term, keyword) :: term
+  def execute_javascript!(conn, body, opts \\ []) do
+    case execute_javascript(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Get the status of a Stream Transaction
@@ -286,151 +229,26 @@ defmodule Arangox.Api.Transactions do
   transaction returns its final status (`committed` or `aborted`). Once
   the server garbage-collects this record, the same identifier becomes
   unknown and the endpoint returns `404`.
-
   """
-  @spec get_stream_transaction(database_name :: String.t(), transaction_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_stream_transaction(database_name, transaction_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, transaction_id: transaction_id],
-      call: {Arangox.Api.Transactions, :get_stream_transaction},
-      url: "/_db/#{database_name}/_api/transaction/#{transaction_id}",
+  @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def get(conn, transaction_id, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      response: [
-        {200, {Arangox.Api.Transactions, :get_stream_transaction_200_json_resp}},
-        {400, {Arangox.Api.Transactions, :get_stream_transaction_400_json_resp}},
-        {404, {Arangox.Api.Transactions, :get_stream_transaction_404_json_resp}}
-      ],
+      segments: ["_api", "transaction", transaction_id],
       opts: opts
-    })
+    )
   end
-
-  @type list_stream_transactions_200_json_resp :: %{
-          transactions: [
-            Arangox.Api.Transactions.list_stream_transactions_200_json_resp_transactions()
-          ]
-        }
-
-  @type list_stream_transactions_200_json_resp_transactions :: %{
-          id: String.t(),
-          state: String.t()
-        }
 
   @doc """
-  List the running Stream Transactions
+  Get the status of a Stream Transaction. Raises on error.
 
-  List the currently running Stream Transactions.
-  In a cluster, the list contains the transactions from all Coordinators.
-
+  See `get/2`.
   """
-  @spec list_stream_transactions(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_stream_transactions(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Transactions, :list_stream_transactions},
-      url: "/_db/#{database_name}/_api/transaction",
-      method: :get,
-      response: [{200, {Arangox.Api.Transactions, :list_stream_transactions_200_json_resp}}],
-      opts: opts
-    })
-  end
-
-  @doc false
-  @spec __fields__(atom) :: keyword
-  def __fields__(:abort_stream_transaction_200_json_resp) do
-    [
-      code: :integer,
-      error: :boolean,
-      result: {Arangox.Api.Transactions, :abort_stream_transaction_200_json_resp_result}
-    ]
-  end
-
-  def __fields__(:abort_stream_transaction_200_json_resp_result) do
-    [id: :string, status: {:const, "aborted"}]
-  end
-
-  def __fields__(:abort_stream_transaction_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:abort_stream_transaction_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:begin_stream_transaction_201_json_resp) do
-    [
-      code: :integer,
-      error: :boolean,
-      result: {Arangox.Api.Transactions, :begin_stream_transaction_201_json_resp_result}
-    ]
-  end
-
-  def __fields__(:begin_stream_transaction_201_json_resp_result) do
-    [id: :string, status: {:const, "running"}]
-  end
-
-  def __fields__(:begin_stream_transaction_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:begin_stream_transaction_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:commit_stream_transaction_200_json_resp) do
-    [
-      code: :integer,
-      error: :boolean,
-      result: {Arangox.Api.Transactions, :commit_stream_transaction_200_json_resp_result}
-    ]
-  end
-
-  def __fields__(:commit_stream_transaction_200_json_resp_result) do
-    [id: :string, status: {:const, "committed"}]
-  end
-
-  def __fields__(:commit_stream_transaction_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:commit_stream_transaction_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:get_stream_transaction_200_json_resp) do
-    [
-      code: :integer,
-      error: :boolean,
-      result: {Arangox.Api.Transactions, :get_stream_transaction_200_json_resp_result}
-    ]
-  end
-
-  def __fields__(:get_stream_transaction_200_json_resp_result) do
-    [id: :string, status: {:enum, ["running", "committed", "aborted"]}]
-  end
-
-  def __fields__(:get_stream_transaction_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:get_stream_transaction_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:list_stream_transactions_200_json_resp) do
-    [
-      transactions: [
-        {Arangox.Api.Transactions, :list_stream_transactions_200_json_resp_transactions}
-      ]
-    ]
-  end
-
-  def __fields__(:list_stream_transactions_200_json_resp_transactions) do
-    [id: :string, state: {:const, "running"}]
+  @spec get!(Arangox.conn(), binary, keyword) :: term
+  def get!(conn, transaction_id, opts \\ []) do
+    case get(conn, transaction_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

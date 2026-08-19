@@ -2,160 +2,175 @@ defmodule Arangox.Api.Client do
   @moduledoc """
   The adapter every `Arangox.Api.*` operation calls.
 
-  Operations end in `client.request/1` with a request map; this module
-  translates that map into `Arangox.request/6`, so the driver's pool,
-  timeout budget, transaction handling, and error contract apply to
+  An operation names a method, a list of path segments, and the query
+  parameters it accepts. This module turns that into a driver request, so the
+  pool, timeout budget, transaction handling and error contract apply to
   `Arangox.Api` calls exactly as they do to hand-written ones. It holds no
-  connection state and opens no socket of its own — a transport change
-  touches this module, not the 243 operations above it.
+  connection state and opens no socket: a transport change touches this
+  module, never the operations above it.
 
-  ## Options
+  ## Options every operation accepts
 
-  The `opts` keyword list of every operation accepts:
+    * `:database` - the database to run against. Falls back to the pool's own
+      `:database`, and then to `_system`.
+    * `:headers` - extra request headers as `{name, value}` tuples, for the
+      header parameters an operation does not expose (`if-match`, and so on).
+    * any query parameter the operation declares, written in snake_case
+    * every per-request option `Arangox.request/6` accepts, such as
+      `:transaction`, `:timeout` and `:request_timeout`
 
-    * `:conn` (required) - the pool or connection to run the request on
-    * `:headers` - a list of `{name, value}` tuples of extra request headers,
-      for the header parameters the surface does not expose (`if-match`,
-      `if-none-match`, ...), appended after the pool's own headers
-    * every per-request option `Arangox.request/6` accepts - `:database`,
-      `:transaction`, `:timeout`, and the rest are forwarded as given
+  ## What comes back
 
-  An operation that declares exactly one non-JSON request media type
-  (`/_api/import` takes `text/plain` JSON lines) gets it set as the request's
-  `content-type`, which routes its body past the JSON codec and onto the wire
-  raw; a caller-supplied `content-type` still wins. An operation declaring
-  several types leaves the choice to the caller, whose value may need more
-  than the bare type (a multipart boundary, say).
+  A successful call answers `{:ok, body}` — the decoded response body, not a
+  response struct. A success that carries no body (`204 No Content`) answers
+  `{:ok, nil}`.
+
+  Any error status answers `{:error, %Arangox.Error{}}`, carrying the HTTP
+  status and ArangoDB's own `errorNum`. A `404` is an error like any other:
+  ask for a document that is not there and you get
+  `{:error, %Arangox.Error{status: 404}}`.
+
+  The `!` form of each operation returns the body directly and raises on any
+  error.
 
   ## Bounds
 
   Every value a caller can influence is bounded here, because every
-  `Arangox.Api` call passes through here:
+  `Arangox.Api` call passes through:
 
-    * a path parameter whose value could alter the path — `/`, `?`, `#`, `%`
-      or a control character — is refused before a request is built. The
-      operation's url already carries the value interpolated, so re-encoding it
-      after the fact cannot be done soundly; refusal matches the rule the
-      driver applies to `:database`. Every other value is percent-encoded per path segment.
-    * query and header names and values must not carry CR, LF, or NUL.
-    * a refusal names the field and the rule, never the value: a rejected
-      header or path segment may be a credential or a transaction capability
-  .
-    * the url must be a rooted path: an operation-supplied scheme or host is
-      refused, and so is an `authorization` or `host` header — the pool's
-      endpoint and credentials are not an operation's to override.
+    * path segments are percent-encoded one segment at a time, so a value
+      carrying `/` or `?` becomes part of that segment instead of altering the
+      path. A control character is refused outright — it is never a legitimate
+      part of a name.
+    * query and header names and values must not carry carriage return, line
+      feed, or null.
+    * an `authorization` or `host` header is refused: the pool's endpoint and
+      credentials are not an operation's to override.
+    * a refusal names the field and the rule, never the value, because a
+      rejected header or path segment may be a credential or a transaction
+      identifier.
   """
 
   alias Arangox.{Client, Error, Response}
 
-  @header_denylist ["authorization", "host"]
+  @denied_headers ["authorization", "host"]
 
-  @spec request(map) :: {:ok, Response.t()} | {:error, any}
-  def request(%{url: url, method: method} = request_map)
-      when is_binary(url) and is_atom(method) do
-    opts = Map.get(request_map, :opts, [])
+  @doc false
+  @spec request(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def request(conn, spec) do
+    opts = Keyword.get(spec, :opts, [])
 
-    conn =
-      Keyword.get(opts, :conn) ||
-        raise ArgumentError,
-              "Arangox.Api operations need a :conn option naming the pool, " <>
-                "e.g. Arangox.Api.Administration.get_version(conn: conn)"
+    with {:ok, path} <- path(Keyword.fetch!(spec, :segments)),
+         {:ok, path} <-
+           with_query(path, Keyword.get(spec, :query, []), Keyword.get(spec, :forced, []), opts),
+         headers = Keyword.get(opts, :headers, []),
+         :ok <- check_headers(headers) do
+      conn
+      |> Arangox.request(
+        Keyword.fetch!(spec, :method),
+        path,
+        Keyword.get(spec, :body, ""),
+        media(headers, Keyword.get(spec, :media)),
+        forwarded(opts, Keyword.get(spec, :query, []))
+      )
+      |> answer(Keyword.get(spec, :response, :body))
+    end
+  end
 
-    headers = Keyword.get(opts, :headers, [])
-    forward_opts = Keyword.drop(opts, [:conn, :client, :headers])
+  @doc false
+  @spec request!(Arangox.conn(), keyword) :: term
+  def request!(conn, spec) do
+    case request(conn, spec) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
-    with {:ok, path} <- bound_path(url, Map.get(request_map, :args, [])),
-         {:ok, path} <- append_query(path, Map.get(request_map, :query, [])),
-         :ok <- bound_headers(headers) do
-      case Arangox.request(
-             conn,
-             method,
-             path,
-             Map.get(request_map, :body, ""),
-             with_declared_media(headers, Map.get(request_map, :request, [])),
-             forward_opts
-           ) do
-        {:ok, _request, %Response{} = response} -> {:ok, response}
-        {:error, _reason} = error -> error
+  defp answer({:ok, _request, %Response{body: body}}, :body), do: {:ok, body}
+
+  # A `HEAD` request has no body at all; its answer is the document revision,
+  # which the server returns as a quoted `etag`. Handing back an empty body
+  # would make the operation useless.
+  defp answer({:ok, _request, %Response{headers: headers}}, :revision) do
+    {:ok,
+     headers
+     |> Enum.find_value(fn {name, value} ->
+       if String.downcase(to_string(name)) == "etag", do: value
+     end)
+     |> unquote_etag()}
+  end
+
+  defp answer({:error, exception}, _response), do: {:error, exception}
+
+  defp unquote_etag(nil), do: nil
+  defp unquote_etag(<<?", rest::binary>>), do: String.trim_trailing(rest, "\"")
+  defp unquote_etag(value), do: value
+
+  # Segments are encoded one at a time, so an interpolated value can never
+  # introduce a separator: a `/` inside a collection name becomes `%2F` and
+  # stays inside its own segment. Control characters are refused instead,
+  # because no ArangoDB name may contain one and encoding them would only
+  # move the rejection to the server.
+  defp path(segments) do
+    Enum.reduce_while(segments, {:ok, ""}, fn segment, {:ok, acc} ->
+      value = to_string(segment)
+
+      if control_byte?(value) do
+        {:halt,
+         {:error,
+          %Error{
+            message:
+              "a path segment cannot contain control characters; the value is not " <>
+                "echoed here because it may be a credential or a transaction identifier"
+          }}}
+      else
+        {:cont, {:ok, acc <> "/" <> URI.encode(value, &URI.char_unreserved?/1)}}
       end
-    end
+    end)
   end
 
-  # The pool's scheme and host are not an operation's to override, so the
-  # url must be a rooted path. `//host/path` is scheme-relative, not rooted.
-  defp bound_path("/" <> rest, args) when binary_part(rest, 0, min(byte_size(rest), 1)) != "/" do
-    with :ok <- check_path_args(args) do
-      {:ok, encode_segments("/" <> rest)}
-    end
-  end
+  defp control_byte?(<<byte, _rest::binary>>) when byte < 0x20 or byte == 0x7F, do: true
+  defp control_byte?(<<_byte, rest::binary>>), do: control_byte?(rest)
+  defp control_byte?(<<>>), do: false
 
-  defp bound_path(url, _args) do
-    {:error,
-     %Error{
-       message:
-         "an Arangox.Api operation's url must be a rooted path; the pool's scheme and host " <>
-           "cannot be overridden, got: #{inspect(url)}"
-     }}
-  end
+  # An operation declares the query parameters it accepts as
+  # `[snake_case_name: "wireName"]`. A caller writes the snake_case name; the
+  # wire name is what ArangoDB reads. Anything the operation does not declare
+  # is left in `opts` for the driver.
+  #
+  # `forced` pairs are the operation's own and are always sent. They carry the
+  # values ArangoDB requires but a caller must not choose — the flag that
+  # decides whether `PUT /_api/document/{collection}` reads or replaces, for
+  # one, where the wrong value silently overwrites a collection.
+  defp with_query(path, declared, forced, opts) do
+    pairs =
+      forced ++
+        for {name, wire} <- declared, Keyword.has_key?(opts, name) do
+          {wire, Keyword.fetch!(opts, name)}
+        end
 
-  # A path parameter is already interpolated into the url by the operation,
-  # so its position cannot be recovered; a value that could alter path
-  # structure is therefore refused rather than encoded, and everything else is
-  # safe to encode segment-wise because it cannot cross a segment boundary.
-  defp check_path_args([]), do: :ok
-  defp check_path_args([{:body, _value} | rest]), do: check_path_args(rest)
-
-  defp check_path_args([{name, value} | rest]) do
-    if path_altering_byte?(to_string(value)) do
-      {:error,
-       %Error{
-         message:
-           "the #{name} path parameter cannot contain \"/\", \"?\", \"#\", \"%\" or " <>
-             "control characters, since they would alter the request path"
-       }}
-    else
-      check_path_args(rest)
-    end
-  end
-
-  defp path_altering_byte?(value), do: Client.path_altering_byte?(value)
-
-  # Percent-encodes everything outside RFC 3986's unreserved set, segment by
-  # segment: static segments come out unchanged, interpolated values carrying
-  # spaces or unicode become legal path bytes. The same encoder the request
-  # seam applies to `:database` and cursor identifiers.
-  defp encode_segments(path) do
-    path
-    |> String.split("/")
-    |> Enum.map_join("/", fn segment -> URI.encode(segment, &URI.char_unreserved?/1) end)
-  end
-
-  defp append_query(path, []), do: {:ok, path}
-
-  defp append_query(path, query) do
-    case Enum.find(query, fn {name, value} ->
-           smuggling_byte?(to_string(name)) or smuggling_byte?(to_string(value))
+    case Enum.find(pairs, fn {name, value} ->
+           Client.smuggling_byte?(to_string(name)) or Client.smuggling_byte?(to_string(value))
          end) do
       nil ->
-        {:ok, path <> "?" <> URI.encode_query(query)}
+        {:ok, if(pairs == [], do: path, else: path <> "?" <> URI.encode_query(pairs))}
 
       {name, _value} ->
         {:error,
          %Error{
            message:
-             "the #{name} query parameter cannot contain carriage return, line feed, " <>
-               "or null"
+             "the #{name} query parameter cannot contain carriage return, line feed, or null"
          }}
     end
   end
 
-  defp bound_headers(headers) when is_list(headers) do
+  defp check_headers(headers) when is_list(headers) do
     Enum.find_value(headers, :ok, fn
-      {name, header_value} ->
+      {name, value} ->
         name = to_string(name)
 
         cond do
-          String.downcase(name) in @header_denylist ->
+          String.downcase(name) in @denied_headers ->
             {:error,
              %Error{
                message:
@@ -163,7 +178,7 @@ defmodule Arangox.Api.Client do
                    "set by an Arangox.Api operation"
              }}
 
-          smuggling_byte?(name) or smuggling_byte?(to_string(header_value)) ->
+          Client.smuggling_byte?(name) or Client.smuggling_byte?(to_string(value)) ->
             {:error,
              %Error{
                message: "the #{name} header cannot contain carriage return, line feed, or null"
@@ -174,47 +189,32 @@ defmodule Arangox.Api.Client do
         end
 
       _other ->
-        {:error,
-         %Error{
-           message: "the :headers option must be a list of {name, value} tuples since 0.8"
-         }}
+        {:error, %Error{message: "the :headers option must be a list of {name, value} tuples"}}
     end)
   end
 
-  defp bound_headers(_headers) do
-    {:error,
-     %Error{message: "the :headers option must be a list of {name, value} tuples since 0.8"}}
-  end
+  defp check_headers(_headers),
+    do: {:error, %Error{message: "the :headers option must be a list of {name, value} tuples"}}
 
-  defp smuggling_byte?(value), do: Client.smuggling_byte?(value)
+  # An operation declaring exactly one non-JSON request media gets it set as
+  # the content type, which routes its body past the JSON codec and onto the
+  # wire as given. JSON is never injected: the pool's `:content_type` decides
+  # the default codec. A caller-supplied content type always wins.
+  defp media(headers, nil), do: headers
 
-  # An operation declares its request media in the request map
-  # (`request: [{"text/plain; charset=utf-8", :map}]`). A non-JSON type is
-  # what routes the body past the JSON codec at the encode seam, so it is set
-  # as the request's content type — only when the operation declares exactly
-  # one type and the caller has not chosen their own. JSON is never injected:
-  # the pool's `:content_type` must keep deciding the default codec. Several
-  # declared types leave the choice to the caller, whose value may need more
-  # than the bare type (a multipart boundary, say).
-  defp with_declared_media(headers, [{media, _schema}]) do
-    cond do
-      media |> media_type() |> json_media?() -> headers
-      Enum.any?(headers, fn {name, _value} -> content_type?(name) end) -> headers
-      true -> headers ++ [{"content-type", media}]
+  defp media(headers, declared) do
+    if Enum.any?(headers, fn {name, _value} ->
+         String.downcase(to_string(name)) == "content-type"
+       end) do
+      headers
+    else
+      headers ++ [{"content-type", declared}]
     end
   end
 
-  defp with_declared_media(headers, _zero_or_many), do: headers
-
-  defp media_type(value) do
-    value
-    |> String.split(";", parts: 2)
-    |> hd()
-    |> String.trim()
-    |> String.downcase()
+  # The operation's own query parameters are consumed here; everything else —
+  # `:database`, `:transaction`, `:timeout` — belongs to the driver.
+  defp forwarded(opts, declared) do
+    Keyword.drop(opts, [:headers | Keyword.keys(declared)])
   end
-
-  defp json_media?(media), do: Client.json_media?(media)
-
-  defp content_type?(name), do: String.downcase(to_string(name)) == "content-type"
 end

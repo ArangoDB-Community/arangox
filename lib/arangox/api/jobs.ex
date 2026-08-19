@@ -1,67 +1,41 @@
 defmodule Arangox.Api.Jobs do
   @moduledoc """
-  Provides API endpoints related to jobs
+  ArangoDB's Jobs operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
-
-  @type cancel_job_200_json_resp :: %{result: boolean}
-
-  @type cancel_job_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @type cancel_job_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  alias Arangox.Api.Client
 
   @doc """
   Cancel an async job
 
   Cancels the currently running job identified by `job-id`. Note that it still
   might take some time to actually cancel the running async job.
-
   """
-  @spec cancel_job(database_name :: String.t(), job_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def cancel_job(database_name, job_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, job_id: job_id],
-      call: {Arangox.Api.Jobs, :cancel_job},
-      url: "/_db/#{database_name}/_api/job/#{job_id}/cancel",
+  @spec cancel(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def cancel(conn, job_id, opts \\ []) do
+    Client.request(conn,
       method: :put,
-      response: [
-        {200, {Arangox.Api.Jobs, :cancel_job_200_json_resp}},
-        {400, {Arangox.Api.Jobs, :cancel_job_400_json_resp}},
-        {404, {Arangox.Api.Jobs, :cancel_job_404_json_resp}}
-      ],
+      segments: ["_api", "job", job_id, "cancel"],
       opts: opts
-    })
+    )
   end
 
-  @type delete_job_200_json_resp :: %{result: boolean}
+  @doc """
+  Cancel an async job. Raises on error.
 
-  @type delete_job_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @type delete_job_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  See `cancel/2`.
+  """
+  @spec cancel!(Arangox.conn(), binary, keyword) :: term
+  def cancel!(conn, job_id, opts \\ []) do
+    case cancel(conn, job_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Delete async job results
@@ -70,48 +44,29 @@ defmodule Arangox.Api.Jobs do
   specific job.
   Clients can use this method to perform an eventual garbage collection of job
   results.
-
-  ## Options
-
-    * `stamp`: A Unix timestamp specifying the expiration threshold for when the `job-id` is
-      set to `expired`.
-      
-
   """
-  @spec delete_job(database_name :: String.t(), job_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def delete_job(database_name, job_id, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:stamp])
-
-    client.request(%{
-      args: [database_name: database_name, job_id: job_id],
-      call: {Arangox.Api.Jobs, :delete_job},
-      url: "/_db/#{database_name}/_api/job/#{job_id}",
+  @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def delete(conn, job_id, opts \\ []) do
+    Client.request(conn,
       method: :delete,
-      query: query,
-      response: [
-        {200, {Arangox.Api.Jobs, :delete_job_200_json_resp}},
-        {400, {Arangox.Api.Jobs, :delete_job_400_json_resp}},
-        {404, {Arangox.Api.Jobs, :delete_job_404_json_resp}}
-      ],
+      segments: ["_api", "job", job_id],
+      query: [stamp: "stamp"],
       opts: opts
-    })
+    )
   end
 
-  @type get_job_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  @doc """
+  Delete async job results. Raises on error.
 
-  @type get_job_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  See `delete/2`.
+  """
+  @spec delete!(Arangox.conn(), binary, keyword) :: term
+  def delete!(conn, job_id, opts \\ []) do
+    case delete(conn, job_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   List async jobs by status or get the status of specific job
@@ -121,50 +76,29 @@ defmodule Arangox.Api.Jobs do
 
   - The IDs of async jobs with a specific status
   - The processing status of a specific async job
-
-  ## Options
-
-    * `count`: The maximum number of job IDs to return per call. If not specified, a
-      server-defined maximum value is used. Only applicable if you specify `pending`
-      or `done` as `job-id` to list jobs.
-      
-
   """
-  @spec get_job(database_name :: String.t(), job_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_job(database_name, job_id, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:count])
-
-    client.request(%{
-      args: [database_name: database_name, job_id: job_id],
-      call: {Arangox.Api.Jobs, :get_job},
-      url: "/_db/#{database_name}/_api/job/#{job_id}",
+  @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def get(conn, job_id, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      query: query,
-      response: [
-        {200, [:string]},
-        {204, :null},
-        {400, {Arangox.Api.Jobs, :get_job_400_json_resp}},
-        {404, {Arangox.Api.Jobs, :get_job_404_json_resp}}
-      ],
+      segments: ["_api", "job", job_id],
+      query: [count: "count"],
       opts: opts
-    })
+    )
   end
 
-  @type get_job_result_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  @doc """
+  List async jobs by status or get the status of specific job. Raises on error.
 
-  @type get_job_result_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
+  See `get/2`.
+  """
+  @spec get!(Arangox.conn(), binary, keyword) :: term
+  def get!(conn, job_id, opts \\ []) do
+    case get(conn, job_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Get the results of an async job
@@ -179,67 +113,26 @@ defmodule Arangox.Api.Jobs do
   If the result is not available yet or if the job is not known (anymore),
   the additional header is not present and you can tell the status from
   the HTTP status code.
-
   """
-  @spec get_job_result(database_name :: String.t(), job_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_job_result(database_name, job_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, job_id: job_id],
-      call: {Arangox.Api.Jobs, :get_job_result},
-      url: "/_db/#{database_name}/_api/job/#{job_id}",
+  @spec result(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def result(conn, job_id, opts \\ []) do
+    Client.request(conn,
       method: :put,
-      response: [
-        {204, :null},
-        {400, {Arangox.Api.Jobs, :get_job_result_400_json_resp}},
-        {404, {Arangox.Api.Jobs, :get_job_result_404_json_resp}},
-        default: :null
-      ],
+      segments: ["_api", "job", job_id],
       opts: opts
-    })
+    )
   end
 
-  @doc false
-  @spec __fields__(atom) :: keyword
-  def __fields__(:cancel_job_200_json_resp) do
-    [result: :boolean]
-  end
+  @doc """
+  Get the results of an async job. Raises on error.
 
-  def __fields__(:cancel_job_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:cancel_job_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:delete_job_200_json_resp) do
-    [result: :boolean]
-  end
-
-  def __fields__(:delete_job_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:delete_job_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:get_job_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:get_job_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:get_job_result_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:get_job_result_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
+  See `result/2`.
+  """
+  @spec result!(Arangox.conn(), binary, keyword) :: term
+  def result!(conn, job_id, opts \\ []) do
+    case result(conn, job_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

@@ -1,9 +1,45 @@
 defmodule Arangox.Api.Indexes do
   @moduledoc """
-  Provides API endpoints related to indexes
+  ArangoDB's Indexes operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
+  alias Arangox.Api.Client
+
+  @doc """
+  List all indexes of a collection
+
+  Returns an object with an `indexes` attribute containing an array of all
+  index descriptions for the given collection. The same information is also
+  available in the `identifiers` attribute as an object with the index identifiers
+  as object keys.
+  """
+  @spec all(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all(conn, collection, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "index"],
+      forced: [{"collection", collection}],
+      query: [with_stats: "withStats", with_hidden: "withHidden"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List all indexes of a collection. Raises on error.
+
+  See `all/1`.
+  """
+  @spec all!(Arangox.conn(), binary, keyword) :: term
+  def all!(conn, collection, opts \\ []) do
+    case all(conn, collection, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Create an index
@@ -37,6 +73,7 @@ defmodule Arangox.Api.Indexes do
 
   > **INFO:**
   Unique indexes on non-shard keys are not supported in cluster deployments.
+
 
   Persistent indexes can optionally be created in a sparse
   variant. A sparse index will be created if the **sparse** attribute in
@@ -82,385 +119,56 @@ defmodule Arangox.Api.Indexes do
   The optional attribute **inBackground** can be set to `true` to keep the
   collection/shards available for write operations by not using an exclusive
   write lock for the duration of the index creation.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec create_index(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
+  @spec create(Arangox.conn(), binary, term, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def create(conn, collection, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {400, :null}, {404, :null}],
+      segments: ["_api", "index"],
+      body: body,
+      forced: [{"collection", collection}],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  Create a full-text index
+  Create an index. Raises on error.
 
-  > **WARNING:**
-  The fulltext index type is deprecated from version 3.10 onwards.
-
-  Creates a fulltext index for the collection `collection-name`, if
-  it does not already exist. The call expects an object containing the index
-  details.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
+  See `create/2`.
   """
-  @spec create_index_fulltext(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_fulltext(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_fulltext},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {404, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Create a geo-spatial index
-
-  Creates a geo-spatial index in the collection `collection`, if
-  it does not already exist.
-
-  Geo indexes are always sparse, meaning that documents that do not contain
-  the index attributes or have non-numeric values in the index attributes
-  will not be indexed.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec create_index_geo(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_geo(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_geo},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {404, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Create an inverted index
-
-  Creates an inverted index for the collection `collection-name`, if
-  it does not already exist. The call expects an object containing the index
-  details.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec create_index_inverted(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_inverted(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_inverted},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {404, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Create a multi-dimensional index
-
-  Creates a multi-dimensional index for the collection `collection-name`, if
-  it does not already exist.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec create_index_mdi(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_mdi(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_mdi},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {400, :null}, {404, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Create a persistent index
-
-  Creates a persistent index for the collection `collection-name`, if
-  it does not already exist.
-
-  In a sparse index all documents will be excluded from the index that do not
-  contain at least one of the specified index attributes (i.e. `fields`) or that
-  have a value of `null` in any of the specified index attributes. Such documents
-  will not be indexed, and not be taken into account for uniqueness checks if
-  the `unique` flag is set.
-
-  In a non-sparse index, these documents will be indexed (for non-present
-  indexed attributes, a value of `null` will be used) and will be taken into
-  account for uniqueness checks if the `unique` flag is set.
-
-  > **INFO:**
-  Unique indexes on non-shard keys are not supported in cluster deployments.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec create_index_persistent(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_persistent(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_persistent},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {400, :null}, {404, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Create a TTL index
-
-  Creates a time-to-live (TTL) index for the collection `collection-name` if it
-  does not already exist.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec create_index_ttl(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_ttl(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_ttl},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {400, :null}, {404, :null}],
-      opts: opts
-    })
-  end
-
-  @type create_index_vector_200_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t() | nil,
-          fields: [String.t()],
-          id: String.t(),
-          isNewlyCreated: boolean,
-          name: String.t(),
-          params: Arangox.Api.Indexes.create_index_vector_200_json_resp_params(),
-          sparse: boolean,
-          storedValues: [String.t()] | nil,
-          trainingState: String.t(),
-          type: String.t(),
-          unique: boolean
-        }
-
-  @type create_index_vector_200_json_resp_params :: %{
-          defaultNProbe: integer,
-          dimension: integer,
-          factory: String.t() | nil,
-          metric: String.t(),
-          nLists: map,
-          numberOfDocsPerCentroid: integer,
-          trainingIterations: integer
-        }
-
-  @type create_index_vector_201_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t() | nil,
-          fields: [String.t()],
-          id: String.t(),
-          isNewlyCreated: boolean,
-          name: String.t(),
-          params: Arangox.Api.Indexes.create_index_vector_201_json_resp_params(),
-          sparse: boolean,
-          storedValues: [String.t()] | nil,
-          trainingState: String.t(),
-          type: String.t(),
-          unique: boolean
-        }
-
-  @type create_index_vector_201_json_resp_params :: %{
-          defaultNProbe: integer,
-          dimension: integer,
-          factory: String.t() | nil,
-          metric: String.t(),
-          nLists: map,
-          numberOfDocsPerCentroid: integer,
-          trainingIterations: integer
-        }
-
-  @type create_index_vector_400_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @type create_index_vector_404_json_resp :: %{
-          code: integer,
-          error: boolean,
-          errorMessage: String.t(),
-          errorNum: integer
-        }
-
-  @doc """
-  Create a vector index
-
-  Creates a vector index for the collection `collection-name`, if
-  it does not already exist.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec create_index_vector(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_index_vector(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Indexes, :create_index_vector},
-      url: "/_db/#{database_name}/_api/index",
-      body: body,
-      method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [
-        {200, {Arangox.Api.Indexes, :create_index_vector_200_json_resp}},
-        {201, {Arangox.Api.Indexes, :create_index_vector_201_json_resp}},
-        {400, {Arangox.Api.Indexes, :create_index_vector_400_json_resp}},
-        {404, {Arangox.Api.Indexes, :create_index_vector_404_json_resp}}
-      ],
-      opts: opts
-    })
+  @spec create!(Arangox.conn(), binary, term, keyword) :: term
+  def create!(conn, collection, body, opts \\ []) do
+    case create(conn, collection, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
   Delete an index
 
   Deletes an index with `index-id`.
-
   """
-  @spec delete_index(database_name :: String.t(), index_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def delete_index(database_name, index_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, index_id: index_id],
-      call: {Arangox.Api.Indexes, :delete_index},
-      url: "/_db/#{database_name}/_api/index/#{index_id}",
+  @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def delete(conn, index_id, opts \\ []) do
+    Client.request(conn,
       method: :delete,
-      response: [{200, :null}, {404, :null}],
+      segments: ["_api", "index", index_id],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Delete an index. Raises on error.
+
+  See `delete/2`.
+  """
+  @spec delete!(Arangox.conn(), binary, keyword) :: term
+  def delete!(conn, index_id, opts \\ []) do
+    case delete(conn, index_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -476,132 +184,26 @@ defmodule Arangox.Api.Indexes do
   All other attributes are type-dependent. For example, some indexes provide
   `unique` or `sparse` flags, whereas others don't. Some indexes also provide
   a selectivity estimate in the `selectivityEstimate` attribute of the result.
-
   """
-  @spec get_index(database_name :: String.t(), index_id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_index(database_name, index_id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, index_id: index_id],
-      call: {Arangox.Api.Indexes, :get_index},
-      url: "/_db/#{database_name}/_api/index/#{index_id}",
+  @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def get(conn, index_id, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      response: [{200, :null}, {404, :null}],
+      segments: ["_api", "index", index_id],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  List all indexes of a collection
+  Get an index. Raises on error.
 
-  Returns an object with an `indexes` attribute containing an array of all
-  index descriptions for the given collection. The same information is also
-  available in the `identifiers` attribute as an object with the index identifiers
-  as object keys.
-
-  ## Options
-
-    * `collection`: The collection name.
-      
-    * `withStats`: Whether to include figures and estimates in the result.
-      
-    * `withHidden`: Whether to include hidden indexes in the result. Internal indexes
-      (such as `arangosearch`) and ones that are currently built in the
-      background are hidden.
-      
-      From v3.12.10 onward, this option additionally makes vector indexes
-      report a `shards` attribute with the per-shard `trainingState`,
-      `error`, and `resolvedNLists`. See
-      [Check the number of centroids of a trained index](https://docs.arango.ai/arangodb/3.12/indexes-and-search/indexing/working-with-indexes/vector-indexes/#check-the-number-of-centroids-of-a-trained-index).
-      
-
+  See `get/2`.
   """
-  @spec list_indexes(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_indexes(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:collection, :withHidden, :withStats])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Indexes, :list_indexes},
-      url: "/_db/#{database_name}/_api/index",
-      method: :get,
-      query: query,
-      response: [{200, :null}],
-      opts: opts
-    })
-  end
-
-  @doc false
-  @spec __fields__(atom) :: keyword
-  def __fields__(:create_index_vector_200_json_resp) do
-    [
-      code: :integer,
-      error: :boolean,
-      errorMessage: :string,
-      fields: [:string],
-      id: :string,
-      isNewlyCreated: :boolean,
-      name: :string,
-      params: {Arangox.Api.Indexes, :create_index_vector_200_json_resp_params},
-      sparse: :boolean,
-      storedValues: [:string],
-      trainingState: {:enum, ["unusable", "training", "ingesting", "ready"]},
-      type: :string,
-      unique: :boolean
-    ]
-  end
-
-  def __fields__(:create_index_vector_200_json_resp_params) do
-    [
-      defaultNProbe: :integer,
-      dimension: :integer,
-      factory: :string,
-      metric: {:enum, ["cosine", "innerProduct", "l2"]},
-      nLists: :map,
-      numberOfDocsPerCentroid: :integer,
-      trainingIterations: :integer
-    ]
-  end
-
-  def __fields__(:create_index_vector_201_json_resp) do
-    [
-      code: :integer,
-      error: :boolean,
-      errorMessage: :string,
-      fields: [:string],
-      id: :string,
-      isNewlyCreated: :boolean,
-      name: :string,
-      params: {Arangox.Api.Indexes, :create_index_vector_201_json_resp_params},
-      sparse: :boolean,
-      storedValues: [:string],
-      trainingState: {:enum, ["unusable", "training", "ingesting", "ready"]},
-      type: :string,
-      unique: :boolean
-    ]
-  end
-
-  def __fields__(:create_index_vector_201_json_resp_params) do
-    [
-      defaultNProbe: :integer,
-      dimension: :integer,
-      factory: :string,
-      metric: {:enum, ["cosine", "innerProduct", "l2"]},
-      nLists: :map,
-      numberOfDocsPerCentroid: :integer,
-      trainingIterations: :integer
-    ]
-  end
-
-  def __fields__(:create_index_vector_400_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
-  end
-
-  def __fields__(:create_index_vector_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string, errorNum: :integer]
+  @spec get!(Arangox.conn(), binary, keyword) :: term
+  def get!(conn, index_id, opts \\ []) do
+    case get(conn, index_id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

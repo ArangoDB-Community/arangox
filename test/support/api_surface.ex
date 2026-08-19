@@ -1,149 +1,144 @@
 defmodule Arangox.TestSupport.ApiSurface do
   @moduledoc """
-  Source extraction over the hand-maintained operation modules under
-  `lib/arangox/api/`: the operation-file listing, the `client.request/1`
-  call-site reader, and the URL-template reconstruction. Everything is read
-  from the AST, never regex over source.
+  Reads the owned `Arangox.Api.*` operation sources as data.
 
-  Both source gates read through this module — `Arangox.Api.SurfaceTest`
-  (unit tier) and `Arangox.Api.ConformanceTest` (integration tier) — so the
-  tiers cannot disagree about what counts as an operation file or a call
-  site; a private copy in either test can drift and quietly narrow what the
-  other tier's invariants are checked against. Analysis of the extracted
-  sites (URL checks, the call-site count, comparison against the server's
-  document) belongs to the tests, not here.
+  Both gates over the surface — the pure-source `Arangox.Api.SurfaceTest` and
+  the live `Arangox.Api.ConformanceTest` — need the same facts out of the same
+  files: which operations exist, and what each one puts on the wire. Parsing
+  happens here once, from the AST rather than from the source text, so an
+  operation written in a shape these checks cannot read raises instead of
+  being silently skipped.
   """
 
-  import ExUnit.Assertions
-
   @surface_dir "lib/arangox/api"
-  @adapter Path.join(@surface_dir, "client.ex")
 
   @doc "The directory holding the operation sources, for failure messages."
   def surface_dir, do: @surface_dir
 
   @doc """
-  Every operation file: `#{@surface_dir}/*.ex` minus the adapter, which is
-  the transport seam rather than an operation module.
+  Every operation source. The adapter is not one: it is the seam the
+  operations call, not an operation.
   """
   def surface_files do
-    files =
-      @surface_dir
-      |> Path.join("*.ex")
-      |> Path.wildcard()
-      |> Enum.reject(&(&1 == @adapter))
-
-    assert files != [], "no operation files found under #{@surface_dir}"
-    files
+    @surface_dir
+    |> Path.join("*.ex")
+    |> Path.wildcard()
+    |> Enum.reject(&(Path.basename(&1) == "client.ex"))
+    |> Enum.sort()
   end
 
   @doc """
-  Every `client.request/1` call site in one operation file, as
-  `%{module:, fun:, body:, pairs:}`: the enclosing module and function, the
-  function body (query extraction reads `query =` bindings from it), and the
-  key-value pairs of the request map.
+  Every operation in a file, as
+  `%{fun:, arity:, bang?:, method:, segments:, forced:, query:, body?:}`.
+
+  `segments` renders each entry as `{:literal, binary}` for a static path
+  segment and `{:arg, atom}` for one interpolated from an argument — the
+  distinction the surface gate needs to prove no path is assembled by string
+  building.
   """
-  def call_sites(file) do
-    {:ok, ast} = file |> File.read!() |> Code.string_to_quoted()
-
-    {:defmodule, _, [{:__aliases__, _, module_parts}, _]} = ast
-    module = Module.concat(module_parts)
-
-    sites =
-      for {name, body} <- function_defs(ast, file), pairs <- request_pairs(body) do
-        %{module: module, fun: name, body: body, pairs: pairs}
-      end
-
-    assert sites != [], "#{file} contains no client.request/1 call site"
-    sites
+  def operations(file) do
+    file
+    |> File.read!()
+    |> Code.string_to_quoted!()
+    |> defs()
+    |> Enum.map(&operation(&1, file))
+    |> Enum.reject(&is_nil/1)
   end
 
-  @doc """
-  Every public function in a quoted expression, as `{name, body}` pairs.
-  Recognizes plain and guarded heads — a guarded `def` wraps its head in a
-  `:when` tuple, so a head-only match would record the function as `:when`.
-  A bodyless head (a default-argument declaration) carries no call sites and
-  is skipped. Any other `def` shape raises, naming `context`: a def this walk
-  cannot read must never be skipped, because a skipped operation silently
-  narrows every invariant checked over the extracted sites.
-  """
-  def function_defs(ast, context) do
-    {_ast, defs} =
-      Macro.prewalk(ast, [], fn
-        {:def, _, [{:when, _, [{name, _, _} | _]}, [do: body]]} = node, acc
-        when is_atom(name) ->
-          {node, [{name, body} | acc]}
+  defp defs({:defmodule, _, [_, [do: {:__block__, _, body}]]}), do: body
+  defp defs({:defmodule, _, [_, [do: single]]}), do: [single]
+  defp defs(_other), do: []
 
-        {:def, _, [{name, _, _}, [do: body]]} = node, acc
-        when is_atom(name) and name != :when ->
-          {node, [{name, body} | acc]}
+  defp operation({:def, _, [head, [do: body]]}, file) do
+    {name, args} = head_parts(head, file)
 
-        {:def, _, [{:when, _, [{name, _, _} | _]}]} = node, acc when is_atom(name) ->
-          {node, acc}
+    case call_spec(body) do
+      nil ->
+        # A bang form delegates to its own non-bang twin rather than calling
+        # the adapter again; it carries no wire facts of its own.
+        %{fun: name, arity: length(args), bang?: bang?(name), spec: nil}
 
-        {:def, _, [{name, _, _}]} = node, acc when is_atom(name) and name != :when ->
-          {node, acc}
-
-        {:def, _, _} = node, _acc ->
-          raise "#{context}: cannot extract a function name from #{Macro.to_string(node)} — " <>
-                  "extend Arangox.TestSupport.ApiSurface.function_defs/2 deliberately"
-
-        node, acc ->
-          {node, acc}
-      end)
-
-    defs
+      spec ->
+        %{
+          fun: name,
+          arity: length(args),
+          bang?: bang?(name),
+          method: Keyword.fetch!(spec, :method) |> literal!(file, name, :method),
+          segments: segments(Keyword.fetch!(spec, :segments), file, name),
+          forced: Keyword.get(spec, :forced, []) |> forced(),
+          query: Keyword.get(spec, :query, []) |> query_names(),
+          body?: Keyword.has_key?(spec, :body),
+          spec: spec
+        }
+    end
   end
 
-  @doc """
-  The argument pairs of every `client.request(%{...})` call in an AST. Takes
-  any quoted expression, not only a whole file's AST, so a test can run the
-  extraction over a synthetic function body.
-  """
-  def request_pairs(ast) do
-    {_ast, calls} =
-      Macro.prewalk(ast, [], fn
-        {{:., _, [{:client, _, _}, :request]}, _, [{:%{}, _, pairs}]} = node, acc ->
-          {node, [pairs | acc]}
+  defp operation(_other, _file), do: nil
 
-        node, acc ->
-          {node, acc}
-      end)
+  defp head_parts({:when, _, [inner, _guard]}, file), do: head_parts(inner, file)
+  defp head_parts({name, _, args}, _file) when is_atom(name) and is_list(args), do: {name, args}
+  defp head_parts({name, _, nil}, _file) when is_atom(name), do: {name, []}
 
-    calls
-  end
+  defp head_parts(other, file),
+    do: raise("#{file}: cannot read a function head from #{inspect(other)}")
 
-  @doc """
-  The URL template of a call site's `url:` value, reconstructed from the AST:
-  a binary literal passes through, and each interpolated segment must be a
-  bare variable, rendered through `render` — `"{var}"` by default, the
-  spelling the conformance gate compares against the document's path keys.
-  Any other shape (a variable, a helper call, an interpolated expression)
-  returns `:error`, so a caller must fail loudly rather than skip the site.
-  """
-  def template(url_ast, render \\ fn name -> "{#{name}}" end)
+  defp bang?(name), do: name |> Atom.to_string() |> String.ends_with?("!")
 
-  def template(url, _render) when is_binary(url), do: {:ok, url}
+  # The adapter call, if this body is one. Anything else — a bang form's
+  # `case`, a helper — has no spec.
+  defp call_spec({{:., _, [{:__aliases__, _, [:Client]}, :request]}, _, [_conn, spec]})
+       when is_list(spec),
+       do: spec
 
-  def template({:<<>>, _, parts}, render) do
-    Enum.reduce_while(parts, {:ok, ""}, fn part, {:ok, acc} ->
-      case template_part(part, render) do
-        {:ok, segment} -> {:cont, {:ok, acc <> segment}}
-        :error -> {:halt, :error}
-      end
+  defp call_spec(_other), do: nil
+
+  defp literal!(value, _file, _name, _key) when is_atom(value) or is_binary(value), do: value
+
+  defp literal!(other, file, name, key),
+    do: raise("#{file}: #{name}'s #{key} is not a literal: #{inspect(other)}")
+
+  defp segments(list, file, name) when is_list(list) do
+    Enum.map(list, fn
+      literal when is_binary(literal) ->
+        {:literal, literal}
+
+      {arg, _meta, context} when is_atom(arg) and is_atom(context) ->
+        {:arg, arg}
+
+      other ->
+        raise(
+          "#{file}: #{name} has a path segment that is neither a literal string " <>
+            "nor a bare argument: #{inspect(other)}"
+        )
     end)
   end
 
-  def template(_other, _render), do: :error
+  defp segments(other, file, name),
+    do: raise("#{file}: #{name}'s segments is not a list: #{inspect(other)}")
 
-  defp template_part(literal, _render) when is_binary(literal), do: {:ok, literal}
+  # `[{"wireName", value}]` — the value is a literal for a fixed flag and an
+  # argument for a required parameter lifted to a positional.
+  defp forced(list) do
+    Enum.map(list, fn
+      {:{}, _, [wire, value]} -> {wire, forced_value(value)}
+      {wire, value} -> {wire, forced_value(value)}
+    end)
+  end
 
-  defp template_part(
-         {:"::", _, [{{:., _, [Kernel, :to_string]}, _, [{var, _, context}]}, _type]},
-         render
-       )
-       when is_atom(var) and is_atom(context),
-       do: {:ok, render.(var)}
+  defp forced_value(v) when is_binary(v), do: {:literal, v}
+  defp forced_value({arg, _meta, ctx}) when is_atom(arg) and is_atom(ctx), do: {:arg, arg}
 
-  defp template_part(_other, _render), do: :error
+  defp query_names(list), do: Enum.map(list, fn {_snake, wire} -> wire end)
+
+  @doc """
+  The wire path an operation addresses, with arguments rendered as the
+  document writes them: `/_api/document/{collection}/{key}`.
+  """
+  def address(%{segments: segments}) do
+    "/" <>
+      Enum.map_join(segments, "/", fn
+        {:literal, s} -> s
+        {:arg, a} -> "{#{a}}"
+      end)
+  end
 end

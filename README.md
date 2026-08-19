@@ -574,6 +574,3 @@ mix test.integration
 - **1.0**: replace the `DBConnection` foundation with `http_connection`,
   which is what unlocks HTTP/2 multiplexing. The 0.x API is the stability
   promise; 1.0 is reserved for that swap.
-- **The next release**: remove the deprecated application-config fallbacks
-  (`:json_library`, `:vst_maxsize`) and their reader functions.
-- An Ecto adapter remains under consideration.

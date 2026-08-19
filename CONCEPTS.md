@@ -25,6 +25,12 @@ ArangoDB's binary wire protocol, as opposed to HTTP. One of the protocols a Clie
 ### Caller
 The process that asks the pool for a connection and then runs the request itself. Worth naming because it is not the connection process: the pool hands the connection's state to the Caller, which applies the Client's callbacks in its own process and is therefore the process actually blocked while waiting on a Socket.
 
+### Request deadline
+The absolute instant by which a request must complete, fixed when the Caller enters the pool — a point in time, not a duration that restarts at each step, so time spent queueing for a connection is already spent. Every socket wait a request performs, receiving and writing alike, is derived from what remains of it, and a request that outlives it ends in Retirement rather than in a longer wait.
+
+### Retirement
+Taking a connection out of service instead of returning it to the pool, forced whenever its Socket can no longer be trusted to carry the next request — bytes may still be in flight, a response was left half-read, or the peer is gone. A retiring close aborts rather than lingers: nothing legitimately waits on the far side of a connection the driver has decided to discard.
+
 ## API surface
 
 ### API surface
@@ -49,4 +55,3 @@ The identifier is a bearer capability: whoever presents it acts inside the trans
 ## Flagged ambiguities
 
 - "Timeout" had been used for both the pool's checkout deadline (how long a Caller will wait to obtain a connection, measured from when it entered the pool) and a request's own time budget at the socket. These are distinct, and the first is an absolute instant rather than a duration that can be reused for the second.
-</content>

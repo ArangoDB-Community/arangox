@@ -1,9 +1,71 @@
 defmodule Arangox.Api.Databases do
   @moduledoc """
-  Provides API endpoints related to databases
+  ArangoDB's Databases operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
+  alias Arangox.Api.Client
+
+  @doc """
+  List all databases
+
+  Retrieves the list of all existing databases
+
+  > **INFO:**
+  Retrieving the list of databases is only possible from within the `_system` database.
+  """
+  @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all(conn, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_db", "_system", "_api", "database"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List all databases. Raises on error.
+
+  See `all/1`.
+  """
+  @spec all!(Arangox.conn(), keyword) :: term
+  def all!(conn, opts \\ []) do
+    case all(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  List the accessible databases
+
+  Retrieves the list of all databases the current user can access without
+  specifying a different username or password.
+  """
+  @spec all_user_accessible(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all_user_accessible(conn, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "database", "user"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List the accessible databases. Raises on error.
+
+  See `all_user_accessible/1`.
+  """
+  @spec all_user_accessible!(Arangox.conn(), keyword) :: term
+  def all_user_accessible!(conn, opts \\ []) do
+    case all_user_accessible(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Create a database
@@ -14,51 +76,28 @@ defmodule Arangox.Api.Databases do
 
   > **INFO:**
   Creating a new database is only possible from within the `_system` database.
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec create_database(body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_database(body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [body: body],
-      call: {Arangox.Api.Databases, :create_database},
-      url: "/_db/_system/_api/database",
-      body: body,
+  @spec create(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def create(conn, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      request: [{"application/json", :map}],
-      response: [{201, :null}, {400, :null}, {403, :null}, {409, :null}],
+      segments: ["_db", "_system", "_api", "database"],
+      body: body,
       opts: opts
-    })
+    )
   end
 
   @doc """
-  Drop a database
+  Create a database. Raises on error.
 
-  Drops the database along with all data stored in it.
-
-  > **INFO:**
-  Dropping a database is only possible from within the `_system` database.
-  The `_system` database itself cannot be dropped.
-
+  See `create/2`.
   """
-  @spec delete_database(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def delete_database(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Databases, :delete_database},
-      url: "/_db/_system/_api/database/#{database_name}",
-      method: :delete,
-      response: [{200, :null}, {400, :null}, {403, :null}, {404, :null}],
-      opts: opts
-    })
+  @spec create!(Arangox.conn(), term, keyword) :: term
+  def create!(conn, body, opts \\ []) do
+    case create(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -75,65 +114,57 @@ defmodule Arangox.Api.Databases do
   - `sharding`: the default sharding method for collections created in this database
   - `replicationFactor`: the default replication factor for collections in this database
   - `writeConcern`: the default write concern for collections in this database
-
   """
-  @spec get_current_database(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_current_database(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Databases, :get_current_database},
-      url: "/_db/#{database_name}/_api/database/current",
+  @spec current(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def current(conn, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      response: [{200, :null}, {400, :null}, {404, :null}],
+      segments: ["_api", "database", "current"],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  List all databases
+  Get information about the current database. Raises on error.
 
-  Retrieves the list of all existing databases
+  See `current/1`.
+  """
+  @spec current!(Arangox.conn(), keyword) :: term
+  def current!(conn, opts \\ []) do
+    case current(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Drop a database
+
+  Drops the database along with all data stored in it.
 
   > **INFO:**
-  Retrieving the list of databases is only possible from within the `_system` database.
-
+  Dropping a database is only possible from within the `_system` database.
+  The `_system` database itself cannot be dropped.
   """
-  @spec list_databases(keyword) :: {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_databases(opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [],
-      call: {Arangox.Api.Databases, :list_databases},
-      url: "/_db/_system/_api/database",
-      method: :get,
-      response: [{200, :null}, {400, :null}, {403, :null}],
+  @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def delete(conn, database_name, opts \\ []) do
+    Client.request(conn,
+      method: :delete,
+      segments: ["_db", "_system", "_api", "database", database_name],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  List the accessible databases
+  Drop a database. Raises on error.
 
-  Retrieves the list of all databases the current user can access without
-  specifying a different username or password.
-
+  See `delete/2`.
   """
-  @spec list_user_accessible_databases(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_user_accessible_databases(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Databases, :list_user_accessible_databases},
-      url: "/_db/#{database_name}/_api/database/user",
-      method: :get,
-      response: [{200, :null}, {400, :null}],
-      opts: opts
-    })
+  @spec delete!(Arangox.conn(), binary, keyword) :: term
+  def delete!(conn, database_name, opts \\ []) do
+    case delete(conn, database_name, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

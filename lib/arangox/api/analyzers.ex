@@ -1,34 +1,72 @@
 defmodule Arangox.Api.Analyzers do
   @moduledoc """
-  Provides API endpoints related to analyzers
+  ArangoDB's Analyzers operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
+  alias Arangox.Api.Client
+
+  @doc """
+  List all Analyzers
+
+  Retrieves a an array of all Analyzer definitions.
+  The resulting array contains objects with the following attributes:
+  - `name`: the Analyzer name
+  - `type`: the Analyzer type
+  - `properties`: the properties used to configure the specified type
+  - `features`: the set of features to set on the Analyzer generated fields
+  """
+  @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all(conn, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "analyzer"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List all Analyzers. Raises on error.
+
+  See `all/1`.
+  """
+  @spec all!(Arangox.conn(), keyword) :: term
+  def all!(conn, opts \\ []) do
+    case all(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Create an Analyzer
 
   Creates a new Analyzer based on the provided configuration.
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec create_analyzer(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_analyzer(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Analyzers, :create_analyzer},
-      url: "/_db/#{database_name}/_api/analyzer",
-      body: body,
+  @spec create(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def create(conn, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      request: [{"application/json", :map}],
-      response: [{200, :null}, {201, :null}, {400, :null}, {403, :null}],
+      segments: ["_api", "analyzer"],
+      body: body,
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Create an Analyzer. Raises on error.
+
+  See `create/2`.
+  """
+  @spec create!(Arangox.conn(), term, keyword) :: term
+  def create!(conn, body, opts \\ []) do
+    case create(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -40,28 +78,28 @@ defmodule Arangox.Api.Analyzers do
   the following attributes:
   - `error`: `false`
   - `name`: The name of the removed Analyzer
-
-  ## Options
-
-    * `force`: The Analyzer configuration should be removed even if it is in-use.
-      
-
   """
-  @spec delete_analyzer(database_name :: String.t(), analyzer_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def delete_analyzer(database_name, analyzer_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:force])
-
-    client.request(%{
-      args: [database_name: database_name, analyzer_name: analyzer_name],
-      call: {Arangox.Api.Analyzers, :delete_analyzer},
-      url: "/_db/#{database_name}/_api/analyzer/#{analyzer_name}",
+  @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def delete(conn, analyzer_name, opts \\ []) do
+    Client.request(conn,
       method: :delete,
-      query: query,
-      response: [{200, :null}, {400, :null}, {403, :null}, {404, :null}, {409, :null}],
+      segments: ["_api", "analyzer", analyzer_name],
+      query: [force: "force"],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Remove an Analyzer. Raises on error.
+
+  See `delete/2`.
+  """
+  @spec delete!(Arangox.conn(), binary, keyword) :: term
+  def delete!(conn, analyzer_name, opts \\ []) do
+    case delete(conn, analyzer_name, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -73,46 +111,26 @@ defmodule Arangox.Api.Analyzers do
   - `type`: the Analyzer type
   - `properties`: the properties used to configure the specified type
   - `features`: the set of features to set on the Analyzer generated fields
-
   """
-  @spec get_analyzer(database_name :: String.t(), analyzer_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_analyzer(database_name, analyzer_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, analyzer_name: analyzer_name],
-      call: {Arangox.Api.Analyzers, :get_analyzer},
-      url: "/_db/#{database_name}/_api/analyzer/#{analyzer_name}",
+  @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def get(conn, analyzer_name, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      response: [{200, :null}, {404, :null}],
+      segments: ["_api", "analyzer", analyzer_name],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  List all Analyzers
+  Get an Analyzer definition. Raises on error.
 
-  Retrieves a an array of all Analyzer definitions.
-  The resulting array contains objects with the following attributes:
-  - `name`: the Analyzer name
-  - `type`: the Analyzer type
-  - `properties`: the properties used to configure the specified type
-  - `features`: the set of features to set on the Analyzer generated fields
-
+  See `get/2`.
   """
-  @spec list_analyzers(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_analyzers(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Analyzers, :list_analyzers},
-      url: "/_db/#{database_name}/_api/analyzer",
-      method: :get,
-      response: [{200, :null}],
-      opts: opts
-    })
+  @spec get!(Arangox.conn(), binary, keyword) :: term
+  def get!(conn, analyzer_name, opts \\ []) do
+    case get(conn, analyzer_name, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

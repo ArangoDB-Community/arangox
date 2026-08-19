@@ -1,9 +1,83 @@
 defmodule Arangox.Api.Foxx do
   @moduledoc """
-  Provides API endpoints related to foxx
+  ArangoDB's Foxx operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
+  alias Arangox.Api.Client
+
+  @doc """
+  List the installed services
+
+  Fetches a list of services installed in the current database.
+
+  Returns a list of objects with the following attributes:
+
+  - `mount`: the mount path of the service
+  - `development`: `true` if the service is running in development mode
+  - `legacy`: `true` if the service is running in 2.8 legacy compatibility mode
+  - `provides`: the service manifest's `provides` value or an empty object
+
+  Additionally the object may contain the following attributes if they have been set on the manifest:
+
+  - `name`: a string identifying the service type
+  - `version`: a semver-compatible version string
+  """
+  @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all(conn, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "foxx"],
+      query: [exclude_system: "excludeSystem"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List the installed services. Raises on error.
+
+  See `all/1`.
+  """
+  @spec all!(Arangox.conn(), keyword) :: term
+  def all!(conn, opts \\ []) do
+    case all(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  List the service scripts
+
+  Fetches a list of the scripts defined by the service.
+
+  Returns an object mapping the raw script names to human-friendly names.
+  """
+  @spec all_scripts(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all_scripts(conn, mount, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "foxx", "scripts"],
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List the service scripts. Raises on error.
+
+  See `all_scripts/1`.
+  """
+  @spec all_scripts!(Arangox.conn(), binary, keyword) :: term
+  def all_scripts!(conn, mount, opts \\ []) do
+    case all_scripts(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Commit the local service state
@@ -11,28 +85,59 @@ defmodule Arangox.Api.Foxx do
   Commits the local service state of the Coordinator to the database.
 
   This can be used to resolve service conflicts between Coordinators that cannot be fixed automatically due to missing data.
-
-  ## Options
-
-    * `replace`: Overwrite existing service files in database even if they already exist.
-      
-
   """
-  @spec commit_foxx_service_state(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def commit_foxx_service_state(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:replace])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :commit_foxx_service_state},
-      url: "/_db/#{database_name}/_api/foxx/commit",
+  @spec commit_state(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def commit_state(conn, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      query: query,
-      response: [{204, :null}],
+      segments: ["_api", "foxx", "commit"],
+      query: [replace: "replace"],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Commit the local service state. Raises on error.
+
+  See `commit_state/1`.
+  """
+  @spec commit_state!(Arangox.conn(), keyword) :: term
+  def commit_state!(conn, opts \\ []) do
+    case commit_state(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Get the configuration options
+
+  Fetches the current configuration for the service at the given mount path.
+
+  Returns an object mapping the configuration option names to their definitions
+  including a human-friendly `title` and the `current` value (if any).
+  """
+  @spec configuration(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def configuration(conn, mount, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "foxx", "configuration"],
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Get the configuration options. Raises on error.
+
+  See `configuration/1`.
+  """
+  @spec configuration!(Arangox.conn(), binary, keyword) :: term
+  def configuration!(conn, mount, opts \\ []) do
+    case configuration(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -67,34 +172,29 @@ defmodule Arangox.Api.Foxx do
 
   Note that when using file system paths in a cluster with multiple Coordinators
   the file system path must resolve to equivalent files on every Coordinator.
-
-  ## Options
-
-    * `mount`: Mount path the service should be installed at.
-      
-    * `development`: Set to `true` to enable development mode.
-      
-    * `setup`: Set to `false` to not run the service's setup script.
-      
-    * `legacy`: Set to `true` to install the service in 2.8 legacy compatibility mode.
-      
-
   """
-  @spec create_foxx_service(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_foxx_service(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:development, :legacy, :mount, :setup])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :create_foxx_service},
-      url: "/_db/#{database_name}/_api/foxx",
+  @spec create(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def create(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      query: query,
-      response: [{201, :null}],
+      segments: ["_api", "foxx"],
+      forced: [{"mount", mount}],
+      query: [development: "development", setup: "setup", legacy: "legacy"],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Install a new service. Raises on error.
+
+  See `create/1`.
+  """
+  @spec create!(Arangox.conn(), binary, keyword) :: term
+  def create!(conn, mount, opts \\ []) do
+    case create(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -103,163 +203,29 @@ defmodule Arangox.Api.Foxx do
   Removes the service at the given mount path from the database and file system.
 
   Returns an empty response on success.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-    * `teardown`: Set to `false` to not run the service's teardown script.
-      
-
   """
-  @spec delete_foxx_service(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def delete_foxx_service(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount, :teardown])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :delete_foxx_service},
-      url: "/_db/#{database_name}/_api/foxx/service",
+  @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def delete(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :delete,
-      query: query,
-      response: [{204, :null}],
+      segments: ["_api", "foxx", "service"],
+      forced: [{"mount", mount}],
+      query: [teardown: "teardown"],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  Disable the development mode
+  Uninstall a service. Raises on error.
 
-  Puts the service at the given mount path into production mode.
-
-  When running ArangoDB in a cluster with multiple Coordinators this will
-  replace the service on all other Coordinators with the version on this
-  Coordinator.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
+  See `delete/1`.
   """
-  @spec disable_foxx_development_mode(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def disable_foxx_development_mode(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :disable_foxx_development_mode},
-      url: "/_db/#{database_name}/_api/foxx/development",
-      method: :delete,
-      query: query,
-      response: [{200, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Download a service bundle
-
-  Downloads a zip bundle of the service directory.
-
-  When development mode is enabled, this always creates a new bundle.
-
-  Otherwise the bundle will represent the version of a service that
-  is installed on that ArangoDB instance.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  """
-  @spec download_foxx_service(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def download_foxx_service(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :download_foxx_service},
-      url: "/_db/#{database_name}/_api/foxx/download",
-      method: :post,
-      query: query,
-      response: [{200, :null}, {400, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Enable the development mode
-
-  Puts the service into development mode.
-
-  While the service is running in development mode the service will be reloaded
-  from the filesystem and its setup script (if any) will be re-executed every
-  time the service handles a request.
-
-  When running ArangoDB in a cluster with multiple Coordinators note that changes
-  to the filesystem on one Coordinator will not be reflected across the other
-  Coordinators. This means you should treat your Coordinators as inconsistent
-  as long as any service is running in development mode.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  """
-  @spec enable_foxx_development_mode(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def enable_foxx_development_mode(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :enable_foxx_development_mode},
-      url: "/_db/#{database_name}/_api/foxx/development",
-      method: :post,
-      query: query,
-      response: [{200, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Get the configuration options
-
-  Fetches the current configuration for the service at the given mount path.
-
-  Returns an object mapping the configuration option names to their definitions
-  including a human-friendly `title` and the `current` value (if any).
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  """
-  @spec get_foxx_configuration(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_foxx_configuration(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :get_foxx_configuration},
-      url: "/_db/#{database_name}/_api/foxx/configuration",
-      method: :get,
-      query: query,
-      response: [{200, :null}],
-      opts: opts
-    })
+  @spec delete!(Arangox.conn(), binary, keyword) :: term
+  def delete!(conn, mount, opts \\ []) do
+    case delete(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -269,56 +235,28 @@ defmodule Arangox.Api.Foxx do
 
   Returns an object mapping the dependency names to their definitions
   including a human-friendly `title` and the `current` mount path (if any).
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
   """
-  @spec get_foxx_dependencies(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_foxx_dependencies(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :get_foxx_dependencies},
-      url: "/_db/#{database_name}/_api/foxx/dependencies",
+  @spec dependencies(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def dependencies(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      query: query,
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "dependencies"],
+      forced: [{"mount", mount}],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  Get the service README
+  Get the dependency options. Raises on error.
 
-  Fetches the service's README or README.md file's contents if any.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
+  See `dependencies/1`.
   """
-  @spec get_foxx_readme(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_foxx_readme(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :get_foxx_readme},
-      url: "/_db/#{database_name}/_api/foxx/readme",
-      method: :get,
-      query: query,
-      response: [{200, :null}, {204, :null}],
-      opts: opts
-    })
+  @spec dependencies!(Arangox.conn(), binary, keyword) :: term
+  def dependencies!(conn, mount, opts \\ []) do
+    case dependencies(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -338,198 +276,160 @@ defmodule Arangox.Api.Foxx do
 
   - `name`: a string identifying the service type
   - `version`: a semver-compatible version string
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
   """
-  @spec get_foxx_service_description(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_foxx_service_description(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :get_foxx_service_description},
-      url: "/_db/#{database_name}/_api/foxx/service",
+  @spec description(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def description(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      query: query,
-      response: [{200, :null}, {400, :null}],
+      segments: ["_api", "foxx", "service"],
+      forced: [{"mount", mount}],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  Get the Swagger description
+  Get the service description. Raises on error.
 
-  Fetches the Swagger API description for the service at the given mount path.
-
-  The response body will be an OpenAPI 2.0 compatible JSON description of the service API.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
+  See `description/1`.
   """
-  @spec get_foxx_swagger_description(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_foxx_swagger_description(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
+  @spec description!(Arangox.conn(), binary, keyword) :: term
+  def description!(conn, mount, opts \\ []) do
+    case description(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :get_foxx_swagger_description},
-      url: "/_db/#{database_name}/_api/foxx/swagger",
+  @doc """
+  Disable the development mode
+
+  Puts the service at the given mount path into production mode.
+
+  When running ArangoDB in a cluster with multiple Coordinators this will
+  replace the service on all other Coordinators with the version on this
+  Coordinator.
+  """
+  @spec disable_development_mode(Arangox.conn(), binary, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def disable_development_mode(conn, mount, opts \\ []) do
+    Client.request(conn,
+      method: :delete,
+      segments: ["_api", "foxx", "development"],
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Disable the development mode. Raises on error.
+
+  See `disable_development_mode/1`.
+  """
+  @spec disable_development_mode!(Arangox.conn(), binary, keyword) :: term
+  def disable_development_mode!(conn, mount, opts \\ []) do
+    case disable_development_mode(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Download a service bundle
+
+  Downloads a zip bundle of the service directory.
+
+  When development mode is enabled, this always creates a new bundle.
+
+  Otherwise the bundle will represent the version of a service that
+  is installed on that ArangoDB instance.
+  """
+  @spec download(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def download(conn, mount, opts \\ []) do
+    Client.request(conn,
+      method: :post,
+      segments: ["_api", "foxx", "download"],
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Download a service bundle. Raises on error.
+
+  See `download/1`.
+  """
+  @spec download!(Arangox.conn(), binary, keyword) :: term
+  def download!(conn, mount, opts \\ []) do
+    case download(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Enable the development mode
+
+  Puts the service into development mode.
+
+  While the service is running in development mode the service will be reloaded
+  from the filesystem and its setup script (if any) will be re-executed every
+  time the service handles a request.
+
+  When running ArangoDB in a cluster with multiple Coordinators note that changes
+  to the filesystem on one Coordinator will not be reflected across the other
+  Coordinators. This means you should treat your Coordinators as inconsistent
+  as long as any service is running in development mode.
+  """
+  @spec enable_development_mode(Arangox.conn(), binary, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def enable_development_mode(conn, mount, opts \\ []) do
+    Client.request(conn,
+      method: :post,
+      segments: ["_api", "foxx", "development"],
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Enable the development mode. Raises on error.
+
+  See `enable_development_mode/1`.
+  """
+  @spec enable_development_mode!(Arangox.conn(), binary, keyword) :: term
+  def enable_development_mode!(conn, mount, opts \\ []) do
+    case enable_development_mode(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Get the service README
+
+  Fetches the service's README or README.md file's contents if any.
+  """
+  @spec readme(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def readme(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      query: query,
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "readme"],
+      forced: [{"mount", mount}],
       opts: opts
-    })
+    )
   end
 
   @doc """
-  List the service scripts
+  Get the service README. Raises on error.
 
-  Fetches a list of the scripts defined by the service.
-
-  Returns an object mapping the raw script names to human-friendly names.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
+  See `readme/1`.
   """
-  @spec list_foxx_scripts(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_foxx_scripts(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :list_foxx_scripts},
-      url: "/_db/#{database_name}/_api/foxx/scripts",
-      method: :get,
-      query: query,
-      response: [{200, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  List the installed services
-
-  Fetches a list of services installed in the current database.
-
-  Returns a list of objects with the following attributes:
-
-  - `mount`: the mount path of the service
-  - `development`: `true` if the service is running in development mode
-  - `legacy`: `true` if the service is running in 2.8 legacy compatibility mode
-  - `provides`: the service manifest's `provides` value or an empty object
-
-  Additionally the object may contain the following attributes if they have been set on the manifest:
-
-  - `name`: a string identifying the service type
-  - `version`: a semver-compatible version string
-
-  ## Options
-
-    * `excludeSystem`: Whether or not system services should be excluded from the result.
-      
-
-  """
-  @spec list_foxx_services(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_foxx_services(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:excludeSystem])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :list_foxx_services},
-      url: "/_db/#{database_name}/_api/foxx",
-      method: :get,
-      query: query,
-      response: [{200, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Replace the configuration options
-
-  Replaces the given service's configuration completely.
-
-  Returns an object mapping all configuration option names to their new values.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec replace_foxx_configuration(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def replace_foxx_configuration(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Foxx, :replace_foxx_configuration},
-      url: "/_db/#{database_name}/_api/foxx/configuration",
-      body: body,
-      method: :put,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}],
-      opts: opts
-    })
-  end
-
-  @doc """
-  Replace the dependency options
-
-  Replaces the given service's dependencies completely.
-
-  Returns an object mapping all dependency names to their new mount paths.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
-  """
-  @spec replace_foxx_dependencies(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def replace_foxx_dependencies(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Foxx, :replace_foxx_dependencies},
-      url: "/_db/#{database_name}/_api/foxx/dependencies",
-      body: body,
-      method: :put,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}],
-      opts: opts
-    })
+  @spec readme!(Arangox.conn(), binary, keyword) :: term
+  def readme!(conn, mount, opts \\ []) do
+    case readme(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -569,36 +469,93 @@ defmodule Arangox.Api.Foxx do
 
   Note that when using file system paths in a cluster with multiple Coordinators
   the file system path must resolve to equivalent files on every Coordinator.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-    * `teardown`: Set to `false` to not run the old service's teardown script.
-      
-    * `setup`: Set to `false` to not run the new service's setup script.
-      
-    * `legacy`: Set to `true` to install the new service in 2.8 legacy compatibility mode.
-      
-    * `force`: Set to `true` to force service install even if no service is installed under given mount.
-      
-
   """
-  @spec replace_foxx_service(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def replace_foxx_service(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:force, :legacy, :mount, :setup, :teardown])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :replace_foxx_service},
-      url: "/_db/#{database_name}/_api/foxx/service",
+  @spec replace(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def replace(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :put,
-      query: query,
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "service"],
+      forced: [{"mount", mount}],
+      query: [teardown: "teardown", setup: "setup", legacy: "legacy", force: "force"],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Replace a service. Raises on error.
+
+  See `replace/1`.
+  """
+  @spec replace!(Arangox.conn(), binary, keyword) :: term
+  def replace!(conn, mount, opts \\ []) do
+    case replace(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Replace the configuration options
+
+  Replaces the given service's configuration completely.
+
+  Returns an object mapping all configuration option names to their new values.
+  """
+  @spec replace_configuration(Arangox.conn(), binary, term, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def replace_configuration(conn, mount, body, opts \\ []) do
+    Client.request(conn,
+      method: :put,
+      segments: ["_api", "foxx", "configuration"],
+      body: body,
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Replace the configuration options. Raises on error.
+
+  See `replace_configuration/2`.
+  """
+  @spec replace_configuration!(Arangox.conn(), binary, term, keyword) :: term
+  def replace_configuration!(conn, mount, body, opts \\ []) do
+    case replace_configuration(conn, mount, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Replace the dependency options
+
+  Replaces the given service's dependencies completely.
+
+  Returns an object mapping all dependency names to their new mount paths.
+  """
+  @spec replace_dependencies(Arangox.conn(), binary, term, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def replace_dependencies(conn, mount, body, opts \\ []) do
+    Client.request(conn,
+      method: :put,
+      segments: ["_api", "foxx", "dependencies"],
+      body: body,
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Replace the dependency options. Raises on error.
+
+  See `replace_dependencies/2`.
+  """
+  @spec replace_dependencies!(Arangox.conn(), binary, term, keyword) :: term
+  def replace_dependencies!(conn, mount, body, opts \\ []) do
+    case replace_dependencies(conn, mount, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -607,33 +564,30 @@ defmodule Arangox.Api.Foxx do
   Runs the given script for the service at the given mount path.
 
   Returns the exports of the script, if any.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec run_foxx_script(database_name :: String.t(), name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def run_foxx_script(database_name, name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name, name: name, body: body],
-      call: {Arangox.Api.Foxx, :run_foxx_script},
-      url: "/_db/#{database_name}/_api/foxx/scripts/#{name}",
-      body: body,
+  @spec run_script(Arangox.conn(), binary, binary, term, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def run_script(conn, name, mount, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "scripts", name],
+      body: body,
+      forced: [{"mount", mount}],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Run a service script. Raises on error.
+
+  See `run_script/3`.
+  """
+  @spec run_script!(Arangox.conn(), binary, binary, term, keyword) :: term
+  def run_script!(conn, name, mount, body, opts \\ []) do
+    case run_script(conn, name, mount, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -661,35 +615,60 @@ defmodule Arangox.Api.Foxx do
   in the response body being formatted as XML instead of JSONML.
 
   Otherwise the response body will be formatted as non-prettyprinted JSON.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-    * `reporter`: Test reporter to use.
-      
-    * `idiomatic`: Use the matching format for the reporter, regardless of the `Accept` header.
-      
-    * `filter`: Only run tests where the full name (including full test suites and test case)
-      matches this string.
-      
-
   """
-  @spec run_foxx_tests(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def run_foxx_tests(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:filter, :idiomatic, :mount, :reporter])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :run_foxx_tests},
-      url: "/_db/#{database_name}/_api/foxx/tests",
+  @spec run_tests(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def run_tests(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      query: query,
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "tests"],
+      forced: [{"mount", mount}],
+      query: [reporter: "reporter", idiomatic: "idiomatic", filter: "filter"],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Run the service tests. Raises on error.
+
+  See `run_tests/1`.
+  """
+  @spec run_tests!(Arangox.conn(), binary, keyword) :: term
+  def run_tests!(conn, mount, opts \\ []) do
+    case run_tests(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+
+  @doc """
+  Get the Swagger description
+
+  Fetches the Swagger API description for the service at the given mount path.
+
+  The response body will be an OpenAPI 2.0 compatible JSON description of the service API.
+  """
+  @spec swagger_description(Arangox.conn(), binary, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def swagger_description(conn, mount, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "foxx", "swagger"],
+      forced: [{"mount", mount}],
+      opts: opts
+    )
+  end
+
+  @doc """
+  Get the Swagger description. Raises on error.
+
+  See `swagger_description/1`.
+  """
+  @spec swagger_description!(Arangox.conn(), binary, keyword) :: term
+  def swagger_description!(conn, mount, opts \\ []) do
+    case swagger_description(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -698,33 +677,30 @@ defmodule Arangox.Api.Foxx do
   Replaces the given service's configuration partially.
 
   Returns an object mapping all configuration option names to their new values.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec update_foxx_configuration(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def update_foxx_configuration(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Foxx, :update_foxx_configuration},
-      url: "/_db/#{database_name}/_api/foxx/configuration",
-      body: body,
+  @spec update_configuration(Arangox.conn(), binary, term, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def update_configuration(conn, mount, body, opts \\ []) do
+    Client.request(conn,
       method: :patch,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "configuration"],
+      body: body,
+      forced: [{"mount", mount}],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Update the configuration options. Raises on error.
+
+  See `update_configuration/2`.
+  """
+  @spec update_configuration!(Arangox.conn(), binary, term, keyword) :: term
+  def update_configuration!(conn, mount, body, opts \\ []) do
+    case update_configuration(conn, mount, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -733,33 +709,30 @@ defmodule Arangox.Api.Foxx do
   Replaces the given service's dependencies.
 
   Returns an object mapping all dependency names to their new mount paths.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec update_foxx_dependencies(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def update_foxx_dependencies(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:mount])
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Foxx, :update_foxx_dependencies},
-      url: "/_db/#{database_name}/_api/foxx/dependencies",
-      body: body,
+  @spec update_dependencies(Arangox.conn(), binary, term, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def update_dependencies(conn, mount, body, opts \\ []) do
+    Client.request(conn,
       method: :patch,
-      query: query,
-      request: [{"application/json", :map}],
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "dependencies"],
+      body: body,
+      forced: [{"mount", mount}],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Update the dependency options. Raises on error.
+
+  See `update_dependencies/2`.
+  """
+  @spec update_dependencies!(Arangox.conn(), binary, term, keyword) :: term
+  def update_dependencies!(conn, mount, body, opts \\ []) do
+    case update_dependencies(conn, mount, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 
   @doc """
@@ -799,35 +772,28 @@ defmodule Arangox.Api.Foxx do
 
   Note that when using file system paths in a cluster with multiple Coordinators
   the file system path must resolve to equivalent files on every Coordinator.
-
-  ## Options
-
-    * `mount`: Mount path of the installed service.
-      
-    * `teardown`: Set to `true` to run the old service's teardown script.
-      
-    * `setup`: Set to `false` to not run the new service's setup script.
-      
-    * `legacy`: Set to `true` to install the new service in 2.8 legacy compatibility mode.
-      
-    * `force`: Set to `true` to force service install even if no service is installed under given mount.
-      
-
   """
-  @spec upgrade_foxx_service(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def upgrade_foxx_service(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-    query = Keyword.take(opts, [:force, :legacy, :mount, :setup, :teardown])
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Foxx, :upgrade_foxx_service},
-      url: "/_db/#{database_name}/_api/foxx/service",
+  @spec upgrade(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def upgrade(conn, mount, opts \\ []) do
+    Client.request(conn,
       method: :patch,
-      query: query,
-      response: [{200, :null}],
+      segments: ["_api", "foxx", "service"],
+      forced: [{"mount", mount}],
+      query: [teardown: "teardown", setup: "setup", legacy: "legacy", force: "force"],
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Upgrade a service. Raises on error.
+
+  See `upgrade/1`.
+  """
+  @spec upgrade!(Arangox.conn(), binary, keyword) :: term
+  def upgrade!(conn, mount, opts \\ []) do
+    case upgrade(conn, mount, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

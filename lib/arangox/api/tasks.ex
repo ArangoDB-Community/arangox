@@ -1,57 +1,68 @@
 defmodule Arangox.Api.Tasks do
   @moduledoc """
-  Provides API endpoints related to tasks
+  ArangoDB's Tasks operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
+  alias Arangox.Api.Client
 
-  @type create_task_200_json_resp :: %{
-          command: String.t(),
-          created: number,
-          database: String.t(),
-          id: String.t(),
-          name: String.t(),
-          offset: number,
-          period: number,
-          type: String.t()
-        }
+  @doc """
+  List all tasks
+
+  Fetches all existing tasks on the server.
+  """
+  @spec all(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
+  def all(conn, opts \\ []) do
+    Client.request(conn,
+      method: :get,
+      segments: ["_api", "tasks"],
+      opts: opts
+    )
+  end
+
+  @doc """
+  List all tasks. Raises on error.
+
+  See `all/1`.
+  """
+  @spec all!(Arangox.conn(), keyword) :: term
+  def all!(conn, opts \\ []) do
+    case all(conn, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Create a task
 
   Creates a new task with a generated identifier.
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec create_task(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_task(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.Tasks, :create_task},
-      url: "/_db/#{database_name}/_api/tasks",
-      body: body,
+  @spec create(Arangox.conn(), term, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def create(conn, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      request: [{"application/json", :map}],
-      response: [{200, {Arangox.Api.Tasks, :create_task_200_json_resp}}, {400, :null}],
+      segments: ["_api", "tasks"],
+      body: body,
       opts: opts
-    })
+    )
   end
 
-  @type create_task_with_id_200_json_resp :: %{
-          command: String.t(),
-          created: number,
-          database: String.t(),
-          id: String.t(),
-          name: String.t(),
-          offset: number,
-          period: number,
-          type: String.t()
-        }
+  @doc """
+  Create a task. Raises on error.
+
+  See `create/2`.
+  """
+  @spec create!(Arangox.conn(), term, keyword) :: term
+  def create!(conn, body, opts \\ []) do
+    case create(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Create a task with ID
@@ -59,183 +70,82 @@ defmodule Arangox.Api.Tasks do
   Registers a new task with the specified ID.
 
   Not compatible with load balancers.
-
-  ## Request Body
-
-  **Content Types**: `application/json`
   """
-  @spec create_task_with_id(database_name :: String.t(), id :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def create_task_with_id(database_name, id, body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, id: id, body: body],
-      call: {Arangox.Api.Tasks, :create_task_with_id},
-      url: "/_db/#{database_name}/_api/tasks/#{id}",
-      body: body,
+  @spec create_with_id(Arangox.conn(), binary, term, keyword) ::
+          {:ok, term} | {:error, Exception.t()}
+  def create_with_id(conn, id, body, opts \\ []) do
+    Client.request(conn,
       method: :put,
-      request: [{"application/json", :map}],
-      response: [
-        {200, {Arangox.Api.Tasks, :create_task_with_id_200_json_resp}},
-        {400, :null},
-        {409, :null}
-      ],
+      segments: ["_api", "tasks", id],
+      body: body,
       opts: opts
-    })
+    )
   end
 
-  @type delete_task_200_json_resp :: %{code: integer, error: boolean}
+  @doc """
+  Create a task with ID. Raises on error.
 
-  @type delete_task_404_json_resp :: %{code: integer, error: boolean, errorMessage: String.t()}
+  See `create_with_id/3`.
+  """
+  @spec create_with_id!(Arangox.conn(), binary, term, keyword) :: term
+  def create_with_id!(conn, id, body, opts \\ []) do
+    case create_with_id(conn, id, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Delete a task
 
   Deletes the task identified by `id` on the server.
-
   """
-  @spec delete_task(database_name :: String.t(), id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def delete_task(database_name, id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, id: id],
-      call: {Arangox.Api.Tasks, :delete_task},
-      url: "/_db/#{database_name}/_api/tasks/#{id}",
+  @spec delete(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def delete(conn, id, opts \\ []) do
+    Client.request(conn,
       method: :delete,
-      response: [
-        {200, {Arangox.Api.Tasks, :delete_task_200_json_resp}},
-        {404, {Arangox.Api.Tasks, :delete_task_404_json_resp}}
-      ],
+      segments: ["_api", "tasks", id],
       opts: opts
-    })
+    )
   end
 
-  @type get_task_200_json_resp :: %{
-          command: String.t(),
-          created: number,
-          database: String.t(),
-          id: String.t(),
-          name: String.t(),
-          offset: number,
-          period: number,
-          type: String.t()
-        }
+  @doc """
+  Delete a task. Raises on error.
+
+  See `delete/2`.
+  """
+  @spec delete!(Arangox.conn(), binary, keyword) :: term
+  def delete!(conn, id, opts \\ []) do
+    case delete(conn, id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
 
   @doc """
   Get a task
 
   fetches one existing task on the server specified by `id`
-
   """
-  @spec get_task(database_name :: String.t(), id :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def get_task(database_name, id, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, id: id],
-      call: {Arangox.Api.Tasks, :get_task},
-      url: "/_db/#{database_name}/_api/tasks/#{id}",
+  @spec get(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def get(conn, id, opts \\ []) do
+    Client.request(conn,
       method: :get,
-      response: [{200, {Arangox.Api.Tasks, :get_task_200_json_resp}}],
+      segments: ["_api", "tasks", id],
       opts: opts
-    })
+    )
   end
-
-  @type list_tasks_200_json_resp :: %{
-          command: String.t(),
-          created: number,
-          database: String.t(),
-          id: String.t(),
-          name: String.t(),
-          offset: number,
-          period: number,
-          type: String.t()
-        }
 
   @doc """
-  List all tasks
+  Get a task. Raises on error.
 
-  Fetches all existing tasks on the server.
-
+  See `get/2`.
   """
-  @spec list_tasks(database_name :: String.t(), keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def list_tasks(database_name, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name],
-      call: {Arangox.Api.Tasks, :list_tasks},
-      url: "/_db/#{database_name}/_api/tasks",
-      method: :get,
-      response: [{200, [{Arangox.Api.Tasks, :list_tasks_200_json_resp}]}],
-      opts: opts
-    })
-  end
-
-  @doc false
-  @spec __fields__(atom) :: keyword
-  def __fields__(:create_task_200_json_resp) do
-    [
-      command: :string,
-      created: :number,
-      database: :string,
-      id: :string,
-      name: :string,
-      offset: :number,
-      period: :number,
-      type: {:enum, ["periodic", "timed"]}
-    ]
-  end
-
-  def __fields__(:create_task_with_id_200_json_resp) do
-    [
-      command: :string,
-      created: :number,
-      database: :string,
-      id: :string,
-      name: :string,
-      offset: :number,
-      period: :number,
-      type: {:enum, ["periodic", "timed"]}
-    ]
-  end
-
-  def __fields__(:delete_task_200_json_resp) do
-    [code: :integer, error: :boolean]
-  end
-
-  def __fields__(:delete_task_404_json_resp) do
-    [code: :integer, error: :boolean, errorMessage: :string]
-  end
-
-  def __fields__(:get_task_200_json_resp) do
-    [
-      command: :string,
-      created: :number,
-      database: :string,
-      id: :string,
-      name: :string,
-      offset: :number,
-      period: :number,
-      type: :string
-    ]
-  end
-
-  def __fields__(:list_tasks_200_json_resp) do
-    [
-      command: :string,
-      created: :number,
-      database: :string,
-      id: :string,
-      name: :string,
-      offset: :number,
-      period: :number,
-      type: :string
-    ]
+  @spec get!(Arangox.conn(), binary, keyword) :: term
+  def get!(conn, id, opts \\ []) do
+    case get(conn, id, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end

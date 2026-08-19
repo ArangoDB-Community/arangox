@@ -1,9 +1,13 @@
 defmodule Arangox.Api.BatchRequests do
   @moduledoc """
-  Provides API endpoint related to batch requests
+  ArangoDB's BatchRequests operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.Api.Client` for the options they all accept and
+  for what a `404` answers.
   """
 
-  @default_client Arangox.Api.Client
+  alias Arangox.Api.Client
 
   @doc """
   Execute a batch request
@@ -11,6 +15,7 @@ defmodule Arangox.Api.BatchRequests do
   > **WARNING:**
   The `/_api/batch` endpoint was deprecated in v3.8.0 and has been removed
   in v3.12.3.
+
 
   Executes a batch request. A batch request can contain any number of
   other requests that can be sent to ArangoDB in isolation. The benefit of
@@ -30,7 +35,7 @@ defmodule Arangox.Api.BatchRequests do
   for each individual batch part must be `application/x-arango-batchpart`.
 
   Please note that when constructing the individual batch parts, you must
-  use CRLF (`\r\n`) as the line terminator as in regular HTTP messages.
+  use CRLF (`\\r\\n`) as the line terminator as in regular HTTP messages.
 
   The response sent by the server will be an `HTTP 200` response, with an
   optional error summary header `x-arango-errors`. This header contains the
@@ -48,25 +53,28 @@ defmodule Arangox.Api.BatchRequests do
   original client request. Client can additionally use the `Content-Id`
   MIME header in a batch part to define an individual id for each batch part.
   The server will return this id is the batch part responses, too.
-
-  ## Request Body
-
-  **Content Types**: `text/plain; charset=utf-8`
   """
-  @spec execute_batch_request(database_name :: String.t(), body :: term, keyword) ::
-          {:ok, Arangox.Response.t()} | {:error, Exception.t()}
-  def execute_batch_request(database_name, body, opts \\ []) do
-    client = opts[:client] || @default_client
-
-    client.request(%{
-      args: [database_name: database_name, body: body],
-      call: {Arangox.Api.BatchRequests, :execute_batch_request},
-      url: "/_db/#{database_name}/_api/batch",
-      body: body,
+  @spec execute(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def execute(conn, body, opts \\ []) do
+    Client.request(conn,
       method: :post,
-      request: [{"text/plain; charset=utf-8", :map}],
-      response: [{200, :null}, {400, :null}, {405, :null}],
+      segments: ["_api", "batch"],
+      body: body,
+      media: "text/plain; charset=utf-8",
       opts: opts
-    })
+    )
+  end
+
+  @doc """
+  Execute a batch request. Raises on error.
+
+  See `execute/2`.
+  """
+  @spec execute!(Arangox.conn(), binary, keyword) :: term
+  def execute!(conn, body, opts \\ []) do
+    case execute(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
   end
 end
