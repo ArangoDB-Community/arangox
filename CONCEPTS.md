@@ -34,16 +34,34 @@ Taking a connection out of service instead of returning it to the pool, forced w
 ## API surface
 
 ### API surface
-The resource-object operations under `Arangox.Api.*` — one Elixir function per operation of ArangoDB's HTTP API, each reaching the network only through the Adapter. Spec-derived owned source: the functions were originally produced from ArangoDB's published OpenAPI document and are hand-maintained, with conformance to the server's own document enforced by the Conformance gate rather than by regeneration.
+The resource-object operations under `Arangox.Api.*` — one Elixir function per operation of ArangoDB's HTTP API, each reaching the network only through the Adapter. Spec-derived owned source: the functions were originally produced from ArangoDB's published OpenAPI document and are hand-maintained, with conformance to the server's own document enforced by the Conformance gate rather than by regeneration. That conformance covers the addresses an operation reaches and the parameters it names, not the values the operations put into them.
 
 ### Adapter
 The single module (`Arangox.Api.Client`) every API-surface operation calls, translating an operation's request map into a driver request. It is operation-agnostic — nothing in it is keyed to a specific operation — and it is the seam that keeps the surface transport-independent: a transport change touches the Adapter, never the operations.
 
+A segment may declare that its value is a Composite path parameter, and the Adapter honours that declaration generically — it reads the shape an operation states, never the identity of the operation stating it.
+
+### Composite path parameter
+A path parameter whose value is itself a path — an ArangoDB index identifier is a collection name and a number joined by a separator — so it fills a single slot in a documented address but occupies more than one segment on the wire.
+
+An operation declares such a parameter explicitly rather than the Adapter guessing at it. The Adapter then keeps the separators inside that value and encodes each part between them, so the value can add path depth but still cannot introduce a query or a fragment. An ordinary path parameter is the opposite: a separator inside it is data and is escaped like any other character, because a collection whose name contains one is a name and not structure. ArangoDB's API description writes both kinds the same way, so the Conformance gate cannot tell them apart; only calling the operation with a real value does.
+
+### Forced parameter
+A query parameter an operation always sends under a value it fixes itself, never offered to callers as an option.
+
+The distinction from an offered parameter is a safety one, not a convenience one. Some parameters decide what an endpoint does rather than how it does it — one flag separates reading many documents from replacing a whole collection at the same address and method — so letting a caller supply a value is the hazard. Forcing it puts the decision in the operation's own source, where it can be read, rather than in the Adapter, which stays operation-agnostic. A parameter that is both forced and offered would hand the choice back, so the two sets never overlap.
+
 ### Conformance gate
-The integration-tier test proving the API surface matches the Live oracle: operation addresses (as a multiset — the document distinguishes two operations sharing a path and method by a URL fragment), query-parameter sets, request media, required-parameter declarations, and operation identity. It asserts the server's version equals the driver's single pinned server version first, so the error table, the surface, and the test server always describe the same release.
+The integration-tier test proving the API surface matches the Live oracle: operation addresses (compared as sets — the document describes one endpoint several times when it takes more than one body or answers more than one shape), query-parameter sets, request media, and required-parameter declarations. It asserts the server's version equals the driver's single pinned server version first, so the error table, the surface, and the test server always describe the same release.
+
+Every dimension it compares is one the description states. Anything the description leaves unstated — the internal structure of a parameter's value among it — is outside its reach, so a green gate means the surface addresses the right endpoints under the right parameter names, not that a call works.
+
+A second, server-free tier checks what can be read from the operation sources alone: that nothing reaches the network except through the Adapter, that addresses are built from literal segments and bare arguments rather than assembled as strings, that every operation has a delegating bang twin, and that no parameter is both forced and offered.
 
 ### Live oracle
 The API description the tested server itself serves, used as the authority the Conformance gate checks the API surface against. Distinct from a vendored copy of the same description, which can drift from the server it claims to describe; the live oracle and the system under test cannot disagree about which release they are.
+
+It is an authority on shape, not on behaviour: it states what an operation is called and what it accepts, never what the server does with a particular value. The same server's answers to real calls are a separate authority, and the only one that settles what an operation returns or whether it works at all.
 
 ## Transactions
 
