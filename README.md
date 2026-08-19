@@ -184,28 +184,36 @@ Arangox.start_link(client: Arangox.GunClient, client_opts: %{protocols: [:http2]
 Note the difference from the Mint example: `:gun` takes its options as a map
 rather than a keyword list.
 
-#### The cowlib advisory (CVE-2026-43966)
+#### The cowlib advisories
 
-`mix deps.get` reports `:gun` as vulnerable to an HTTP request/response
-splitting advisory. As of arangox v0.8.0 there is no release to upgrade to, and
-the finding does not reach code arangox uses. Three reasons, so you can judge it
-rather than take our word:
+`mix deps.get` reports `:cowlib` and `:gun` as vulnerable. This affects users of
+`Arangox.GunClient` only — `:cowlib` reaches your application through `:gun`, and
+a pool on `Arangox.MintClient` (the default) has neither in its tree.
 
-- The flaw is in `:cowlib`, which `:gun` depends on: `cow_http_struct_hd:escape_string/2`
-  escapes only `\` and `"`, letting carriage return and line feed through when
-  an application builds an [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941)
-  *structured* header field from untrusted input. Arangox builds no structured
-  headers, and `:gun` never calls that function — its only callers are inside
-  cowlib itself, for `Variants`, `ALPS` and WebTransport headers.
-- The [advisory](https://osv.dev/vulnerability/EEF-CVE-2026-43966) names
-  `:cowboy` 2.16+ and `:gun` 2.4+ as carrying protections against it. Arangox
-  resolves `:gun` 2.5.0. (The GitHub copy of the same advisory lists gun's fix
-  as 2.16.0 — a version `:gun` has never published — which is why the warning
-  fires at all.)
-- Its recommended mitigation is validating attacker-controlled data before it
-  reaches a header. Arangox does that for every request and connect probe: a
-  header name or value carrying a carriage return, line feed, or null is
-  refused before any client sees it.
+Three advisories are open against `:cowlib`, all the same shape: an encoder that
+does not reject the bytes its matching decoder already refuses. None has a
+released fix — every one names 2.9.0 as introduced with no fixed version, and
+2.19.0, the latest published, is affected. Two carry upstream fix commits that
+have not been cut into a release.
+
+None of them reaches code arangox uses. Check each yourself rather than take our
+word:
+
+| Advisory | Vulnerable function | Why it cannot fire here |
+| --- | --- | --- |
+| [CVE-2026-43966](https://osv.dev/vulnerability/EEF-CVE-2026-43966) | `cow_http_struct_hd:escape_string/2` — escapes only `\` and `"`, so CR and LF survive into an [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941) *structured* header | Arangox builds no structured headers, and nothing in the dependency tree calls the function — its only callers are inside cowlib itself, serializing `Variants` (`cow_http_hd:variants/1`, `variant_key/1`) and WebTransport (`wt_protocol/1`, `wt_available_protocols/1`) headers. |
+| [CVE-2026-43969](https://osv.dev/vulnerability/EEF-CVE-2026-43969) | `cow_cookie:cookie/1` — builds a `Cookie:` request header without validating names or values, admitting `;`, `,`, CR, LF and TAB | `:gun` does call this, from its cookie store. That store is opt-in: gun's `cookie_store` option defaults to `undefined`, and `gun_cookies:add_cookie_header/5` returns the headers untouched in that case. Arangox never sets it, so the call is unreachable unless you pass `client_opts: %{cookie_store: {Mod, State}}` yourself. |
+| [CVE-2026-43971](https://osv.dev/vulnerability/EEF-CVE-2026-43971) | `cow_link:link/1` — interpolates a target URI, `rel` value and attribute keys into a `Link:` header with no escaping | Never called. Cowlib parses `Link:` headers (`cow_http_hd:parse_link/1`); nothing in the tree builds one. |
+
+Two guards stand in front of all three, whatever cowlib does:
+
+- Arangox validates every header on every request and connect probe. A name or
+  value carrying a carriage return, line feed, or null is refused before any
+  client sees it.
+- `:gun` 2.4 and later raise on an outgoing request header containing CR or LF —
+  its `invalid_request_headers` option defaults to `raise`. Arangox resolves
+  `:gun` 2.5.0. (The GitHub copy of CVE-2026-43966 lists gun's fix as 2.16.0, a
+  version `:gun` has never published, which is why that warning fires at all.)
 
 `:cowboy` and `:cowlib` also appear in this repository's own test tooling.
 Nothing there ships: the released package contains `lib/` only.
