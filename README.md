@@ -76,10 +76,10 @@ The default vst chunk size is `30_720`. It is a per-pool start option, so differ
 Arangox.start_link(vst_maxsize: 12_345)
 ```
 
-Setting it in `config/config.exs` still works in 0.8 and logs a deprecation warning once per pool. That fallback is removed in 0.9:
+Setting it in `config/config.exs` still works in 0.8 and logs a deprecation warning once per pool. That fallback is removed in the next release:
 
 ```elixir
-# deprecated, removed in 0.9
+# deprecated, removed in the next release
 config :arangox, :vst_maxsize, 12_345
 ```
 
@@ -143,10 +143,10 @@ The default json library is `Jason`. To use a different library, pass the `:json
 Arangox.start_link(json_library: Poison)
 ```
 
-Setting it in `config/config.exs` still works in 0.8 and logs a deprecation warning once per pool. That fallback is removed in 0.9:
+Setting it in `config/config.exs` still works in 0.8 and logs a deprecation warning once per pool. That fallback is removed in the next release:
 
 ```elixir
-# deprecated, going away in v0.9
+# deprecated, going away in the next release
 config :arangox, :json_library, Poison
 ```
 
@@ -566,6 +566,6 @@ mix test.integration
 - **1.0**: replace the `DBConnection` foundation with `http_connection`,
   which is what unlocks HTTP/2 multiplexing. The 0.x API is the stability
   promise; 1.0 is reserved for that swap.
-- **0.9**: remove the deprecated application-config fallbacks
+- **The next release**: remove the deprecated application-config fallbacks
   (`:json_library`, `:vst_maxsize`) and their reader functions.
 - An Ecto adapter remains under consideration.

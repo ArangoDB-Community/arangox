@@ -296,9 +296,9 @@ defmodule Arangox do
       config :arangox, :json_library, Poison
       config :arangox, :vst_maxsize, 12_345
 
-  Both reads still work in v0.8 and will be removed in v0.9. A pool that does not pass the
-  start option falls back to the application config, and the fallback logs a deprecation
-  warning. A value read from the fallback is validated exactly like the start option and
+  Both reads still work in v0.8 and will be removed in the next release. A pool that
+  does not pass the start option falls back to the application config, and the fallback
+  logs a deprecation warning. A value read from the fallback is validated exactly like the start option and
   raises here on the same inputs — `:vst_maxsize` used to be checked by
   `Application.compile_env/3` at compile time, and losing that check would only move the
   failure to a `MatchError` in the middle of a request.
@@ -1193,8 +1193,8 @@ defmodule Arangox do
   @doc """
   Returns the JSON library from the deprecated application config, or `Jason`.
 
-  Deprecated in v0.8 and to be removed in v0.9 along with the application-config read it
-  reports on. It answers the *fallback*, not what any particular pool uses:
+  Deprecated in v0.8 and to be removed in the next release, along with the
+  application-config read it reports on. It answers the *fallback*, not what any particular pool uses:
   since v0.8 the JSON library is a per-pool start option, so two pools can disagree
   and neither has to agree with this. Pass `:json_library` to `start_link/1` instead.
 
@@ -1205,7 +1205,7 @@ defmodule Arangox do
   @spec json_library() :: module()
   def json_library do
     Logger.warning("""
-    Arangox.json_library/0 is deprecated and will be removed in v0.9. \
+    Arangox.json_library/0 is deprecated and will be removed in the next release. \
     The JSON library is a per-pool start option now, and this function cannot \
     see it:
 
@@ -1241,7 +1241,7 @@ defmodule Arangox do
     if not Keyword.has_key?(opts, key) and Application.fetch_env(:arangox, key) != :error do
       Logger.warning("""
       Reading #{inspect(key)} from application config is deprecated and will be \
-      removed in v0.9. It is a per-pool start option now:
+      removed in the next release. It is a per-pool start option now:
 
           #{example}
       """)

@@ -49,8 +49,8 @@ if Code.ensure_loaded?(VelocyPack) do
     Returns the _VelocyStream_ chunk size from the deprecated application config,
     or `30_720`.
 
-    Deprecated in 0.8 and removed in 0.9 along with the application-config read it
-    reports on. It answers the *fallback*, not what any particular pool uses:
+    Deprecated in 0.8 and removed in the next release, along with the
+    application-config read it reports on. It answers the *fallback*, not what any particular pool uses:
     since 0.8 the chunk size is a per-pool start option, resolved at connect and
     held in `Arangox.Connection`, so two pools can disagree and neither has to
     agree with this. Pass `:vst_maxsize` to `Arangox.start_link/1` instead.
@@ -62,8 +62,8 @@ if Code.ensure_loaded?(VelocyPack) do
     def vst_maxsize do
       Logger.warning("""
       Arangox.VelocyClient.vst_maxsize/0 is deprecated and will be removed in \
-      arangox 0.9. The chunk size is a per-pool start option now, and this \
-      function cannot see it:
+      the next arangox release. The chunk size is a per-pool start option now, \
+      and this function cannot see it:
 
           Arangox.start_link(vst_maxsize: 12_345)
       """)

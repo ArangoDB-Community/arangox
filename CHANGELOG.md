@@ -37,7 +37,7 @@ for ArangoDB 3.11, which is the last server release that speaks them.
     the pool, and a fully written request is never retried automatically.
   * `:json_library` and `:vst_maxsize` are per-pool start options. The
     application-config forms still work and warn once per pool; they will
-    be removed in 0.9.
+    be removed in the next release.
   * The `:database` option (per pool and per request) is validated: names
     that would alter the request path (`/`, `?`, `#`, `%`, control
     characters) are refused, and extended names (spaces, unicode) are
@@ -221,7 +221,7 @@ what makes multiplexing and streamed request bodies reachable, and it is
 breaking on its own — `t:Arangox.conn/0`, `DBConnection.ConnectionError`,
 `DBConnection.Stream`, and the pool options are all part of the public surface
 today. 0.8 exists so the stability promise lands on the foundation that stays;
-0.9 removes the deprecated application-config fallbacks in between.
+the next release removes the deprecated application-config fallbacks in between.
 
 ### Migrating from v0.7
 
@@ -253,8 +253,8 @@ from `Arangox.begin_transaction/2` instead and pass it per request as
 `transaction: trx` — the id is accepted nowhere by itself.
 
 **Application config.** `config :arangox, :json_library` and `:vst_maxsize`
-still work and warn; move them to `start_link/1` options before v0.9. Two
-pools can now disagree, which is the point.
+still work and warn; move them to `start_link/1` options before the next release.
+Two pools can now disagree, which is the point.
 
 **Timeouts.** `:timeout` is a deadline from pool entry, so queue time counts
 against it; a timed-out request disconnects its connection and is never
