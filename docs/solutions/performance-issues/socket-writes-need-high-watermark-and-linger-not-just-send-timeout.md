@@ -37,7 +37,7 @@ The 5.2-second figure was the tell: it did not match the request budget (300 ms 
 
 ## What Didn't Work
 
-The fixed 15-second bound did not enter the code by accident. An earlier fix round had already established that no client bounded socket writes at all — Gun applies its own `{send_timeout, 15000}` default only when the caller passes no `tcp_opts`, and this driver always passed the key, silently suppressing it, while Mint and VelocyStream configured nothing. That round restored a fixed 15-second bound, verified it only by asserting the option value reaches the transport configuration (not by simulating a peer that stops reading), and explicitly deferred deadline-aware writes as too large to rush. The fixed bound was a known stopgap; what nobody knew was that it was also inert. (session history)
+The fixed 15-second bound did not enter the code by accident. An earlier fix round had already established that no client bounded socket writes at all — Gun applies its own `{send_timeout, 15000}` default only when the caller passes no `tcp_opts`, and this driver always passed the key, silently suppressing it, while Mint and VelocyStream configured nothing. That round restored a fixed 15-second bound, verified it only by asserting the option value reaches the transport configuration (not by simulating a peer that stops reading), and explicitly deferred deadline-aware writes as too large to rush. The fixed bound was a known stopgap; what nobody knew was that it was also inert.
 
 The investigation then proceeded from the assumption that the stall lived in the send, and each probe eliminated part of that assumption:
 
@@ -121,7 +121,7 @@ The `"socket write bounds"` describe block in test/arangox/protocol_test.exs:105
 
 Anyone adding a transport client should answer one question first: does the caller's process ever execute the socket write? If yes (Mint and VelocyStream both write synchronously in the caller), the client needs the send timeout, close-on-expiry, and zero linger at connect, plus a budget-derived `setopts` before every write — and the explicit `high_watermark` too if the client hands the transport whole bodies in one command, since that is the shape whose send otherwise never blocks. A chunked writer blocks at the driver's default watermark on its own, as VelocyStream does. If no (Gun writes from its own connection process), per-request send bounds do not apply, but the socket should still carry the watermark and the zero linger so the writing process is protected and retirement never pays the flush wait. In either case, verify how the underlying library treats your `tcp_opts`: Gun silently drops its own send-timeout default the moment the key is present, and any library may close the socket inside its error handling — which is exactly where an unlingered close would hand your caller a multi-second bill.
 
-A deeper rework remains deferred: truly streaming writes in flow-control-window-sized pieces under the deadline (interleaving writes with window updates) is a read/write state machine, not a socket-option change, and belongs to the planned transport rework rather than a fix round. (session history)
+A deeper rework remains deferred: truly streaming writes in flow-control-window-sized pieces under the deadline (interleaving writes with window updates) is a read/write state machine, not a socket-option change, and belongs to the planned transport rework rather than a fix round.
 
 ## Related Issues
 

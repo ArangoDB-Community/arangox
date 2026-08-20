@@ -33,7 +33,7 @@ A security review and two peer review rounds found real defects in the generated
 
 The generator made zero transcription errors. Its entire defect class was judgment — and the machinery around it existed to defend a guarantee ("the surface matches the spec") that the generator never provided. The gate provided it.
 
-Three details from the generation era sharpen the picture (session history):
+Three details from the generation era sharpen the picture:
 
 - **The first fragment fix was itself wrong, in a judgment-shaped way.** Stripping fragments from the document's path keys at preprocess time would have collided every fragment key with an existing canonical path and method; a naive `Map.put` would have silently overwritten the canonical operation, converting a wrong-URL bug into 15 operations *missing* from the surface. The working fix stripped the fragment only at URL-render time, leaving operation identities untouched.
 - **The `getDocuments` trap was exposed by the fragment fix.** Before it, the corrupted URL 404'd on every call — broken but harmless. The moment the URL became well-formed, the same generated function became a live path to the destructive bulk replace with `onlyget` omitted. Fixing one generator defect armed another.
@@ -119,7 +119,7 @@ Do not apply when:
 
 **The fragment convention — the same defect watched at two tiers.** The gate strips fragments before comparing addresses (`conformance_test.exs:240-248`) and documents the convention in its moduledoc (`16-25`); the unit tier independently refuses a literal path segment carrying `{`, `}`, `#` or `?` (`surface_test.exs:62-73`), Docker-free. The defect that originally broke 15 operations cannot re-enter through either an edit to the surface or drift in the document.
 
-**One assertion over every operation, not one test per bug.** When the generation-era review asked whether the 15 corrupt URLs should get 15 test cases, the answer was one assertion over every emitted URL — it covers every operation and catches the next fragment that arrives, not just the ones already seen (session history). The owned-surface gates keep that shape: every check above quantifies over the whole surface.
+**One assertion over every operation, not one test per bug.** When the generation-era review asked whether the 15 corrupt URLs should get 15 test cases, the answer was one assertion over every emitted URL — it covers every operation and catches the next fragment that arrives, not just the ones already seen. The owned-surface gates keep that shape: every check above quantifies over the whole surface.
 
 ## Related
 

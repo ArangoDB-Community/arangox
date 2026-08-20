@@ -11,7 +11,7 @@ applies_when:
   - Deriving any wait inside handle_execute, handle_declare, handle_fetch, or a client callback
   - Reviewing a timeout design that compares two durations to pick the smaller one
   - Reviewing a design for reasoning errors rather than internal consistency
-tags: [db-connection, timeout, deadline, connection-pool, elixir, checkout, adversarial-review]
+tags: [db-connection, timeout, deadline, connection-pool, elixir, checkout, code-review]
 ---
 
 # DBConnection's :timeout is a deadline, not a duration you can reuse downstream
@@ -20,9 +20,9 @@ tags: [db-connection, timeout, deadline, connection-pool, elixir, checkout, adve
 
 While planning arangox 1.0 we needed a request timeout: no client should wait on a socket forever. The obvious design was to resolve a pool-level `:request_timeout`, compare it against the caller's `:timeout`, take the lower of the two, subtract a small margin, and use that as the socket receive timeout.
 
-That design is wrong, and it is wrong in a way that survives review. It is locally coherent — the arithmetic is defensible, the code looks defensive, and it behaves correctly under every test that does not saturate the pool. It survived an architecture review, a feasibility review, a cross-model whole-document sweep by a different model family, and two re-reads by the author. (session history)
+That design is wrong, and it is wrong in a way that survives review. It is locally coherent — the arithmetic is defensible, the code looks defensive, and it behaves correctly under every test that does not saturate the pool. It survived an architecture review, a feasibility review, a whole-document sweep, and two re-reads by the author.
 
-The feasibility pass came closest without arriving. It observed that the design could not work as a static default "because DBConnection reads the checkout deadline from *each caller's* option list" — correctly identifying that the caller's value is per-call and variable, but not going on to ask when that value started counting. (session history)
+The feasibility pass came closest without arriving. It observed that the design could not work as a static default "because DBConnection reads the checkout deadline from *each caller's* option list" — correctly identifying that the caller's value is per-call and variable, but not going on to ask when that value started counting.
 
 The failure the design produces is not "the timeout is slightly off." It is the exact failure the timeout was introduced to prevent.
 
@@ -125,7 +125,7 @@ The user asked for a 15-second bound and got roughly 29 seconds, an opaque error
 
 There is a second reason a timed-out request must **disconnect** rather than return its connection to the pool: on HTTP/1.1 a timeout mid-response leaves unread bytes in the socket and an open request reference. If that connection goes back into the pool, the next checkout — possibly a different caller, a different tenant, a different database — issues its request and reads the *previous* response's remaining bytes. That is a cross-checkout confidentiality leak, not merely corruption.
 
-These two rules have independent origins and both are required. The disconnect rule came out of the architecture review, which found that normalizing client errors into a uniform shape erased the signal DBConnection needs to force a disconnect; the deadline rule came out of a later adversarial pass. (session history) A correct deadline with a normalized error still leaks, and a disconnect-on-timeout with a duration-derived bound still overruns. Neither rule substitutes for the other.
+These two rules have independent origins and both are required. The disconnect rule came out of the architecture review, which found that normalizing client errors into a uniform shape erased the signal DBConnection needs to force a disconnect; the deadline rule came out of a later review pass. A correct deadline with a normalized error still leaks, and a disconnect-on-timeout with a duration-derived bound still overruns. Neither rule substitutes for the other.
 
 ## When to Apply
 
@@ -148,13 +148,13 @@ Under an idle pool, checkout is instant, the durations effectively agree, and th
 
 **The test that catches it:** a saturated pool plus a short caller deadline. Assert the driver's own timeout error arrives *before* DBConnection's deadline error. A duration-based derivation fails this and passes everything else, which is why the scenario has to be written deliberately rather than discovered.
 
-**The reviewing lesson.** A design can be locally coherent and globally wrong. Each pass that missed this one was checking something real: coherence checks internal consistency, feasibility checks whether the code can do what the plan says, security checks the threat surface. None of them asks whether the reasoning holds. The pass that caught it asked a different question — not whether the derivation was defensible, but what instant each of its terms was measured from. (session history)
+**The reviewing lesson.** A design can be locally coherent and globally wrong. Each pass that missed this one was checking something real: coherence checks internal consistency, feasibility checks whether the code can do what the plan says, security checks the threat surface. None of them asks whether the reasoning holds. The pass that caught it asked a different question — not whether the derivation was defensible, but what instant each of its terms was measured from.
 
 ## Related
 
-- Implementation lives in unit U9 ("Request timeouts") of `docs/plans/2026-08-06-001-feat-arangox-1-0-modernization-plan.md`. The governing decision is KTD5 and the requirement is R17; U9 lists R17 as its sole requirement and depends on U2 and U17. KTD5 is also the source of the `:request_timeout` name, chosen specifically to avoid colliding with DBConnection's own `:timeout` key in the same keyword list.
-- The observable proof of the disconnect corollary is acceptance evidence AE5 in the same plan: a server that accepts a request and never responds must produce a caller error within the request timeout, tear down the connection, and serve the next request from a fresh connection.
-- The disconnect itself is produced at the error-classification seam defined by KTD6, whose "socket gone" reason class maps to `{:disconnect, ...}`. A timeout that does not reach that class does not disconnect.
-- The plan's risk table names both failure modes in one line each: "A timed-out connection returned to the pool delivers the previous response's bytes to the next caller" and "A timeout budget measured as a duration rather than a deadline lets a queued caller outlive its own deadline — the failure KTD5 exists to prevent."
+- The `:request_timeout` name was chosen specifically to avoid colliding with DBConnection's own `:timeout` key in the same keyword list.
+- The observable proof of the disconnect corollary: a server that accepts a request and never responds must produce a caller error within the request timeout, tear down the connection, and serve the next request from a fresh connection.
+- The disconnect itself is produced at the error-classification seam, whose "socket gone" reason class maps to `{:disconnect, ...}`. A timeout that does not reach that class does not disconnect.
+- Two failure modes motivate the rule: a timed-out connection returned to the pool delivers the previous response's bytes to the next caller, and a timeout budget measured as a duration rather than a deadline lets a queued caller outlive its own deadline.
 - Verified against db_connection 2.10.2 (`mix.lock`; `deps/db_connection/mix.exs` `@version`). Line numbers are into the dependency (`deps/db_connection/`), which is present in this checkout but not in every clone — re-locate by function name (`abs_timeout/2`, `start_deadline/5`, `handle_or_cleanup/5`, `holder_apply/4`, `run_with_retries/5`) if they drift.
 </content>
