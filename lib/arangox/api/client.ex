@@ -61,28 +61,52 @@ defmodule Arangox.Api.Client do
 
   @headers_shape "the :headers option must be a list of {name, value} tuples"
 
-  @control_byte "a path segment cannot contain control characters; the value is not " <>
-                  "echoed here because it may be a credential or a transaction identifier"
-
+  # The spec is an operation's whole description of itself:
+  #
+  #   * `:method` (required) — the HTTP method atom
+  #   * `:segments` (required) — the path, one entry per segment: a literal
+  #     binary, a caller argument, or `{:path, value}` for an argument that
+  #     is itself a path (an index identifier is `collection/number`)
+  #   * `:query` — the query parameters the operation offers, as
+  #     `[snake_case_name: "wireName"]`; a caller passes the snake_case name
+  #     in the options, and the wire name is what ArangoDB reads
+  #   * `:forced` — `{"wireName", value}` pairs sent unconditionally, for
+  #     parameters ArangoDB requires but a caller must not choose
+  #   * `:body` — the request body, default `""`
+  #   * `:media` — a non-JSON request media type, set as the content type
+  #     when the caller supplies none of their own
+  #   * `:response` — `:body` (default), or `:revision` for a HEAD operation
+  #     whose answer is the `etag` header
+  #   * `:opts` — the caller's options: `:headers`, the offered query
+  #     parameters, and everything the driver accepts per request
+  #
+  # `test/support/api_surface.ex` parses these same keys out of the operation
+  # sources for the surface gates; a key added here needs reading there too.
   @doc false
   @spec request(Arangox.conn(), keyword) :: {:ok, term} | {:error, Exception.t()}
   def request(conn, spec) do
+    method = Keyword.fetch!(spec, :method)
+    segments = Keyword.fetch!(spec, :segments)
     declared = Keyword.get(spec, :query, [])
+    forced = Keyword.get(spec, :forced, [])
+    body = Keyword.get(spec, :body, "")
+    media = Keyword.get(spec, :media)
+    response = Keyword.get(spec, :response, :body)
     opts = Keyword.get(spec, :opts, [])
     headers = Keyword.get(opts, :headers, [])
 
-    with {:ok, path} <- path(Keyword.fetch!(spec, :segments)),
-         {:ok, path} <- with_query(path, declared, Keyword.get(spec, :forced, []), opts),
+    with {:ok, path} <- path(segments),
+         {:ok, path} <- with_query(path, declared, forced, opts),
          :ok <- check_headers(headers) do
       conn
       |> Arangox.request(
-        Keyword.fetch!(spec, :method),
+        method,
         path,
-        Keyword.get(spec, :body, ""),
-        media(headers, Keyword.get(spec, :media)),
+        body,
+        headers_with_media(headers, media),
         forwarded(opts, declared)
       )
-      |> answer(Keyword.get(spec, :response, :body))
+      |> answer(response)
     end
   end
 
@@ -94,23 +118,6 @@ defmodule Arangox.Api.Client do
       {:error, exception} -> raise exception
     end
   end
-
-  ## The answer
-
-  defp answer({:ok, _request, %Response{body: body}}, :body), do: {:ok, body}
-
-  # A `HEAD` request has no body at all; its answer is the document revision,
-  # which the server returns as a quoted `etag`. Handing back an empty body
-  # would make the operation useless.
-  defp answer({:ok, _request, %Response{headers: headers}}, :revision) do
-    {:ok, headers |> header("etag") |> unquote_etag()}
-  end
-
-  defp answer({:error, exception}, _response), do: {:error, exception}
-
-  defp unquote_etag(nil), do: nil
-  defp unquote_etag(<<?", rest::binary>>), do: String.trim_trailing(rest, "\"")
-  defp unquote_etag(value), do: value
 
   ## The path
 
@@ -145,7 +152,14 @@ defmodule Arangox.Api.Client do
   defp checked(value) do
     value = to_string(value)
 
-    if control_byte?(value), do: refuse(@control_byte), else: {:ok, value}
+    if control_byte?(value) do
+      refuse(
+        "a path segment cannot contain control characters; the value is not " <>
+          "echoed here because it may be a credential or a transaction identifier"
+      )
+    else
+      {:ok, value}
+    end
   end
 
   defp escape(value), do: URI.encode(value, &URI.char_unreserved?/1)
@@ -163,6 +177,8 @@ defmodule Arangox.Api.Client do
       nil ->
         {:ok, append_query(path, pairs)}
 
+      # Echoing the name is safe here, unlike in `check_header/1`: query wire
+      # names are operation-authored literals, never caller input.
       {name, _value} ->
         refuse("the #{name} query parameter cannot contain carriage return, line feed, or null")
     end
@@ -210,7 +226,12 @@ defmodule Arangox.Api.Client do
             "set by an Arangox.Api operation"
         )
 
-      smuggles?(name) or smuggles?(value) ->
+      # The offending name cannot be named without repeating the refused
+      # bytes into the message, and from there into whatever logs it.
+      smuggles?(name) ->
+        refuse("a header name cannot contain carriage return, line feed, or null")
+
+      smuggles?(value) ->
         refuse("the #{name} header cannot contain carriage return, line feed, or null")
 
       true ->
@@ -224,9 +245,9 @@ defmodule Arangox.Api.Client do
   # the content type, which routes its body past the JSON codec and onto the
   # wire as given. JSON is never injected: the pool's `:content_type` decides
   # the default codec. A caller-supplied content type always wins.
-  defp media(headers, nil), do: headers
+  defp headers_with_media(headers, nil), do: headers
 
-  defp media(headers, declared) do
+  defp headers_with_media(headers, declared) do
     if has_header?(headers, "content-type"),
       do: headers,
       else: headers ++ [{"content-type", declared}]
@@ -234,6 +255,8 @@ defmodule Arangox.Api.Client do
 
   # HTTP does not distinguish header name case, and a caller may write either
   # form, so a name is matched case-insensitively wherever one is looked up.
+  # Only the caller-written key is normalised: the sought `name` must already
+  # be lowercase.
   defp header(headers, name) do
     Enum.find_value(headers, fn {key, value} -> if named?(key, name), do: value end)
   end
@@ -243,6 +266,23 @@ defmodule Arangox.Api.Client do
   end
 
   defp named?(key, name), do: String.downcase(to_string(key)) == name
+
+  ## The answer
+
+  defp answer({:ok, _request, %Response{body: body}}, :body), do: {:ok, body}
+
+  # A `HEAD` request has no body at all; its answer is the document revision,
+  # which the server returns as a quoted `etag`. Handing back an empty body
+  # would make the operation useless.
+  defp answer({:ok, _request, %Response{headers: headers}}, :revision) do
+    {:ok, headers |> header("etag") |> unquote_etag()}
+  end
+
+  defp answer({:error, exception}, _response), do: {:error, exception}
+
+  defp unquote_etag(nil), do: nil
+  defp unquote_etag(<<?", rest::binary>>), do: String.trim_trailing(rest, "\"")
+  defp unquote_etag(value), do: value
 
   ## Refusals
 

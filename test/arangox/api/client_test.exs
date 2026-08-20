@@ -297,6 +297,24 @@ defmodule Arangox.Api.ClientTest do
       assert adapter_requests(server) == []
     end
 
+    # The refusal names the offending header, but a name that itself carries
+    # the refused bytes cannot be named without repeating them into the
+    # message — and from there into whatever logs it.
+    test "a header name carrying CR, LF or NUL is refused without echoing the name" do
+      {conn, server} = connected!()
+
+      assert {:error, %Error{} = error} =
+               Client.request(conn,
+                 method: :get,
+                 segments: ["_api", "version"],
+                 opts: [headers: [{"x-bad\r\nx-injected", "v"}]]
+               )
+
+      refute Exception.message(error) =~ "\r"
+      refute Exception.message(error) =~ "\n"
+      assert adapter_requests(server) == []
+    end
+
     test "an operation cannot set the authorization or host header" do
       {conn, server} = connected!()
 
