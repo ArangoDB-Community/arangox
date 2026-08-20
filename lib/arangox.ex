@@ -523,9 +523,20 @@ defmodule Arangox do
 
   # The message never renders an element: a header value may be a credential
   # or a transaction identifier.
-  defp check_headers_argument!(headers) when is_list(headers), do: :ok
+  defp check_headers_argument!(headers) when is_list(headers) do
+    if Enum.all?(headers, fn
+         {name, value} -> is_binary(name) and is_binary(value)
+         _other -> false
+       end) do
+      :ok
+    else
+      bad_headers_argument!()
+    end
+  end
 
-  defp check_headers_argument!(_headers) do
+  defp check_headers_argument!(_headers), do: bad_headers_argument!()
+
+  defp bad_headers_argument! do
     raise ArgumentError,
           "request headers are a list of {name, value} tuples since 0.8, sent in order " <>
             "after the pool's :headers; maps are no longer accepted"
@@ -1050,12 +1061,13 @@ defmodule Arangox do
   def cursor(conn, %Query{} = query, bindvars, opts),
     do: DBConnection.stream(conn, query, bindvars, warn_unknown_query_opts(opts))
 
-  # Until 1.0 this was a `defdelegate` and a binary reached
-  # `DBConnection` as the query itself, which needed a `DBConnection.Query`
-  # implementation for `BitString` — a protocol implementation for a built-in
-  # type, shipped by a library, which makes any application that installs a
-  # second driver doing the same un-consolidatable. Wrapping the binary here
-  # converges both forms on one struct and costs the caller nothing.
+  # A binary query is wrapped here rather than passed through. Letting a
+  # binary reach `DBConnection` as the query itself would require a
+  # `DBConnection.Query` implementation for `BitString` — a protocol
+  # implementation for a built-in type, shipped by a library, which makes any
+  # application that installs a second driver doing the same
+  # un-consolidatable. Wrapping converges both forms on one struct and costs
+  # the caller nothing.
   def cursor(conn, query, bindvars, opts) when is_binary(query),
     do: cursor(conn, %Query{query: query}, bindvars, opts)
 
@@ -1640,9 +1652,7 @@ defmodule Arangox do
   # on every connect attempt and must not raise — a raise there escapes the
   # `DBConnection` callback and turns backoff into a supervisor crash loop — so
   # `start_link/1` and `child_spec/1` are the only places left that can reject
-  # it. And the value was never unchecked before: until 1.0 `:vst_maxsize` went
-  # through `Application.compile_env/3`, which raised at compile time on anything
-  # too small. Validating only the option would be a real loss of assertiveness:
+  # it. Validating only the option would be a real loss of assertiveness:
   # `config :arangox, :vst_maxsize, 10` would reach `build_stream/2` as a
   # negative chunk size and raise a MatchError out of
   # `Arangox.VelocyClient.request/2`.

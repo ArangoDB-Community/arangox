@@ -107,9 +107,18 @@ defmodule Arangox.Endpoint do
   @spec redact(Arangox.endpoint() | term) :: Arangox.endpoint() | term
   def redact(endpoint) when is_binary(endpoint) do
     case {:binary.match(endpoint, "://"), :binary.match(endpoint, "@")} do
-      {{_pos, 3}, :nomatch} -> endpoint
-      {{scheme_len, 3}, _at} -> binary_part(endpoint, 0, scheme_len + 3) <> "[redacted]"
-      {:nomatch, _at} -> "[redacted]"
+      {{_scheme_at, 3}, :nomatch} ->
+        endpoint
+
+      # The scheme prefix is kept only when the `@` follows it. An `@` before
+      # the scheme separator means the value is not a URL whose userinfo sits
+      # in the userinfo position, so no prefix of it is known to be
+      # credential-free and the whole value goes.
+      {{scheme_at, 3}, {at, 1}} when at > scheme_at ->
+        binary_part(endpoint, 0, scheme_at + 3) <> "[redacted]"
+
+      {_scheme, _at} ->
+        "[redacted]"
     end
   end
 

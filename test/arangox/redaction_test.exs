@@ -124,6 +124,14 @@ defmodule Arangox.RedactionTest do
       assert Endpoint.redact("") == "[redacted]"
       assert Endpoint.redact("root:hunter2@localhost") == "[redacted]"
     end
+
+    test "a credential written ahead of the scheme is redacted, not kept as a prefix" do
+      # Keeping the bytes before "://" is only safe when the userinfo comes
+      # after it. Prefixing credentials puts them in front, where a prefix
+      # rule preserves them verbatim.
+      assert Endpoint.redact("root:hunter2@http://localhost:8529") == "[redacted]"
+      assert Endpoint.redact("root:hunter2@tcp://db.internal:8529") == "[redacted]"
+    end
   end
 
   describe "a failed connect to an endpoint carrying userinfo:" do

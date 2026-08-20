@@ -601,6 +601,14 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    defp recv_stream(_socket, n_chunks, _buffer, _deadline, _opts, _state) when n_chunks < 2 do
+      {:error,
+       %Error{
+         reason: :malformed_header,
+         message: "a chunked message declared #{n_chunks} chunks, which cannot be answered"
+       }}
+    end
+
     defp recv_stream(socket, n_chunks, buffer, deadline, opts, state) do
       Enum.reduce_while(1..(n_chunks - 1), buffer, fn n, buffer ->
         with(

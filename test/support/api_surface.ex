@@ -55,8 +55,16 @@ defmodule Arangox.TestSupport.ApiSurface do
     case call_spec(body) do
       nil ->
         # A bang form delegates to its own non-bang twin rather than calling
-        # the adapter again; it carries no wire facts of its own.
-        %{fun: name, arity: length(args), bang?: bang?(name), spec: nil}
+        # the adapter again; it carries no wire facts of its own. Any other
+        # shape is refused here rather than recorded as fact-free: the gates
+        # all skip an operation whose spec is nil, so accepting one would let
+        # it past every check silently.
+        unless bang?(name) do
+          raise "#{file}: #{name}/#{length(args)} does not call the adapter directly; " <>
+                  "every operation reaches the network through Arangox.Api.Client.request/2"
+        end
+
+        %{fun: name, arity: length(args), bang?: true, spec: nil}
 
       spec ->
         %{

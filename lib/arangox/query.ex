@@ -56,6 +56,7 @@ defmodule Arangox.Query do
   """
 
   alias __MODULE__
+  alias Arangox.Error
 
   @type t :: %__MODULE__{
           query: binary,
@@ -125,7 +126,7 @@ defmodule Arangox.Query do
   # option list also carries `DBConnection`'s keys, `:database` and
   # `:transaction`, so AQL names are picked out of it rather than validated
   # against it; `Arangox.query/4` and `Arangox.cursor/4` warn on near-misses.
-  @spec body(t, Arangox.bindvars(), keyword) :: {:ok, map} | {:error, String.t()}
+  @spec body(t, Arangox.bindvars(), keyword) :: {:ok, map} | {:error, Arangox.Error.t()}
   def body(%Query{query: statement, opts: query_opts}, params, call_opts) do
     with :ok <- validate_opts(query_opts) do
       opts =
@@ -144,9 +145,13 @@ defmodule Arangox.Query do
 
       {key, _value} ->
         {:error,
-         "unknown AQL query option #{inspect(key)}. Known options are: " <>
-           Enum.map_join(known_options(), ", ", &inspect/1) <>
-           ". Anything the mapping does not cover can be passed verbatim under :properties"}
+         %Error{
+           reason: :options,
+           message:
+             "unknown AQL query option #{inspect(key)}. Known options are: " <>
+               Enum.map_join(known_options(), ", ", &inspect/1) <>
+               ". Anything the mapping does not cover can be passed verbatim under :properties"
+         }}
     end
   end
 

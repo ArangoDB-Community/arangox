@@ -247,7 +247,10 @@ defmodule Arangox.ProtocolServer do
   end
 
   @doc false
-  def __config__(agent), do: Agent.get(agent, & &1)
+  # Read one field at a time: the state also holds every request the harness
+  # has answered, and `Agent.get/2` copies whatever the function returns to
+  # the calling process.
+  def __config__(agent, field), do: Agent.get(agent, &Map.fetch!(&1, field))
 
   ## Cowboy listener
 
@@ -550,7 +553,7 @@ defmodule Arangox.ProtocolServer.Handler do
       body
     )
 
-    case Map.fetch(ProtocolServer.__config__(agent).routes, conn.request_path) do
+    case Map.fetch(ProtocolServer.__config__(agent, :routes), conn.request_path) do
       {:ok, route} -> serve_route(conn, route)
       :error -> dispatch(conn.path_info, conn, body, agent)
     end
@@ -575,7 +578,8 @@ defmodule Arangox.ProtocolServer.Handler do
     status = String.to_integer(code)
 
     conn =
-      Enum.reduce(ProtocolServer.__config__(agent).response_headers, conn, fn {name, value}, c ->
+      Enum.reduce(ProtocolServer.__config__(agent, :response_headers), conn, fn {name, value},
+                                                                                c ->
         put_resp_header(c, name, value)
       end)
 
@@ -608,7 +612,7 @@ defmodule Arangox.ProtocolServer.Handler do
 
   defp dispatch(["redirect-503"], conn, _body, agent) do
     conn =
-      case ProtocolServer.__config__(agent).redirect_to do
+      case ProtocolServer.__config__(agent, :redirect_to) do
         nil -> conn
         endpoint -> put_resp_header(conn, "x-arango-endpoint", endpoint)
       end

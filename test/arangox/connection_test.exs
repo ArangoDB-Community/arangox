@@ -31,7 +31,14 @@ defmodule Arangox.ConnectionTest.ScriptClient do
   @name __MODULE__.Agent
 
   def start(script) do
-    {:ok, _pid} = Agent.start_link(fn -> %{script: script, events: []} end, name: @name)
+    # Supervised rather than linked: ExUnit waits for a supervised child to
+    # terminate before finishing the test, so the registered name is free
+    # before the next test calls this.
+    ExUnit.Callbacks.start_supervised!(%{
+      id: @name,
+      start: {Agent, :start_link, [fn -> %{script: script, events: []} end, [name: @name]]}
+    })
+
     :ok
   end
 

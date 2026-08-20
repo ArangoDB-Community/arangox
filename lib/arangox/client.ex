@@ -299,7 +299,7 @@ defmodule Arangox.Client do
   # credential itself, so only the header name is reported.
   defp check_headers(headers) when is_map(headers) or is_list(headers) do
     Enum.find_value(headers, :ok, fn
-      {name, value} ->
+      {name, value} when (is_binary(name) or is_atom(name)) and is_binary(value) ->
         name = to_string(name)
 
         if smuggling_byte?(name) or smuggling_byte?(to_string(value)) do

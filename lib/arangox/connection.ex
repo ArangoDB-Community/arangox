@@ -1291,12 +1291,11 @@ defmodule Arangox.Connection do
           cursor = make_ref()
           {:ok, query, cursor, %{state | cursors: Map.put(state.cursors, cursor, initial)}}
 
-        error ->
-          error
+        {call, exception, state} when call in [:error, :disconnect] ->
+          {call, exception, state}
       end
     else
-      {:error, %Error{} = exception} -> {:error, exception, state}
-      {:error, message} -> {:error, %Error{message: message}, state}
+      {:error, %Error{} = exception} -> {:error, exception(state, exception), state}
     end
   end
 
@@ -1369,8 +1368,8 @@ defmodule Arangox.Connection do
           {:ok, _req, response, state} ->
             {:ok, response, state}
 
-          error ->
-            error
+          {call, exception, state} when call in [:error, :disconnect] ->
+            {call, exception, state}
         end
     end
   end
@@ -1444,8 +1443,7 @@ defmodule Arangox.Connection do
           {call, exception, state}
       end
     else
-      {:error, %Error{} = exception} -> {:error, exception, state}
-      {:error, message} -> {:error, %Error{message: message}, state}
+      {:error, %Error{} = exception} -> {:error, exception(state, exception), state}
     end
   end
 
@@ -1593,7 +1591,7 @@ defmodule Arangox.Connection do
          {:ok, %Request{} = request} <- interpolate_path(request, opts, state) do
       run_execute(request, option_trx, opts, state)
     else
-      {:error, exception} -> {:error, exception, state}
+      {:error, %Error{} = exception} -> {:error, exception(state, exception), state}
     end
   end
 
@@ -2307,11 +2305,12 @@ defmodule Arangox.Connection do
     |> Enum.map(fn line -> json_library.decode!(line) end)
   end
 
-  ## The single error-construction site
+  ## Where an error picks up the endpoint
   #
-  # Everything that becomes an `Arangox.Error` in this module comes through
-  # here, which is what makes "`:reason` is always populated" and "the endpoint
-  # is always redacted" checkable rather than aspirational.
+  # Every error that leaves this module is stamped with the redacted endpoint
+  # here. An error built anywhere else must be passed through `exception/2`
+  # before it is returned, or it reaches the caller with `:endpoint` nil and
+  # renders without the prefix every other error carries.
 
   # How many bytes of an undecodable response body are quoted back.
   @body_excerpt 256

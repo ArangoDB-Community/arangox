@@ -221,9 +221,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
             {:ok, new_socket, ref} <-
               Mint.request(
                 socket,
-                method
-                |> to_string()
-                |> String.upcase(),
+                method_string(method),
                 path,
                 with_host(headers, socket),
                 body
@@ -462,5 +460,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp caught_reason(reason) when is_atom(reason), do: reason
     defp caught_reason(_reason), do: :client_error
+
+    # `Arangox.method/0` is a closed set. Converting through it rather than
+    # through `to_string/1` keeps a caller's bad argument an argument error:
+    # a protocol failure here would raise past the rescue below, which reads
+    # any raise as a dead socket and retires a healthy connection.
+    defp method_string(:get), do: "GET"
+    defp method_string(:post), do: "POST"
+    defp method_string(:put), do: "PUT"
+    defp method_string(:patch), do: "PATCH"
+    defp method_string(:delete), do: "DELETE"
+    defp method_string(:head), do: "HEAD"
+    defp method_string(:options), do: "OPTIONS"
   end
 end
