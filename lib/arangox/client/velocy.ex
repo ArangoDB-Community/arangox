@@ -222,10 +222,13 @@ if Code.ensure_loaded?(VelocyPack) do
 
       {database, path} =
         case path do
+          # A caller can write the prefix with no trailing segment —
+          # `/_db/mydb` — so the split answers one part as well as two.
           "/_db/" <> rest ->
-            [database, path] = :binary.split(rest, "/")
-
-            {database, "/" <> path}
+            case :binary.split(rest, "/") do
+              [database, path] -> {database, "/" <> path}
+              [database] -> {database, "/"}
+            end
 
           _ ->
             {database || "", path}
@@ -628,6 +631,11 @@ if Code.ensure_loaded?(VelocyPack) do
         end
       end)
     end
+
+    # An empty chunk must not reach `recv/3`: length 0 on a raw-mode socket
+    # means "whatever bytes are buffered", not "nothing", so it would swallow
+    # the next chunk's header and desynchronise the stream.
+    defp recv_chunk(_socket, @chunk_header_size, _deadline, _opts, _state), do: {:ok, ""}
 
     defp recv_chunk({mod, port}, chunk_length, deadline, opts, state) do
       case timeout_for(deadline, opts, state) do

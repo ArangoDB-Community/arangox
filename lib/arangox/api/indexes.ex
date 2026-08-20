@@ -72,7 +72,7 @@ defmodule Arangox.Api.Indexes do
   @doc """
   List all indexes of a collection. Raises on error.
 
-  See `all/1`.
+  See `all/2`.
   """
   @spec all!(Arangox.conn(), binary, keyword) :: term
   def all!(conn, collection, opts \\ []) do
@@ -175,7 +175,7 @@ defmodule Arangox.Api.Indexes do
   @doc """
   Create an index. Raises on error.
 
-  See `create/2`.
+  See `create/3`.
   """
   @spec create!(Arangox.conn(), binary, term, keyword) :: term
   def create!(conn, collection, body, opts \\ []) do

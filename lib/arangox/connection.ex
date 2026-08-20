@@ -184,7 +184,14 @@ defmodule Arangox.Connection do
       max_body_size: config.max_body_size,
       vst_maxsize: config.vst_maxsize,
       request_timeout: config.request_timeout,
-      cursors: %{}
+      cursors: %{},
+      # `struct/2` above reads the raw option list, which can name *any*
+      # struct key — including fields no option may set. Every
+      # internal-only field must be re-asserted in this merge, or a start
+      # option can preload it: `trx_id:` in the options would attach a
+      # transaction nobody began to every request the connection serves.
+      trx_id: nil,
+      server_version: nil
     })
   end
 
@@ -237,7 +244,7 @@ defmodule Arangox.Connection do
   # silently every time a stage was added — and the stage count has already
   # tripled once. So the budget is established once per endpoint attempt, when the
   # socket opens, and each stage derives its wait from what is *left* of it,
-  # exactly as `run_execute/3` does for a caller's request. This is the shape
+  # exactly as `run_execute/4` does for a caller's request. This is the shape
   # Postgrex and MyXQL use (`handshake_timeout`, armed once around the whole
   # handshake); they need an external timer for it because their handshake
   # receives pass `:infinity`, while arangox already derives every wait from a
@@ -336,7 +343,7 @@ defmodule Arangox.Connection do
       endpoints: List.wrap(given),
       # The redirect admission policy is decided from the configured
       # endpoints and this mapper, so both are resolved once, here, rather than
-      # read out of `opts` from inside `check_availability/2`.
+      # read out of `opts` from inside `check_availability/3`.
       endpoint_mapper: Keyword.get(opts, :endpoint_mapper),
       redirects_left: @max_redirects,
       # A list of endpoints means failover: one endpoint being unusable moves
@@ -622,9 +629,17 @@ defmodule Arangox.Connection do
   defp failover_callback(%Error{} = exception, opts) do
     try do
       case Keyword.get(opts, :failover_callback) do
-        {mod, fun, args} -> apply(mod, fun, [exception | args])
-        fun when is_function(fun, 1) -> fun.(exception)
-        _invalid_callback -> nil
+        # The guards keep a malformed tuple out of `apply/3`, whose raise the
+        # rescue below would swallow. `Arangox.start_link/1` refuses malformed
+        # callbacks, but this state is reachable without its validation.
+        {mod, fun, args} when is_atom(mod) and is_atom(fun) and is_list(args) ->
+          apply(mod, fun, [exception | args])
+
+        fun when is_function(fun, 1) ->
+          fun.(exception)
+
+        _absent_or_invalid ->
+          nil
       end
     rescue
       _exception -> nil
@@ -1156,7 +1171,7 @@ defmodule Arangox.Connection do
   def handle_status(_opts, %__MODULE__{trx_id: nil} = state), do: {:idle, state}
 
   def handle_status(opts, %__MODULE__{trx_id: id} = state) do
-    trx_request(Transaction.status(id), id, opts, state, :keep, fn response, state ->
+    trx_request(Transaction.status(id), opts, state, :keep, fn response, state ->
       # A transaction committed or aborted through another handle answers
       # `:idle`. Keeping its identifier in state would then send a finished
       # transaction's header on every later request in this checkout, and the
@@ -1172,7 +1187,7 @@ defmodule Arangox.Connection do
   def handle_commit(_opts, %__MODULE__{trx_id: nil} = state), do: {:idle, state}
 
   def handle_commit(opts, %__MODULE__{trx_id: id} = state) do
-    trx_request(Transaction.commit(id), id, opts, state, :strip, fn response, state ->
+    trx_request(Transaction.commit(id), opts, state, :strip, fn response, state ->
       {:ok, response, state}
     end)
   end
@@ -1181,7 +1196,7 @@ defmodule Arangox.Connection do
   def handle_rollback(_opts, %__MODULE__{trx_id: nil} = state), do: {:idle, state}
 
   def handle_rollback(opts, %__MODULE__{trx_id: id} = state) do
-    trx_request(Transaction.abort(id), id, opts, state, :strip, fn response, state ->
+    trx_request(Transaction.abort(id), opts, state, :strip, fn response, state ->
       {:ok, response, state}
     end)
   end
@@ -1205,7 +1220,10 @@ defmodule Arangox.Connection do
   # flight. Dropping the header before that acknowledgment strands the
   # server-side transaction: it stays alive holding its locks until the server
   # times it out, with nothing left able to name it.
-  defp trx_request(%Request{} = request, id, opts, %__MODULE__{} = state, wire, on_200) do
+  # The identifier is read off the state itself rather than passed alongside
+  # it: a second copy could disagree, and `retain_trx/3` would then rewrite
+  # state to name a different transaction than the one in flight.
+  defp trx_request(%Request{} = request, opts, %__MODULE__{trx_id: id} = state, wire, on_200) do
     request_state = if wire == :strip, do: %{state | trx_id: nil}, else: state
 
     case execute_request(request, opts, request_state) do
@@ -1256,7 +1274,7 @@ defmodule Arangox.Connection do
     # server-side and keyed by the statement, so a cursor would benefit from
     # one exactly as a drained execution does.
     #
-    # It is opt-in because preparing has to mean something. ArangoDB has no
+    # ArangoDB has no
     # server-side prepare, so asking for the plan cache is the only observable
     # difference between a prepared execution and any other, and defaulting it
     # on here would erase that difference entirely. It would also put every
@@ -1379,7 +1397,7 @@ defmodule Arangox.Connection do
   # It runs on `DBConnection`'s idle cycle, in the *connection* process, with no
   # caller and therefore no deadline to inherit — the third budget case
   # alongside caller requests and connect probes. It is a request, so the
-  # request bound is the one that fits: `run_execute/3` establishes a
+  # request bound is the one that fits: `run_execute/4` establishes a
   # request-local deadline of `:request_timeout` for any request that arrives
   # without one, which is exactly this path. A ping is deliberately *not* given
   # the connect budget: it is not part of connecting, and an idle pool whose
@@ -1396,30 +1414,6 @@ defmodule Arangox.Connection do
     end
   end
 
-  # The `:transaction` per-request option.
-  #
-  # This is the one seam every request path crosses — hand-written requests,
-  # the connect-independent handle functions, and the cursor callbacks
-  # (`handle_declare`/`handle_fetch`/`handle_deallocate` all funnel into
-  # `execute_request/3`) — so applying the option here covers all of them at
-  # once.
-  #
-  # The header goes onto the *request struct* and never into `state.headers`:
-  # a transaction written to connection state would ride the checked-in
-  # connection to whichever unrelated caller draws it next, which is exactly
-  # the leak the handle form exists to prevent. Note the pipeline below: the request is a local
-  # value, and the returned state is whatever `Client.request/3` hands back —
-  # nothing in this path constructs a new state from the transaction.
-  #
-  # It is applied *before* the state-header merge, whose merge order lets the
-  # request's own headers win, so a per-request handle deliberately overrides
-  # a closure-form transaction the connection may be inside of — per-request
-  # identity is the more specific of the two.
-  #
-  # An invalid option is a plain `{:error, exception, state}`: the request
-  # never reaches the wire, and the connection — which was never touched —
-  # stays checked in and healthy. Raising here instead would make DBConnection
-  # retire a perfectly good connection over a caller's typo.
   # Two honest clauses. A prepared query builds its own request and hands
   # the *query* back in the callback's query position, so `decode/3` dispatches
   # on the query rather than on a request and the caller gets the struct they
@@ -1461,7 +1455,7 @@ defmodule Arangox.Connection do
   # `hasMore` answered honestly. Nothing deletes the cursor afterwards because
   # a fully drained cursor no longer exists server-side.
   defp drain(%Query{} = query, %Response{} = initial, opts, %__MODULE__{} = state) do
-    case collect(initial, rows(initial), opts, state) do
+    case collect(initial, [rows(initial)], opts, state) do
       {:ok, rows, state} ->
         body = initial.body |> Map.put("result", rows) |> Map.put("hasMore", false)
         {:ok, query, %{initial | body: body}, state}
@@ -1471,12 +1465,16 @@ defmodule Arangox.Connection do
     end
   end
 
-  defp collect(%Response{body: %{"hasMore" => true, "id" => id}}, rows, opts, state) do
+  # The accumulator is a list of batches, newest first, flattened once at the
+  # end: appending each batch to a flat list instead re-copies everything
+  # collected so far on every batch, which is quadratic in exactly the
+  # many-batch case draining exists for.
+  defp collect(%Response{body: %{"hasMore" => true, "id" => id}}, batches, opts, state) do
     request = %Request{method: :put, path: @cursor_path <> id}
 
     case execute_request(request, opts, state) do
       {:ok, _req, %Response{} = next, state} ->
-        collect(next, rows ++ rows(next), opts, state)
+        collect(next, [rows(next) | batches], opts, state)
 
       {call, exception, state} when call in [:error, :disconnect] ->
         {call, exception, state}
@@ -1486,7 +1484,7 @@ defmodule Arangox.Connection do
   # `hasMore` with no cursor to fetch it from is a promise the server cannot
   # keep. Returning the rows collected so far would truncate the result
   # silently, so it is an error instead.
-  defp collect(%Response{body: %{"hasMore" => true}}, _rows, _opts, state) do
+  defp collect(%Response{body: %{"hasMore" => true}}, _batches, _opts, state) do
     {:error,
      exception(
        state,
@@ -1494,7 +1492,8 @@ defmodule Arangox.Connection do
      ), state}
   end
 
-  defp collect(%Response{}, rows, _opts, state), do: {:ok, rows, state}
+  defp collect(%Response{}, batches, _opts, state),
+    do: {:ok, batches |> Enum.reverse() |> Enum.concat(), state}
 
   defp rows(%Response{body: %{"result" => rows}}) when is_list(rows), do: rows
   defp rows(%Response{}), do: []
@@ -1585,6 +1584,24 @@ defmodule Arangox.Connection do
   # would therefore intercept all three and send a cursor body in place of the
   # request they intended. Calling this function removes the hazard by
   # construction, and there is no `nil` query left to pass.
+  #
+  # The `:transaction` per-request option is applied here for the same
+  # reason. The header goes onto the *request struct* and never into
+  # `state.headers`: a transaction written to connection state would ride the
+  # checked-in connection to whichever unrelated caller draws it next, which
+  # is exactly the leak the handle form exists to prevent. The request is a
+  # local value, and the returned state is whatever `Client.request/3` hands
+  # back — nothing in this path constructs a new state from the transaction.
+  #
+  # It is applied *before* the state-header merge, whose merge order lets the
+  # request's own headers win, so a per-request handle deliberately overrides
+  # a closure-form transaction the connection may be inside of — per-request
+  # identity is the more specific of the two.
+  #
+  # An invalid option is a plain `{:error, exception, state}`: the request
+  # never reaches the wire, and the connection — which was never touched —
+  # stays checked in and healthy. Raising here instead would make DBConnection
+  # retire a perfectly good connection over a caller's typo.
   defp execute_request(%Request{} = request, opts, %__MODULE__{} = state) do
     with :ok <- check_request_timeout(opts),
          {:ok, option_trx} <- transaction_option(opts),
@@ -1847,8 +1864,6 @@ defmodule Arangox.Connection do
 
   # Prepare and close
 
-  # Preparing is refused, and the error is the documentation.
-  #
   # ArangoDB has no prepared statements. What it has is a plan cache — a
   # server-side memoisation of parsing and planning, keyed by statement text and
   # shared across every caller in the database. Measured against 3.12.4: the
@@ -1861,8 +1876,7 @@ defmodule Arangox.Connection do
   # `DBConnection.prepare/3` runs through `run/4` and never touches the socket —
   # to set a boolean the caller can set directly, while borrowing a word that
   # everywhere else in this ecosystem means a round trip and a server-side
-  # handle. Refusing costs the same checkout but teaches the right model once
-  # instead of the wrong one forever.
+  # handle.
   @impl true
   def handle_prepare(%Query{}, _opts, %__MODULE__{} = state),
     do: {:error, %{@exception_no_prepare | endpoint: state.endpoint}, state}
@@ -1971,15 +1985,17 @@ defmodule Arangox.Connection do
     # is refused either way, so the same call does not start working because of
     # where it happens to point.
     case Keyword.fetch(opts, :database) do
-      {:ok, database} ->
-        with :ok <- validate_database(database) do
-          {:ok, prepend_database(request, database, state)}
-        else
-          {:error, message} -> {:error, %Error{message: message}}
-        end
+      {:ok, database} -> prepend_validated(request, database, state)
+      :error -> do_db_prepend(request, state)
+    end
+  end
 
-      :error ->
-        do_db_prepend(request, state)
+  # The one validate-then-prepend step, shared by the per-request option and
+  # the pool's own database so the two cannot drift.
+  defp prepend_validated(%Request{} = request, database, %__MODULE__{} = state) do
+    case validate_database(database) do
+      :ok -> {:ok, prepend_database(request, database, state)}
+      {:error, message} -> {:error, %Error{message: message}}
     end
   end
 
@@ -1995,13 +2011,8 @@ defmodule Arangox.Connection do
   # a pool started through `DBConnection.start_link/2` directly never crossed
   # `Arangox.start_link/1`'s option validation, and the rule is about what reaches a
   # socket, not about which entry point built the pool.
-  defp do_db_prepend(%Request{} = request, %__MODULE__{database: db} = state) do
-    with :ok <- validate_database(db) do
-      {:ok, prepend_database(request, db, state)}
-    else
-      {:error, message} -> {:error, %Error{message: message}}
-    end
-  end
+  defp do_db_prepend(%Request{} = request, %__MODULE__{database: db} = state),
+    do: prepend_validated(request, db, state)
 
   # "Every request that isn't already prepended", as `Arangox.start_link/1`
   # documents it — one rule for the pool option and the per-request one alike.
@@ -2121,8 +2132,7 @@ defmodule Arangox.Connection do
     case request_content_type(headers) do
       nil -> fallback
       @content_type_vpack -> :velocypack
-      "application/json" -> :json
-      media -> if String.ends_with?(media, "+json"), do: :json, else: :raw
+      media -> if Client.json_media?(media), do: :json, else: :raw
     end
   end
 
@@ -2152,8 +2162,8 @@ defmodule Arangox.Connection do
 
   # The accept header goes on every request a VelocyPack pool makes, body or
   # not: a GET has nothing to encode but still wants a VelocyPack answer.
-  # `maybe_encode_body/2` only sees requests that have a body, so bodyless ones
-  # are covered by the call in `run_execute/3`.
+  # `maybe_encode_body/3` only sees requests that have a body, so bodyless ones
+  # are covered by the call in `run_execute/4`.
   defp accept_header(%Request{} = request, %__MODULE__{client: VelocyClient}), do: request
 
   defp accept_header(%Request{} = request, %__MODULE__{content_type: :velocypack}),
@@ -2301,7 +2311,7 @@ defmodule Arangox.Connection do
   defp decode_dump(body, json_library) do
     body
     |> String.split("\n")
-    |> Enum.filter(fn line -> String.length(line) > 0 end)
+    |> Enum.reject(&(&1 == ""))
     |> Enum.map(fn line -> json_library.decode!(line) end)
   end
 

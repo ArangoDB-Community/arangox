@@ -63,6 +63,8 @@ defmodule Arangox.TransactionTest do
 
   use ExUnit.Case, async: true
 
+  import TestHelper, only: [stop_pool: 1]
+
   alias Arangox.{Connection, Error, Query, Request, Response, Transaction}
   alias Arangox.TransactionTest.StubClient
 
@@ -108,15 +110,6 @@ defmodule Arangox.TransactionTest do
     on_exit(fn -> stop_pool(conn) end)
 
     conn
-  end
-
-  # The pool is linked to the test process, so it may already be shutting
-  # down by the time on_exit runs.
-  defp stop_pool(pool) do
-    if Process.alive?(pool), do: GenServer.stop(pool)
-    :ok
-  catch
-    :exit, _reason -> :ok
   end
 
   defp drain_requests(acc \\ []) do
@@ -807,6 +800,43 @@ defmodule Arangox.TransactionTest do
 
       assert {:error, %Error{status: 200}} =
                Arangox.transaction_status(conn, Transaction.new("9"))
+    end
+
+    # The body is the server's data, not the caller's argument, so a shape
+    # this driver does not recognize is an error tuple, never a raise.
+    test "a 200 whose status is not a binary is an error, not a crash" do
+      script = %{
+        {:get, "/_api/transaction/9"} =>
+          {200, ~s({"code":200,"error":false,"result":{"id":"9","status":3}})}
+      }
+
+      conn = start_pool(script)
+
+      assert {:error, %Error{status: 200}} =
+               Arangox.transaction_status(conn, Transaction.new("9"))
+    end
+
+    # `Arangox.start_link/1` refuses `:transaction` as a pool option; the
+    # state field behind it must not be reachable under its internal name
+    # either, or every caller inherits a transaction nobody began.
+    test "a start option cannot preload connection state with a transaction" do
+      ExUnit.CaptureLog.capture_log(fn ->
+        {:ok, conn} =
+          Arangox.start_link(
+            client: StubClient,
+            client_opts: [owner: self(), script: %{}],
+            pool_size: 1,
+            idle_interval: 60_000,
+            trx_id: "123"
+          )
+
+        on_exit(fn -> stop_pool(conn) end)
+
+        assert {:ok, %Response{}} = Arangox.get(conn, "/data")
+
+        assert %Request{headers: headers} = Enum.find(drain_requests(), &(&1.path == "/data"))
+        refute Enum.any?(headers, fn {name, _value} -> name == @trx_header end)
+      end)
     end
 
     test "a handle around a malformed identifier is rejected before any request" do

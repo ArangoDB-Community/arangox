@@ -798,7 +798,7 @@ defmodule Arangox.Api.Graphs do
   @doc """
   Get inbound and outbound edges. Raises on error.
 
-  See `vertex_edges/2`.
+  See `vertex_edges/3`.
   """
   @spec vertex_edges!(Arangox.conn(), binary, binary, keyword) :: term
   def vertex_edges!(conn, collection, vertex, opts \\ []) do

@@ -13,7 +13,7 @@ defmodule Arangox.VelocyTest do
 
   use ExUnit.Case, async: false
 
-  alias Arangox.{Connection, Error, Request, VelocyClient}
+  alias Arangox.{Connection, Error, Request, Response, VelocyClient}
 
   # Accepts one connection and stays silent, forwarding everything that arrives
   # to the test process so the bytes the client wrote can be asserted on.
@@ -285,6 +285,23 @@ defmodule Arangox.VelocyTest do
     end
   end
 
+  ## Database-prefixed paths
+
+  # `request/3`'s rescue reports a raise as a dead socket, so a path shape a
+  # caller can legitimately write must never reach it.
+  describe "a path naming a database with no trailing segment" do
+    test "is sent rather than reported as a transport fault" do
+      state = state!()
+
+      assert {:error, %Error{reason: :timeout}, %Connection{}} =
+               VelocyClient.request(%Request{method: :get, path: "/_db/mydb"}, [], state)
+
+      # The request reached the wire naming the database; the silent listener
+      # simply never answered it.
+      assert wire() =~ "mydb"
+    end
+  end
+
   ## Send failures
 
   # Guards the regression where the chunk loop escaped by throwing, which a
@@ -341,6 +358,23 @@ defmodule Arangox.VelocyTest do
       state = replying_state!(chunk_header(24, 0, 1))
 
       assert {:error, %Error{}, %Connection{}} =
+               VelocyClient.request(%Request{method: :get, path: "/_api/version"}, [], state)
+    end
+
+    # `recv/3` with length 0 on a raw-mode socket returns whatever bytes are
+    # buffered rather than none, so an empty chunk read that way swallows the
+    # next chunk's header and desynchronises the stream.
+    test "an empty chunk reassembles instead of desynchronising the stream" do
+      {:ok, payload} = VelocyPack.encode([1, 2, 200, %{}])
+      msg_length = 2 * 24 + byte_size(payload)
+
+      reply =
+        chunk_header(24, 2, 1, msg_length) <>
+          chunk_header(24 + byte_size(payload), 1, 0, msg_length) <> payload
+
+      state = replying_state!(reply)
+
+      assert {:ok, %Response{status: 200}, %Connection{}} =
                VelocyClient.request(%Request{method: :get, path: "/_api/version"}, [], state)
     end
   end

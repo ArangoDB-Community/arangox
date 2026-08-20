@@ -619,7 +619,7 @@ defmodule Arangox.Api.Cluster do
   @doc """
   Get the statistics of a DB-Server. Raises on error.
 
-  See `statistics/1`.
+  See `statistics/2`.
   """
   @spec statistics!(Arangox.conn(), binary, keyword) :: term
   def statistics!(conn, d_bserver, opts \\ []) do

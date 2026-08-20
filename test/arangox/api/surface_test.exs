@@ -20,6 +20,8 @@ defmodule Arangox.Api.SurfaceTest do
       turns the unit tier red.
     * A parameter the operation forces is never also offered as an option —
       the guard that keeps a caller from setting a flag the driver fixes.
+    * Every local `fun/arity` reference in the docs resolves, so a bang
+      twin's "See `twin/n`." line cannot go stale when a signature changes.
   """
 
   use ExUnit.Case, async: true
@@ -111,6 +113,31 @@ defmodule Arangox.Api.SurfaceTest do
 
       assert overlap == [],
              "#{op.fun}/#{op.arity} forces #{inspect(overlap)} and also offers it as an option"
+    end
+  end
+
+  ## Documentation references
+
+  # ExDoc renders an unresolvable local reference as dead text instead of a
+  # link, and warns only when docs are built — which plain `mix test` never
+  # does. The references live in prose, so nothing else re-derives them when
+  # an operation's signature changes.
+  test "every local function reference in the docs resolves to a defined arity" do
+    for {file, ops} <- operations_by_file() do
+      # `opts` carries a default, so an operation also answers one below its
+      # head arity — the arity its docs conventionally cite.
+      callable =
+        for op <- ops,
+            arity <- [op.arity, op.arity - 1],
+            into: MapSet.new(),
+            do: {Atom.to_string(op.fun), arity}
+
+      source = File.read!(file)
+
+      for [whole, name, arity] <- Regex.scan(~r|`([a-z_][a-z0-9_]*!?)/(\d+)`|, source) do
+        assert MapSet.member?(callable, {name, String.to_integer(arity)}),
+               "#{file}: the docs reference #{whole}, which no operation there answers to"
+      end
     end
   end
 

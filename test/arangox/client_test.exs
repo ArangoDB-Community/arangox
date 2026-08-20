@@ -177,14 +177,16 @@ defmodule Arangox.ClientTest do
 
     @tag :unix
     test "connecting to a unix socket" do
-      if File.exists?("_build/#{Mix.env()}/velocy.sock") do
-        File.rm("_build/#{Mix.env()}/velocy.sock")
+      socket_path = "_build/#{Mix.env()}/velocy.sock"
+
+      if File.exists?(socket_path) do
+        File.rm(socket_path)
       end
 
-      _port = Port.open({:spawn, "nc -lU _build/#{Mix.env()}/velocy.sock"}, [:binary])
-      endpoint = Endpoint.new("unix://#{Path.expand("_build")}/#{Mix.env()}/velocy.sock")
+      _port = Port.open({:spawn, "nc -lU #{socket_path}"}, [:binary])
+      endpoint = Endpoint.new("unix://#{Path.expand(socket_path)}")
 
-      :timer.sleep(1000)
+      TestHelper.await_unix_socket!(socket_path)
 
       assert {:ok, _conn} = VelocyClient.connect(endpoint, [])
     after

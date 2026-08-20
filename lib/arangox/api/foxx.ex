@@ -82,7 +82,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   List the service scripts. Raises on error.
 
-  See `all_scripts/1`.
+  See `all_scripts/2`.
   """
   @spec all_scripts!(Arangox.conn(), binary, keyword) :: term
   def all_scripts!(conn, mount, opts \\ []) do
@@ -143,7 +143,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Get the configuration options. Raises on error.
 
-  See `configuration/1`.
+  See `configuration/2`.
   """
   @spec configuration!(Arangox.conn(), binary, keyword) :: term
   def configuration!(conn, mount, opts \\ []) do
@@ -200,7 +200,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Install a new service. Raises on error.
 
-  See `create/1`.
+  See `create/2`.
   """
   @spec create!(Arangox.conn(), binary, keyword) :: term
   def create!(conn, mount, opts \\ []) do
@@ -231,7 +231,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Uninstall a service. Raises on error.
 
-  See `delete/1`.
+  See `delete/2`.
   """
   @spec delete!(Arangox.conn(), binary, keyword) :: term
   def delete!(conn, mount, opts \\ []) do
@@ -262,7 +262,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Get the dependency options. Raises on error.
 
-  See `dependencies/1`.
+  See `dependencies/2`.
   """
   @spec dependencies!(Arangox.conn(), binary, keyword) :: term
   def dependencies!(conn, mount, opts \\ []) do
@@ -303,7 +303,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Get the service description. Raises on error.
 
-  See `description/1`.
+  See `description/2`.
   """
   @spec description!(Arangox.conn(), binary, keyword) :: term
   def description!(conn, mount, opts \\ []) do
@@ -336,7 +336,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Disable the development mode. Raises on error.
 
-  See `disable_development_mode/1`.
+  See `disable_development_mode/2`.
   """
   @spec disable_development_mode!(Arangox.conn(), binary, keyword) :: term
   def disable_development_mode!(conn, mount, opts \\ []) do
@@ -369,7 +369,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Download a service bundle. Raises on error.
 
-  See `download/1`.
+  See `download/2`.
   """
   @spec download!(Arangox.conn(), binary, keyword) :: term
   def download!(conn, mount, opts \\ []) do
@@ -407,7 +407,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Enable the development mode. Raises on error.
 
-  See `enable_development_mode/1`.
+  See `enable_development_mode/2`.
   """
   @spec enable_development_mode!(Arangox.conn(), binary, keyword) :: term
   def enable_development_mode!(conn, mount, opts \\ []) do
@@ -435,7 +435,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Get the service README. Raises on error.
 
-  See `readme/1`.
+  See `readme/2`.
   """
   @spec readme!(Arangox.conn(), binary, keyword) :: term
   def readme!(conn, mount, opts \\ []) do
@@ -497,7 +497,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Replace a service. Raises on error.
 
-  See `replace/1`.
+  See `replace/2`.
   """
   @spec replace!(Arangox.conn(), binary, keyword) :: term
   def replace!(conn, mount, opts \\ []) do
@@ -529,7 +529,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Replace the configuration options. Raises on error.
 
-  See `replace_configuration/2`.
+  See `replace_configuration/3`.
   """
   @spec replace_configuration!(Arangox.conn(), binary, term, keyword) :: term
   def replace_configuration!(conn, mount, body, opts \\ []) do
@@ -561,7 +561,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Replace the dependency options. Raises on error.
 
-  See `replace_dependencies/2`.
+  See `replace_dependencies/3`.
   """
   @spec replace_dependencies!(Arangox.conn(), binary, term, keyword) :: term
   def replace_dependencies!(conn, mount, body, opts \\ []) do
@@ -593,7 +593,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Run a service script. Raises on error.
 
-  See `run_script/3`.
+  See `run_script/4`.
   """
   @spec run_script!(Arangox.conn(), binary, binary, term, keyword) :: term
   def run_script!(conn, name, mount, body, opts \\ []) do
@@ -643,7 +643,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Run the service tests. Raises on error.
 
-  See `run_tests/1`.
+  See `run_tests/2`.
   """
   @spec run_tests!(Arangox.conn(), binary, keyword) :: term
   def run_tests!(conn, mount, opts \\ []) do
@@ -674,7 +674,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Get the Swagger description. Raises on error.
 
-  See `swagger_description/1`.
+  See `swagger_description/2`.
   """
   @spec swagger_description!(Arangox.conn(), binary, keyword) :: term
   def swagger_description!(conn, mount, opts \\ []) do
@@ -706,7 +706,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Update the configuration options. Raises on error.
 
-  See `update_configuration/2`.
+  See `update_configuration/3`.
   """
   @spec update_configuration!(Arangox.conn(), binary, term, keyword) :: term
   def update_configuration!(conn, mount, body, opts \\ []) do
@@ -738,7 +738,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Update the dependency options. Raises on error.
 
-  See `update_dependencies/2`.
+  See `update_dependencies/3`.
   """
   @spec update_dependencies!(Arangox.conn(), binary, term, keyword) :: term
   def update_dependencies!(conn, mount, body, opts \\ []) do
@@ -800,7 +800,7 @@ defmodule Arangox.Api.Foxx do
   @doc """
   Upgrade a service. Raises on error.
 
-  See `upgrade/1`.
+  See `upgrade/2`.
   """
   @spec upgrade!(Arangox.conn(), binary, keyword) :: term
   def upgrade!(conn, mount, opts \\ []) do

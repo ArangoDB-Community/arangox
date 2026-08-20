@@ -116,6 +116,8 @@ defmodule Arangox.ConfigTest do
 
   use ExUnit.Case, async: false
 
+  import TestHelper, only: [stop_pool: 1]
+
   import ExUnit.CaptureLog
 
   alias Arangox.Connection
@@ -141,13 +143,6 @@ defmodule Arangox.ConfigTest do
     {:ok, pool} = Arangox.start_link(Keyword.merge([client: ProbeClient, pool_size: 1], opts))
     on_exit(fn -> stop_pool(pool) end)
     pool
-  end
-
-  defp stop_pool(pool) do
-    if Process.alive?(pool), do: GenServer.stop(pool)
-    :ok
-  catch
-    :exit, _reason -> :ok
   end
 
   defp count(log, needle) do
@@ -645,6 +640,45 @@ defmodule Arangox.ConfigTest do
       assert_raise ArgumentError, ~r/:json_library/, fn ->
         Arangox.child_spec(json_library: "Jason")
       end
+    end
+
+    # HTTP/1.1 carries one request per connection, so DBConnection's pool size
+    # of one would serialize the whole application — and the supervised path
+    # is the normal production path.
+    test "child_spec/1 applies the same pool size default as start_link/1" do
+      assert %{start: {_mod, _fun, [{Arangox.Connection, opts}]}} =
+               Arangox.child_spec(client: ProbeClient)
+
+      assert Keyword.get(opts, :pool_size) == 10
+
+      assert %{start: {_mod, _fun, [{Arangox.Connection, opts}]}} =
+               Arangox.child_spec(client: ProbeClient, pool_size: 3)
+
+      assert Keyword.get(opts, :pool_size) == 3
+    end
+
+    # `Arangox.Connection` must not raise out of `connect/1`, so a malformed
+    # callback there is discarded silently — which makes start-up the only
+    # place a misconfigured one can ever be reported.
+    test ":failover_callback must be an arity-1 function or an MFA tuple" do
+      for invalid <- [
+            :not_a_callback,
+            fn -> :wrong_arity end,
+            {IO, :inspect},
+            {IO, :no_such_function, []},
+            {IO, :inspect, :not_a_list}
+          ] do
+        assert_raise ArgumentError, ~r/:failover_callback/, fn ->
+          Arangox.start_link(failover_callback: invalid)
+        end
+
+        assert_raise ArgumentError, ~r/:failover_callback/, fn ->
+          Arangox.child_spec(failover_callback: invalid)
+        end
+      end
+
+      pool = start_pool(failover_callback: {IO, :inspect, []})
+      assert %Response{status: 200} = Arangox.get!(pool, "/mfa-accepted")
     end
 
     test "neither option is reported as unknown" do

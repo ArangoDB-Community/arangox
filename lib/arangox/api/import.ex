@@ -64,7 +64,7 @@ defmodule Arangox.Api.Import do
   @doc """
   Import JSON data as documents. Raises on error.
 
-  See `data/2`.
+  See `data/3`.
   """
   @spec data!(Arangox.conn(), binary, binary, keyword) :: term
   def data!(conn, collection, body, opts \\ []) do

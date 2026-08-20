@@ -62,7 +62,7 @@ defmodule Arangox.Api.Replication do
   @doc """
   Get documents by revision. Raises on error.
 
-  See `all_revision_documents/1`.
+  See `all_revision_documents/3`.
   """
   @spec all_revision_documents!(Arangox.conn(), binary, binary, keyword) :: term
   def all_revision_documents!(conn, collection, batch_id, opts \\ []) do
@@ -144,7 +144,7 @@ defmodule Arangox.Api.Replication do
   @doc """
   List document revision IDs within requested ranges. Raises on error.
 
-  See `all_revision_ranges/1`.
+  See `all_revision_ranges/3`.
   """
   @spec all_revision_ranges!(Arangox.conn(), binary, binary, keyword) :: term
   def all_revision_ranges!(conn, collection, batch_id, opts \\ []) do
@@ -355,7 +355,7 @@ defmodule Arangox.Api.Replication do
   @doc """
   Get a replication dump. Raises on error.
 
-  See `dump/1`.
+  See `dump/3`.
   """
   @spec dump!(Arangox.conn(), binary, binary, keyword) :: term
   def dump!(conn, collection, batch_id, opts \\ []) do
@@ -503,7 +503,7 @@ defmodule Arangox.Api.Replication do
   @doc """
   Get a replication inventory. Raises on error.
 
-  See `inventory/1`.
+  See `inventory/2`.
   """
   @spec inventory!(Arangox.conn(), binary, keyword) :: term
   def inventory!(conn, batch_id, opts \\ []) do
@@ -622,7 +622,7 @@ defmodule Arangox.Api.Replication do
   @doc """
   Rebuild the replication revision tree. Raises on error.
 
-  See `rebuild_revision_tree/1`.
+  See `rebuild_revision_tree/2`.
   """
   @spec rebuild_revision_tree!(Arangox.conn(), binary, keyword) :: term
   def rebuild_revision_tree!(conn, collection, opts \\ []) do
@@ -687,7 +687,7 @@ defmodule Arangox.Api.Replication do
   @doc """
   Get the replication revision tree. Raises on error.
 
-  See `revision_tree/1`.
+  See `revision_tree/3`.
   """
   @spec revision_tree!(Arangox.conn(), binary, binary, keyword) :: term
   def revision_tree!(conn, collection, batch_id, opts \\ []) do

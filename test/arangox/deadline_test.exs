@@ -17,6 +17,8 @@ defmodule Arangox.DeadlineTest do
 
   use ExUnit.Case, async: true
 
+  import TestHelper, only: [stop_pool: 1]
+
   alias Arangox.Response
 
   @block_timeout 1_000
@@ -107,13 +109,7 @@ defmodule Arangox.DeadlineTest do
         ] ++ opts
       )
 
-    on_exit(fn ->
-      try do
-        if Process.alive?(pool), do: GenServer.stop(pool)
-      catch
-        :exit, _reason -> :ok
-      end
-    end)
+    on_exit(fn -> stop_pool(pool) end)
 
     pool
   end

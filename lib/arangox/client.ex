@@ -314,8 +314,9 @@ defmodule Arangox.Client do
         end
 
       # A malformed entry is the caller's mistake on a healthy connection:
-      # refused described — the entry may carry a credential — rather than
-      # left to raise out of the callback, which would retire the connection.
+      # refused with a message that does not echo it — the entry may carry a
+      # credential — rather than left to raise out of the callback, which
+      # would retire the connection.
       _other ->
         {:error,
          %Error{
@@ -353,11 +354,28 @@ defmodule Arangox.Client do
 
   @doc false
   # The one JSON test both codec seams apply: `Arangox.Connection` when
-  # deciding whether a response body decodes as JSON, `Arangox.Api.Client`
-  # when deciding whether a declared request media type needs a content-type
-  # header. Takes a bare, lowercased media type.
+  # selecting a request body's codec from the caller's content-type, and
+  # again when deciding whether a response body decodes as JSON. One
+  # implementation, so a second spelling of the rule cannot silently escape
+  # either seam. Takes a bare, lowercased media type.
   @spec json_media?(binary) :: boolean
   def json_media?(media), do: media == "application/json" or String.ends_with?(media, "+json")
+
+  @doc false
+  # `Arangox.method/0` rendered for an HTTP request line. One implementation
+  # for both HTTP clients: a method added to the closed set and mapped in
+  # only one of them raises a `FunctionClauseError` in the other, whose
+  # request rescue reads any raise as a dead socket and retires a healthy
+  # connection. Converting through the closed set rather than `to_string/1`
+  # keeps a caller's bad argument an argument error for the same reason.
+  @spec method_string(Arangox.method()) :: binary
+  def method_string(:get), do: "GET"
+  def method_string(:post), do: "POST"
+  def method_string(:put), do: "PUT"
+  def method_string(:patch), do: "PATCH"
+  def method_string(:delete), do: "DELETE"
+  def method_string(:head), do: "HEAD"
+  def method_string(:options), do: "OPTIONS"
 
   @doc """
   Closes the connection in `state`.

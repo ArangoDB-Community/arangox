@@ -63,6 +63,8 @@ defmodule Arangox.QueryTest do
 
   use ExUnit.Case, async: true
 
+  import TestHelper, only: [stop_pool: 1]
+
   import ExUnit.CaptureLog
 
   alias Arangox.{Connection, Error, Query, Request, Response}
@@ -111,15 +113,6 @@ defmodule Arangox.QueryTest do
     on_exit(fn -> stop_pool(conn) end)
 
     conn
-  end
-
-  # The pool is linked to the test process, so it may already be shutting down
-  # by the time on_exit runs.
-  defp stop_pool(pool) do
-    if Process.alive?(pool), do: GenServer.stop(pool)
-    :ok
-  catch
-    :exit, _reason -> :ok
   end
 
   defp query(text, opts \\ []), do: %Query{query: text, opts: opts}
@@ -657,6 +650,19 @@ defmodule Arangox.QueryTest do
       assert {:halt, %Response{}, %Connection{}} =
                Connection.handle_fetch(query("RETURN 1"), "c1", [], state(script))
     end
+  end
+
+  ## The plan-cache listing's answer shape
+
+  # The listing's contract is a list of entries. A body of any other shape —
+  # an error envelope behind a 200, a body left undecoded — must be an error,
+  # not wrapped into a one-entry list of something that is not an entry.
+  test "a plan-cache body that is not a list is an error, not an invented entry" do
+    conn =
+      start_pool(%{{:get, "/_api/query-plan-cache"} => {200, ~s({"error":false,"code":200})}})
+
+    assert {:error, %Error{status: 200}} = Arangox.plan_cache(conn)
+    assert_raise Error, fn -> Arangox.plan_cache!(conn) end
   end
 
   ## Live: the cache key and the management endpoints

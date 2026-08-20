@@ -144,7 +144,7 @@ if Code.ensure_loaded?(:gun) do
         ref =
           Gun.request(
             pid,
-            method_string(method),
+            Client.method_string(method),
             path,
             headers,
             body || ""
@@ -253,25 +253,23 @@ if Code.ensure_loaded?(:gun) do
 
     defp normalize({:down, reason}), do: normalize(reason)
 
-    # Gun wraps whatever ended the stream. The inner reason is the one that says
-    # whether the connection survived, so flattening it here would lose the
-    # distinction between a reset stream and a closed socket.
     # Gun reports a connection-level failure (a GOAWAY, a socket that died
     # mid-stream) as `{:connection_error, reason}` from `await/3` and
-    # `await_body/3`. It has to keep the transport's own reason: falling
-    # through to the catch-all below would report `:client_error`, which is
-    # not in `Arangox.Client.connection_lost_reasons/0`, and the unusable
-    # connection would go back into the pool.
-    # The transport's own reason is kept only when it already retires the
-    # connection. HTTP/2 reports these as cow_http2 atoms — `:protocol_error`,
-    # `:internal_error` — which are not in `connection_lost_reasons/0`, so
-    # keeping them verbatim would leave a failed connection checked in, which
-    # is the defect this clause exists to fix.
+    # `await_body/3`. The reported reason must be in
+    # `Arangox.Client.connection_lost_reasons/0` or the unusable connection
+    # goes back into the pool, and HTTP/2's cow_http2 atoms
+    # (`:protocol_error`, `:internal_error`) are not in that set — so
+    # `connection_error/1` keeps the transport's own reason only when it
+    # already retires the connection, and replaces anything else with
+    # `:closed`.
     defp normalize({:connection_error, {reason, _human_readable}}),
       do: connection_error(reason)
 
     defp normalize({:connection_error, reason}), do: connection_error(reason)
 
+    # A stream-level failure ends one request on a connection that survived
+    # it, so the inner reason passes through as-is rather than being made a
+    # retiring one.
     defp normalize({:stream_error, reason}), do: normalize(reason)
 
     defp normalize({:stream_error, _reason, _message}),
@@ -308,17 +306,5 @@ if Code.ensure_loaded?(:gun) do
     defp caught_reason({reason, _stack}) when is_atom(reason), do: reason
     defp caught_reason(reason) when is_atom(reason), do: reason
     defp caught_reason(_reason), do: :client_error
-
-    # `Arangox.method/0` is a closed set. Converting through it rather than
-    # through `to_string/1` keeps a caller's bad argument an argument error:
-    # a protocol failure here would raise past the rescue below, which reads
-    # any raise as a dead socket and retires a healthy connection.
-    defp method_string(:get), do: "GET"
-    defp method_string(:post), do: "POST"
-    defp method_string(:put), do: "PUT"
-    defp method_string(:patch), do: "PATCH"
-    defp method_string(:delete), do: "DELETE"
-    defp method_string(:head), do: "HEAD"
-    defp method_string(:options), do: "OPTIONS"
   end
 end

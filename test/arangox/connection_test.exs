@@ -120,6 +120,8 @@ defmodule Arangox.ConnectionTest do
 
   use ExUnit.Case, async: false
 
+  import TestHelper, only: [stop_pool: 1]
+
   alias Arangox.{Connection, Error, ProtocolServer}
   alias Arangox.ConnectionTest.ScriptClient
 
@@ -196,13 +198,6 @@ defmodule Arangox.ConnectionTest do
       {:name, name} -> name
       _other -> nil
     end
-  end
-
-  defp stop_pool(pool) do
-    if Process.alive?(pool), do: GenServer.stop(pool)
-    :ok
-  catch
-    :exit, _reason -> :ok
   end
 
   ## Scripted-client helpers

@@ -43,6 +43,42 @@ defmodule TestHelper do
   end
 
   @doc """
+  Stops a pool started with `Arangox.start_link/1`.
+
+  The pool is linked to the test process, so by the time an `on_exit` runs it
+  may already be shutting down on its own; `GenServer.stop/1` then exits, and
+  that exit means the shutdown already happened.
+  """
+  def stop_pool(pool) do
+    if Process.alive?(pool), do: GenServer.stop(pool)
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  @doc """
+  Waits, bounded, for a unix socket file to appear.
+
+  The listener binding it is a separate OS process, so the file appearing is
+  the only signal that a connect can succeed; a fixed sleep either wastes the
+  whole wait or loses the race on a slow machine.
+  """
+  def await_unix_socket!(path, attempts \\ 100)
+
+  def await_unix_socket!(path, 0) do
+    raise "#{path} never appeared; is a unix-socket-capable nc on PATH?"
+  end
+
+  def await_unix_socket!(path, attempts) do
+    unless File.exists?(path) do
+      Process.sleep(20)
+      await_unix_socket!(path, attempts - 1)
+    end
+
+    :ok
+  end
+
+  @doc """
   Cheap TCP probe of the primary endpoint, used to fail the integration tier
   fast when the containers aren't up.
   """

@@ -14,6 +14,8 @@ defmodule Arangox.ClientContractTest do
 
   use ExUnit.Case, async: false
 
+  import TestHelper, only: [stop_pool: 1]
+
   alias Arangox.{
     Client,
     Connection,
@@ -362,13 +364,6 @@ defmodule Arangox.ClientContractTest do
 
     on_exit(fn -> stop_pool(pool) end)
     pool
-  end
-
-  defp stop_pool(pool) do
-    if Process.alive?(pool), do: GenServer.stop(pool)
-    :ok
-  catch
-    :exit, _reason -> :ok
   end
 
   defp eventually(fun, attempts \\ 200) do

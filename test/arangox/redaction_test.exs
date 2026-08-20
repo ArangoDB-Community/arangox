@@ -54,6 +54,8 @@ defmodule Arangox.RedactionTest do
 
   use ExUnit.Case, async: false
 
+  import TestHelper, only: [stop_pool: 1]
+
   # The verification gate `mix test --only redaction` selects this
   # file; the tag adds nothing to a normal run, which already includes it.
   @moduletag :redaction
@@ -646,12 +648,5 @@ defmodule Arangox.RedactionTest do
 
     on_exit(fn -> stop_pool(pool) end)
     pool
-  end
-
-  defp stop_pool(pool) do
-    if Process.alive?(pool), do: GenServer.stop(pool)
-    :ok
-  catch
-    :exit, _reason -> :ok
   end
 end

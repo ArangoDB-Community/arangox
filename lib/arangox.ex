@@ -90,10 +90,7 @@ defmodule Arangox do
   """
   @spec child_spec([start_option()]) :: Supervisor.child_spec()
   def child_spec(opts \\ []) do
-    ensure_opts_valid!(opts)
-    warn_deprecated_app_config(opts)
-
-    DBConnection.child_spec(__MODULE__.Connection, opts)
+    DBConnection.child_spec(__MODULE__.Connection, prepared_start_opts(opts))
   end
 
   @doc """
@@ -314,10 +311,7 @@ defmodule Arangox do
   """
   @spec start_link([start_option]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    ensure_opts_valid!(opts)
-    warn_deprecated_app_config(opts)
-
-    DBConnection.start_link(__MODULE__.Connection, with_pool_size(opts))
+    DBConnection.start_link(__MODULE__.Connection, prepared_start_opts(opts))
   end
 
   # `DBConnection` defaults to a single connection, which for an HTTP driver
@@ -327,7 +321,14 @@ defmodule Arangox do
   # `:pool_size` still decides.
   @default_pool_size 10
 
-  defp with_pool_size(opts), do: Keyword.put_new(opts, :pool_size, @default_pool_size)
+  # The whole once-per-pool preamble, shared so `start_link/1` and
+  # `child_spec/1` cannot drift: a step applied in only one of them splits
+  # pool behavior by how the pool was started.
+  defp prepared_start_opts(opts) do
+    ensure_opts_valid!(opts)
+    warn_deprecated_app_config(opts)
+    Keyword.put_new(opts, :pool_size, @default_pool_size)
+  end
 
   @doc """
   Runs a GET request against a connection pool.
@@ -523,18 +524,20 @@ defmodule Arangox do
 
   # The message never renders an element: a header value may be a credential
   # or a transaction identifier.
-  defp check_headers_argument!(headers) when is_list(headers) do
-    if Enum.all?(headers, fn
-         {name, value} -> is_binary(name) and is_binary(value)
-         _other -> false
-       end) do
-      :ok
-    else
-      bad_headers_argument!()
-    end
+  defp check_headers_argument!(headers) do
+    if header_list?(headers), do: :ok, else: bad_headers_argument!()
   end
 
-  defp check_headers_argument!(_headers), do: bad_headers_argument!()
+  # One rule for what a header list is, shared by this per-request check and
+  # the pool-option check in `validate_headers!/1` so the two notions cannot
+  # drift.
+  defp header_list?(headers) do
+    is_list(headers) and
+      Enum.all?(headers, fn
+        {name, value} -> is_binary(name) and is_binary(value)
+        _other -> false
+      end)
+  end
 
   defp bad_headers_argument! do
     raise ArgumentError,
@@ -958,12 +961,16 @@ defmodule Arangox do
     end
   end
 
-  defp trx_status_from_body(%Response{body: %{"result" => %{"status" => status}}}) do
+  # The guard is what routes a present-but-non-binary status — null, a
+  # number — to the error clause below: the body is the server's data, so an
+  # unrecognized shape must answer as an error, never raise.
+  defp trx_status_from_body(%Response{body: %{"result" => %{"status" => status}}})
+       when is_binary(status) do
     case status do
       "running" -> {:ok, :running}
       "committed" -> {:ok, :committed}
       "aborted" -> {:ok, :aborted}
-      other when is_binary(other) -> {:ok, other}
+      other -> {:ok, other}
     end
   end
 
@@ -1165,8 +1172,21 @@ defmodule Arangox do
   """
   @spec plan_cache(conn(), [DBConnection.option()]) :: {:ok, [map]} | {:error, any}
   def plan_cache(conn, opts \\ []) do
-    with {:ok, %Response{body: entries}} <- get(conn, @plan_cache_path, [], opts) do
-      {:ok, List.wrap(entries)}
+    case get(conn, @plan_cache_path, [], opts) do
+      {:ok, %Response{body: entries}} when is_list(entries) ->
+        {:ok, entries}
+
+      # A 200 whose body is not a list — an envelope, a body left undecoded —
+      # holds no entries to answer with, and wrapping it would invent one.
+      {:ok, %Response{status: status}} ->
+        {:error,
+         %Error{
+           status: status,
+           message: "the server's answer to the plan-cache listing was not a list of entries"
+         }}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -1176,8 +1196,12 @@ defmodule Arangox do
   See `plan_cache/2`, including its warning about empty results.
   """
   @spec plan_cache!(conn(), [DBConnection.option()]) :: [map]
-  def plan_cache!(conn, opts \\ []),
-    do: conn |> get!(@plan_cache_path, [], opts) |> Map.fetch!(:body) |> List.wrap()
+  def plan_cache!(conn, opts \\ []) do
+    case plan_cache(conn, opts) do
+      {:ok, entries} -> entries
+      {:error, exception} when is_exception(exception) -> raise exception
+    end
+  end
 
   @doc """
   Discards every cached query plan in the current database.
@@ -1236,19 +1260,12 @@ defmodule Arangox do
     __MODULE__.Connection.fallback_json_library()
   end
 
-  # DECISION (scope of "once per pool"): the application-config deprecation
-  # warning is emitted here, from `start_link/1` and `child_spec/1`, and nowhere
-  # else. Both run exactly once per pool, in the caller's process, before any
-  # connection process exists.
-  #
-  # The tempting home is `Arangox.Connection.resolve_options/1`, next to the
-  # resolution itself, and it is wrong. `connect/1` is not a once-per-pool
-  # function: `DBConnection` re-enters it in the same process on every backoff
-  # cycle for as long as the pool lives, in each of `:pool_size` processes. A
-  # warning there fires once per process per reconnect — against an unreachable
-  # server with the default backoff that is a permanent log flood, not a
-  # deprecation notice. Resolution stays in the connect pipeline; the warning
-  # does not follow it there.
+  # Emitted only from the once-per-pool start preamble, in the caller's
+  # process. It must not move next to the resolution itself in
+  # `Arangox.Connection.resolve_options/1`: `connect/1` is re-entered by
+  # `DBConnection` on every backoff cycle, in each of `:pool_size` processes,
+  # so a warning there is a permanent log flood against an unreachable
+  # server, not a deprecation notice.
   defp warn_deprecated_app_config(opts) do
     warn_app_config_key(opts, :json_library, "Arangox.start_link(json_library: Poison)")
     warn_app_config_key(opts, :vst_maxsize, "Arangox.start_link(vst_maxsize: 12_345)")
@@ -1322,49 +1339,20 @@ defmodule Arangox do
   @known_opts Enum.uniq(@arangox_opts ++ @db_connection_opts)
 
   defp ensure_opts_valid!(opts) do
-    # A present key always validates its value; only an absent key is skipped.
-    # Keyword.get/2 must not be used here: it cannot tell `client: false` or
-    # `auth: nil` apart from an absent key, which silently skipped validation.
-    case Keyword.fetch(opts, :endpoints) do
-      {:ok, endpoints} -> validate_endpoints!(endpoints)
-      :error -> :ok
-    end
-
-    case Keyword.fetch(opts, :endpoint_mapper) do
-      {:ok, endpoint_mapper} -> validate_endpoint_mapper!(endpoint_mapper)
-      :error -> :ok
-    end
-
-    case Keyword.fetch(opts, :auth) do
-      {:ok, auth} -> Auth.validate(auth)
-      :error -> :ok
-    end
-
-    case Keyword.fetch(opts, :headers) do
-      {:ok, headers} -> validate_headers!(headers)
-      :error -> :ok
-    end
-
+    validate_present!(opts, :endpoints, &validate_endpoints!/1)
+    validate_present!(opts, :endpoint_mapper, &validate_endpoint_mapper!/1)
+    validate_present!(opts, :failover_callback, &validate_failover_callback!/1)
+    validate_present!(opts, :auth, &Auth.validate/1)
+    validate_present!(opts, :headers, &validate_headers!/1)
     validate_cleartext_auth!(opts)
-
-    case Keyword.fetch(opts, :client) do
-      {:ok, client} -> ensure_client_loaded!(client)
-      :error -> :ok
-    end
-
-    case Keyword.fetch(opts, :database) do
-      {:ok, database} -> validate_database!(database)
-      :error -> :ok
-    end
+    validate_present!(opts, :client, &ensure_client_loaded!/1)
+    validate_present!(opts, :database, &validate_database!/1)
 
     # `Arangox.Connection.resolve_options/1` cannot raise on a bad value
     # , so this is the only place a pool started through arangox can be
     # told about one. The same check runs per request in
     # `Arangox.Connection.handle_execute/4`.
-    case Keyword.fetch(opts, :request_timeout) do
-      {:ok, request_timeout} -> validate_request_timeout!(request_timeout)
-      :error -> :ok
-    end
+    validate_present!(opts, :request_timeout, &validate_request_timeout!/1)
 
     # A pool-level transaction default would attach the
     # previous caller's transaction to whoever draws a connection next —
@@ -1392,19 +1380,22 @@ defmodule Arangox do
       :error -> :ok
     end
 
-    case Keyword.fetch(opts, :content_type) do
-      {:ok, content_type} -> validate_content_type!(content_type)
-      :error -> :ok
-    end
-
-    case Keyword.fetch(opts, :max_body_size) do
-      {:ok, max_body_size} -> validate_max_body_size!(max_body_size)
-      :error -> :ok
-    end
+    validate_present!(opts, :content_type, &validate_content_type!/1)
+    validate_present!(opts, :max_body_size, &validate_max_body_size!/1)
 
     warn_unknown_opts(opts)
 
     :ok
+  end
+
+  # A present key always validates its value; only an absent key is skipped.
+  # `Keyword.get/2` must not be used here: it cannot tell `client: false` or
+  # `auth: nil` apart from an absent key, which silently skipped validation.
+  defp validate_present!(opts, key, validator) do
+    case Keyword.fetch(opts, key) do
+      {:ok, value} -> validator.(value)
+      :error -> :ok
+    end
   end
 
   # VelocyPack is opt-in and needs `:velocy`, which is an optional
@@ -1514,27 +1505,39 @@ defmodule Arangox do
     """
   end
 
-  # Cleartext is supported deliberately — plenty of deployments run
-  # ArangoDB on a private network and have no interest in terminating TLS for
-  # it. What should not happen silently is sending credentials over it to
-  # another machine, where every hop in between can read them.
-  #
-  # So the opt-in is required only where the risk is: credentials configured,
-  # cleartext scheme, and an endpoint that is not this machine. A loopback
-  # endpoint never leaves the host and is exempt, which is what keeps the
-  # documented default configuration — `http://localhost:8529` with `:auth` —
-  # working untouched.
+  # The callback is the operator's only signal that a failover walk is
+  # happening, and `Arangox.Connection` deliberately discards anything wrong
+  # with it during connect — connect must not raise — so start-up is the only
+  # place a misconfigured one can ever be reported.
+  defp validate_failover_callback!(callback) when is_function(callback, 1), do: :ok
+
+  defp validate_failover_callback!({mod, fun, args})
+       when is_atom(mod) and is_atom(fun) and is_list(args) do
+    arity = length(args) + 1
+
+    unless Code.ensure_loaded?(mod) and function_exported?(mod, fun, arity) do
+      raise ArgumentError, """
+      The :failover_callback option expects a {module, function, args} tuple naming \
+      an exported function of arity #{arity} (the failure's %Arangox.Error{} is \
+      prepended to args), got: #{inspect({mod, fun, args})}
+      """
+    end
+
+    :ok
+  end
+
+  defp validate_failover_callback!(callback) do
+    raise ArgumentError, """
+    The :failover_callback option expects a one-argument function or a \
+    {module, function, args} tuple to call with the failure's %Arangox.Error{}, \
+    got: #{inspect(callback)}
+    """
+  end
+
   # The message never renders an element: an authorization entry in `:headers`
   # is a documented way to carry a credential.
   defp validate_headers!(headers) do
-    valid? =
-      is_list(headers) and
-        Enum.all?(headers, fn
-          {name, value} -> is_binary(name) and is_binary(value)
-          _other -> false
-        end)
-
-    unless valid? do
+    unless header_list?(headers) do
       raise ArgumentError, """
       :headers must be a list of {name, value} tuples of strings since 0.8, \
       sent in order before each request's own headers. Maps are no longer \
@@ -1545,6 +1548,16 @@ defmodule Arangox do
     :ok
   end
 
+  # Cleartext is supported deliberately — plenty of deployments run
+  # ArangoDB on a private network and have no interest in terminating TLS for
+  # it. What should not happen silently is sending credentials over it to
+  # another machine, where every hop in between can read them.
+  #
+  # So the opt-in is required only where the risk is: credentials configured,
+  # cleartext scheme, and an endpoint that is not this machine. A loopback
+  # endpoint never leaves the host and is exempt, which is what keeps the
+  # documented default configuration — `http://localhost:8529` with `:auth` —
+  # working untouched.
   defp validate_cleartext_auth!(opts) do
     with false <- Keyword.get(opts, :allow_cleartext_auth, false) == true,
          true <- credentialed?(opts),
