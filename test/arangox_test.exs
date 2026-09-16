@@ -249,7 +249,11 @@ defmodule ArangoxTest do
   test "auth resolution with velocy client" do
     {:ok, conn1} =
       Arangox.start_link(
-        opts(endpoints: [@vst], auth: {:basic, "root", ""}, client: Arangox.VelocyClient)
+        opts(
+          endpoints: [@failover_1, @failover_2, @failover_3],
+          auth: {:basic, "root", ""},
+          client: Arangox.VelocyClient
+        )
       )
 
     assert %Response{status: 200} = Arangox.get!(conn1, "/_admin/server/mode")

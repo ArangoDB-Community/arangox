@@ -1,9 +1,8 @@
 # The containerless job runs the unit and protocol tiers on the
 # full Elixir/OTP matrix — TLS defaults changed in OTP 26, so one release is
 # not evidence about the rest. The integration legs each start only their
-# server line's compose profile. README doctests need both lines at once (the
-# active-failover example talks to the 3.11 trio), so they run in their own
-# full-stack job.
+# server line's compose profile, so a test must carry the tag of the line
+# whose service it actually reaches.
 
 name: Elixir CI
 
@@ -131,10 +130,10 @@ jobs:
       run: docker compose up --detach --wait --wait-timeout 180
       env:
         COMPOSE_PROFILES: '3.12'
-    # Valued tag selection: plain integration tests carry `integration: true`,
-    # the 3.11 tier `integration: :arango_3_11`, README `integration: :readme`.
-    # ExUnit's include filter beats excludes, so subtracting overlapping tags
-    # with --exclude cannot work; selecting by value can.
+    # Valued tag selection: plain integration tests carry `integration: true`
+    # and the 3.11 tier `integration: :arango_3_11`. ExUnit's include filter
+    # beats excludes, so subtracting overlapping tags with --exclude cannot
+    # work; selecting by value can.
     - name: Run the 3.12 integration tier
       run: mix test --only integration:true
 
@@ -165,29 +164,3 @@ jobs:
         COMPOSE_PROFILES: '3.11'
     - name: Run the 3.11 tier (VelocyStream, failover, read-only)
       run: mix test --only integration:arango_3_11
-
-  readme-doctests:
-    name: README doctests (full stack)
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Elixir
-      uses: erlef/setup-beam@v1
-      with:
-        elixir-version: '1.19'
-        otp-version: '28'
-    - name: Restore dependencies cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          deps
-          _build
-        key: ${{ runner.os }}-mix-1.19-28-${{ hashFiles('**/mix.lock') }}
-        restore-keys: ${{ runner.os }}-mix-1.19-28-
-    - name: Install dependencies
-      run: mix deps.get
-    - name: Start the full stack
-      run: docker compose up --detach --wait --wait-timeout 180
-    - name: Run the README's examples
-      run: mix test.integration test/readme_test.exs

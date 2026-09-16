@@ -49,10 +49,12 @@ Three tiers:
   (`docker compose up --detach --wait`). Its preflight probe expects the full
   stack; `ARANGOX_SKIP_DOCKER_CHECK=1 mix test --only integration <file>`
   runs a subset against whatever is up. Integration tests carry a *valued*
-  tag — `integration: true` (3.12 tier), `integration: :arango_3_11` (the
-  3.11 trio), `integration: :readme` (README doctests, full stack) — so CI
-  legs select by value (`--only integration:arango_3_11`) while the bare
-  `--only integration` behind `mix test.integration` matches all of them.
+  tag — `integration: true` (3.12 tier) and `integration: :arango_3_11` (the
+  3.11 trio) — so CI legs select by value (`--only integration:arango_3_11`)
+  while the bare `--only integration` behind `mix test.integration` matches
+  both. A test must carry the tag of the server line whose service it reaches,
+  not the one whose feature it is about: each CI leg starts a single compose
+  profile, so a test tagged for the other line finds nothing listening.
   Compose profiles mirror the split (`3.12`/`3.11`); the committed `.env`
   enables both so plain `docker compose up` is unchanged.
 

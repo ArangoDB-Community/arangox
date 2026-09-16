@@ -272,6 +272,7 @@ defmodule Arangox.ClientTest do
     # certificate is refused until the caller says otherwise. Stays on the 3.12
     # service: it is the only one with a TLS endpoint, and nothing here reaches
     # the VelocyStream protocol — `connect/2` writes the handshake and returns.
+    @tag integration: true
     test "ssl and ssl_opts" do
       assert {:error, %Arangox.Error{}} = VelocyClient.connect(@ssl, [])
 
