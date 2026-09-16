@@ -1,13 +1,13 @@
-defmodule Arangox.Api.Security do
+defmodule Arangox.API.Security do
   @moduledoc """
   ArangoDB's Security operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   Reload the TLS data
@@ -23,6 +23,7 @@ defmodule Arangox.Api.Security do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "server", "tls"],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -57,6 +58,7 @@ defmodule Arangox.Api.Security do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "server", "encryption"],
+      database_scope: :server,
       opts: opts
     )
   end

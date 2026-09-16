@@ -1,16 +1,16 @@
-defmodule Arangox.Api.SurfaceIntegrationTest do
+defmodule Arangox.API.SurfaceIntegrationTest do
   @moduledoc """
-  Spot-verification of the owned `Arangox.Api.*` surface against a live 3.12
-  server. `Arangox.Api.ConformanceTest` proves every operation exists and
+  Spot-verification of the owned `Arangox.API.*` surface against a live 3.12
+  server. `Arangox.API.ConformanceTest` proves every operation exists and
   addresses what the server describes; these prove the shape is *correct* on
   the wire — one read, one write, one delete, a path parameter that needs
-  encoding, a query parameter, the revision a `HEAD` answers, and an error.
+  encoding, a query parameter, the revision a `HEAD` returns, and an error.
   Neither substitutes for the other.
   """
 
   use ExUnit.Case
 
-  alias Arangox.Api.{Administration, Collections, Documents}
+  alias Arangox.API.{Administration, Collections, Documents}
   alias Arangox.Error
 
   @moduletag :integration
@@ -31,7 +31,7 @@ defmodule Arangox.Api.SurfaceIntegrationTest do
     end
   end
 
-  test "a read answers the decoded body, not a response struct", %{conn: conn} do
+  test "a read returns the decoded body, not a response struct", %{conn: conn} do
     assert {:ok, %{"server" => "arango", "version" => version}} = Administration.version(conn)
     assert version =~ ~r/^3\.12\./
   end
@@ -45,7 +45,7 @@ defmodule Arangox.Api.SurfaceIntegrationTest do
     end)
   end
 
-  test "a missing resource answers the driver's structured error", %{conn: conn} do
+  test "a missing resource returns the driver's structured error", %{conn: conn} do
     assert {:error, %Error{status: 404, error_num: error_num}} =
              Collections.get(conn, "surface_spot_absent")
 
@@ -77,7 +77,7 @@ defmodule Arangox.Api.SurfaceIntegrationTest do
   end
 
   # The whole value of a HEAD is the revision, which arrives in the etag.
-  test "a HEAD answers the document revision", %{conn: conn} do
+  test "a HEAD returns the document revision", %{conn: conn} do
     with_collection(conn, fn name ->
       assert {:ok, %{"_key" => key, "_rev" => rev}} =
                Documents.create(conn, name, %{"marker" => 4}, return_new: false)
@@ -105,9 +105,9 @@ defmodule Arangox.Api.SurfaceIntegrationTest do
   # falls back to the pool's own setting when absent.
   test "the :database option selects the database", %{conn: conn} do
     assert {:ok, %{"result" => %{"name" => "_system"}}} =
-             Arangox.Api.Databases.current(conn, database: "_system")
+             Arangox.API.Databases.current(conn, database: "_system")
 
     assert {:error, %Error{status: 404}} =
-             Arangox.Api.Databases.current(conn, database: "no_such_database")
+             Arangox.API.Databases.current(conn, database: "no_such_database")
   end
 end

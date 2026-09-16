@@ -23,7 +23,7 @@ defmodule Arangox.Query do
         use_plan_cache: true)
 
   It is opt-in rather than defaulted for two reasons. The server refuses to
-  cache some statements outright — an UPSERT answers `1584`,
+  cache some statements outright — an UPSERT is refused with `1584`,
   `:query_not_eligible_for_plan_caching` — and the option has a server-version
   floor of 3.12.4 that this driver gates on. Neither belongs to a caller who
   never asked for the cache.
@@ -138,6 +138,7 @@ defmodule Arangox.Query do
     end
   end
 
+  @spec validate_opts(keyword) :: :ok | {:error, Error.t()}
   defp validate_opts(opts) do
     case Enum.find(opts, fn {key, _value} -> key not in @known end) do
       nil ->
@@ -155,6 +156,7 @@ defmodule Arangox.Query do
     end
   end
 
+  @spec build(binary, Arangox.bindvars(), keyword) :: map
   defp build(statement, params, opts) do
     {properties, opts} = Keyword.pop(opts, :properties, [])
 
@@ -163,6 +165,7 @@ defmodule Arangox.Query do
     |> then(&Enum.into(properties, &1))
   end
 
+  @spec put_option({atom, term}, map) :: map
   defp put_option({key, value}, body) when is_map_key(@top_level, key),
     do: Map.put(body, Map.fetch!(@top_level, key), value)
 
@@ -174,7 +177,7 @@ defmodule Arangox.Query do
 
   defimpl DBConnection.Query do
     # `describe/2` runs on every prepare and `parse/2` on every unprepared
-    # execute. Both answer with the query unchanged: there is no server-side
+    # execute. Both return the query unchanged: there is no server-side
     # prepare to describe against, and the options are checked where an invalid
     # one can be reported as an error rather than raised through the callback.
     def parse(%Query{} = query, _opts), do: query
@@ -188,7 +191,7 @@ defmodule Arangox.Query do
     # Both a prepared execution and each batch of a streamed cursor arrive as
     # an `%Arangox.Response{}` the client already built, so there is nothing to
     # convert. Keep the clause this wide: a narrower one leaves `DBConnection`
-    # without an answer when a callback returns anything else.
+    # with no matching clause when a callback returns anything else.
     def decode(%Query{}, result, _opts), do: result
   end
 end

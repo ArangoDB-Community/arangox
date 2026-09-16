@@ -35,7 +35,7 @@ defmodule Arangox.Client do
   The set covers the socket genuinely being gone (`:closed`, `:econnreset`,
   `:epipe`, ...) and also `:timeout`/`:etimedout`, because a request/response
   exchange that timed out leaves an unread reply on the socket: the next request
-  on it would read the previous request's answer. `:noproc` is in the set too,
+  on it would read the previous request's response. `:noproc` is in the set too,
   so a third-party client written against the old sentinel keeps forcing
   disconnects.
 
@@ -130,7 +130,7 @@ defmodule Arangox.Client do
   # loaded scheduler cannot flip the order.
   #
   # `@min_socket_timeout` is the smallest wait worth starting. Below it the
-  # request is refused instead: issuing one whose answer nobody will read costs
+  # request is refused instead: issuing one whose response nobody will read costs
   # a round trip and, on HTTP/1.1, a connection.
   @timeout_margin 100
   @min_socket_timeout 25
@@ -142,6 +142,7 @@ defmodule Arangox.Client do
   # Reasons that mean the socket cannot be reused. Kept as an attribute so the
   # membership test compiles to a literal match rather than a list walk.
   @connection_lost_reasons [
+    :body_too_large,
     :closed,
     :econnaborted,
     :econnreset,
@@ -166,8 +167,10 @@ defmodule Arangox.Client do
   callbacks as needed. It can be anything — a tuple, another struct, whatever
   the client needs.
 
-  It's up to the client to consolidate the `:connect_timeout`, `:transport_opts`
-  and `:client_opts` options.
+  It's up to the client to consolidate `:connect_timeout`, `:tcp_opts`,
+  `:ssl_opts` and `:client_opts` into whatever its library takes. `:tcp_opts`
+  applies to a cleartext endpoint and `:ssl_opts` to an encrypted one, so a
+  client reads whichever the endpoint's `:ssl?` selects.
 
   Must not raise or exit, whatever the transport does with the options it was
   given: the connection's connect is a `DBConnection` callback, and an
@@ -235,12 +238,12 @@ defmodule Arangox.Client do
   Whether the connection in `state` is still usable.
 
   Returns `true` for a client that does not implement `c:alive?/1`: the callback
-  is optional, and a liveness probe that cannot be asked answers optimistically
+  is optional, and a liveness probe that cannot be asked reports optimistically
   rather than retiring a working connection. Implement `c:alive?/1` if a client
-  can answer more cheaply or more accurately than a request would.
+  can decide more cheaply or more accurately than a request would.
 
   The export check runs `Code.ensure_loaded?/1` first. `function_exported?/3`
-  answers `false` for a module that merely has not been **loaded** yet, which
+  returns `false` for a module that merely has not been **loaded** yet, which
   under lazy loading is any module nothing has called into — so the bare check
   would report a client as not implementing a callback it does implement, and
   the first request against a fresh node would silently take the default.
@@ -292,11 +295,12 @@ defmodule Arangox.Client do
   # the rule lives here rather than in a client. The transports do not agree:
   # HTTP/1.1 refuses such a value locally, while under HTTP/2 the header is
   # HPACK-encoded and only the server objects — so a transport-level check
-  # would name the offending header on one protocol and answer
+  # would name the offending header on one protocol and report
   # `:protocol_error` on the other, and the byte would reach the wire.
   #
   # The offending value is never echoed: for `authorization` it is the
   # credential itself, so only the header name is reported.
+  @spec check_headers(term) :: :ok | {:error, Error.t()}
   defp check_headers(headers) when is_map(headers) or is_list(headers) do
     Enum.find_value(headers, :ok, fn
       {name, value} when (is_binary(name) or is_atom(name)) and is_binary(value) ->
@@ -332,7 +336,7 @@ defmodule Arangox.Client do
 
   @doc false
   # The header-injection byte class. Applied to every request here and to the
-  # `:headers` option in `Arangox.Api.Client`; one implementation, so the two
+  # `:headers` option in `Arangox.API.Client`; one implementation, so the two
   # refusals cannot drift apart.
   @spec smuggling_byte?(binary) :: boolean
   def smuggling_byte?(<<byte, _rest::binary>>) when byte in [?\r, ?\n, 0], do: true
@@ -342,7 +346,7 @@ defmodule Arangox.Client do
   @doc false
   # The byte class that can alter a request path when interpolated into it.
   # Applied by `Arangox.Connection` to the `:database` name and by
-  # `Arangox.Api.Client` to path parameters; one implementation, so neither
+  # `Arangox.API.Client` to path parameters; one implementation, so neither
   # seam can become the bypass of the other.
   @spec path_altering_byte?(binary) :: boolean
   def path_altering_byte?(<<byte, _rest::binary>>)
@@ -518,8 +522,21 @@ defmodule Arangox.Client do
   def connection_lost?(reason) when reason in @connection_lost_reasons, do: true
   def connection_lost?(_reason), do: false
 
+  @doc false
+  @spec body_too_large(non_neg_integer | nil, non_neg_integer, pos_integer) :: Error.t()
+  def body_too_large(status, received, max) do
+    %Error{
+      reason: :body_too_large,
+      status: status,
+      message:
+        "response body exceeded :max_body_size (#{max}) after receiving #{received} bytes; " <>
+          "raise the pool option if the workload is legitimate"
+    }
+  end
+
   # A third-party client written against the pre-0.8 two-argument callback
   # fails here rather than as a bare UndefinedFunctionError at first request.
+  @spec translate_legacy_arity(Exception.t(), module) :: Exception.t()
   defp translate_legacy_arity(
          %UndefinedFunctionError{module: client, function: :request, arity: 3} = exception,
          client

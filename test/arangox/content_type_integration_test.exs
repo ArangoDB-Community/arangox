@@ -4,7 +4,7 @@ defmodule Arangox.ContentTypeIntegrationTest do
 
   `Arangox.ContentTypeTest` pins the wire shape at the protocol tier with a
   scripted client; these prove the negotiation is real — the server accepts
-  VelocyPack request bodies over HTTP, answers in VelocyPack when asked, and
+  VelocyPack request bodies over HTTP, responds in VelocyPack when asked, and
   a document reads back identically through either codec.
   """
 
@@ -86,7 +86,7 @@ defmodule Arangox.ContentTypeIntegrationTest do
     end)
   end
 
-  # Decoding follows the response's content type, so a JSON answer under a
+  # Decoding follows the response's content type, so a JSON response under a
   # VelocyPack pool must still be read — here forced through the documented
   # per-request header override, which wins over the pool default.
   test "a JSON response under a VelocyPack pool is decoded by its own content type", %{

@@ -42,7 +42,7 @@ defmodule Arangox.ErrnoTest do
       a new server tag, update priv/arangodb/README.md, gen_errno.exs and this
       test together. Errno.tag/0 is the repo's single version pin: the API
       conformance gate (test/arangox/api/conformance_test.exs) holds it to the
-      live server's /_api/version answer, so a re-pin also moves that gate's
+      live server's /_api/version response, so a re-pin also moves that gate's
       expectations.
       """
     end

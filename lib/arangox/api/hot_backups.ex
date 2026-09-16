@@ -1,13 +1,13 @@
-defmodule Arangox.Api.HotBackups do
+defmodule Arangox.API.HotBackups do
   @moduledoc """
   ArangoDB's HotBackups operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   List all backups
@@ -19,6 +19,7 @@ defmodule Arangox.Api.HotBackups do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "backup", "list"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -53,6 +54,7 @@ defmodule Arangox.Api.HotBackups do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "backup", "create"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -81,6 +83,7 @@ defmodule Arangox.Api.HotBackups do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "backup", "delete"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -111,6 +114,7 @@ defmodule Arangox.Api.HotBackups do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "backup", "download"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -141,6 +145,7 @@ defmodule Arangox.Api.HotBackups do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "backup", "restore"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -171,6 +176,7 @@ defmodule Arangox.Api.HotBackups do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "backup", "upload"],
+      database_scope: :server,
       body: body,
       opts: opts
     )

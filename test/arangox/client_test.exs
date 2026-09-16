@@ -1,6 +1,6 @@
 defmodule Arangox.ClientTest.ScriptedTransport do
   @moduledoc """
-  A `:gen_tcp`-shaped transport whose `recv/3` answers from a scripted queue.
+  A `:gen_tcp`-shaped transport whose `recv/3` serves from a scripted queue.
 
   `Arangox.VelocyClient` treats a socket as `{module, port}`; here the port is
   an `Agent` holding a list of `recv/3` replies, popped in order. `send/2`
@@ -202,7 +202,7 @@ defmodule Arangox.ClientTest do
     # `resilient_single` is an active-failover trio. Any member serves a read or
     # an authentication, which is why most of this block can name one port and
     # stop thinking about it — but `/_admin/echo` is a POST, and a follower
-    # answers that with `503 "not a leader"` and the leader's advertised
+    # responds to that with `503 "not a leader"` and the leader's advertised
     # endpoint. Which member leads is not fixed across container restarts, so it
     # is found rather than assumed.
     defp vst_leader! do

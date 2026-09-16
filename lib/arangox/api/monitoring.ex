@@ -1,13 +1,13 @@
-defmodule Arangox.Api.Monitoring do
+defmodule Arangox.API.Monitoring do
   @moduledoc """
   ArangoDB's Monitoring operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   Get the global server logs (deprecated)
@@ -45,6 +45,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "log"],
+      database_scope: :server,
       query: [
         upto: "upto",
         level: "level",
@@ -106,6 +107,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "log", "entries"],
+      database_scope: :server,
       query: [
         upto: "upto",
         level: "level",
@@ -156,6 +158,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "log", "level"],
+      database_scope: :server,
       query: [server_id: "serverId", with_appenders: "withAppenders"],
       opts: opts
     )
@@ -405,6 +408,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :delete,
       segments: ["_admin", "log", "level"],
+      database_scope: :server,
       query: [server_id: "serverId"],
       opts: opts
     )
@@ -464,6 +468,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :put,
       segments: ["_admin", "log", "level"],
+      database_scope: :server,
       body: body,
       query: [server_id: "serverId", with_appenders: "withAppenders"],
       opts: opts
@@ -505,6 +510,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :put,
       segments: ["_admin", "log", "structured"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -822,6 +828,7 @@ defmodule Arangox.Api.Monitoring do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "log", "structured"],
+      database_scope: :server,
       opts: opts
     )
   end

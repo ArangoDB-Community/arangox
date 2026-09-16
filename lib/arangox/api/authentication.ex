@@ -1,13 +1,13 @@
-defmodule Arangox.Api.Authentication do
+defmodule Arangox.API.Authentication do
   @moduledoc """
   ArangoDB's Authentication operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   List all access tokens
@@ -36,6 +36,7 @@ defmodule Arangox.Api.Authentication do
     Client.request(conn,
       method: :get,
       segments: ["_api", "token", user],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -72,6 +73,7 @@ defmodule Arangox.Api.Authentication do
     Client.request(conn,
       method: :post,
       segments: ["_api", "token", user],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -107,6 +109,7 @@ defmodule Arangox.Api.Authentication do
     Client.request(conn,
       method: :post,
       segments: ["_open", "auth"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -141,6 +144,7 @@ defmodule Arangox.Api.Authentication do
     Client.request(conn,
       method: :delete,
       segments: ["_api", "token", user, token_id],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -176,6 +180,7 @@ defmodule Arangox.Api.Authentication do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "server", "jwt"],
+      database_scope: :server,
       opts: opts
     )
   end

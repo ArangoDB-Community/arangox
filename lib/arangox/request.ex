@@ -74,10 +74,12 @@ defimpl Inspect, for: Arangox.Request do
     )
   end
 
+  @spec field({atom, term}, Inspect.Opts.t()) :: Inspect.Algebra.t()
   defp field({key, value}, opts) do
     concat([Atom.to_string(key), ": ", to_doc(value, opts)])
   end
 
+  @spec redact_headers(term) :: term
   defp redact_headers(headers) when is_map(headers) do
     Map.new(headers, fn {name, value} ->
       if Arangox.Request.sensitive_header?(name), do: {name, @redacted}, else: {name, value}

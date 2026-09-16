@@ -43,6 +43,48 @@ defmodule Arangox.ClientContractTest do
 
   defp state_for(client, socket), do: struct(Connection, socket: socket, client: client)
 
+  describe "the socket options a caller sets reach the socket:" do
+    # Both HTTP clients build their library's socket options from `:tcp_opts`
+    # or `:ssl_opts` plus the write bounds, then merge `:client_opts` over
+    # that per key. A client that replaced the key wholesale would drop the
+    # write bounds for any caller who set one unrelated socket option.
+    test "gun merges :client_opts over the derived socket options per key" do
+      assert {:error, %Error{reason: reason}} =
+               GunClient.connect(refused_endpoint(),
+                 tcp_opts: [not_a_socket_option: true],
+                 client_opts: %{tcp_opts: [nodelay: true]}
+               )
+
+      assert reason == :badarg,
+             "the derived list was replaced rather than merged: the unrecognised option " <>
+               "never reached the socket, so the write bounds would not have either"
+    end
+
+    test "gun reaches the socket at all when nothing is overridden" do
+      assert {:error, %Error{reason: :econnrefused}} = GunClient.connect(refused_endpoint(), [])
+    end
+
+    # `Mint.TransportError` renders a reason it does not special-case through
+    # `:ssl.format_error/1`, which requires an atom. A tagged tuple makes that
+    # raise, and `Exception.message/1` answers with a diagnostic carrying a
+    # stack trace, which would become this error's message.
+    test "mint describes an unrecognised socket option instead of quoting a diagnostic" do
+      assert {:error, %Error{reason: :badarg, message: message}} =
+               MintClient.connect(Endpoint.new("https://localhost:#{@refused}"),
+                 ssl_opts: [verify: :verify_none, not_a_socket_option: true]
+               )
+
+      assert message =~ "not_a_socket_option", "the message must name the option at fault"
+      refute message =~ "Exception.message", "the message must not be a formatting diagnostic"
+      refute message =~ "Stacktrace", "the message must not carry a stack trace"
+    end
+
+    test "mint still uses the library's own wording for a reason it can format" do
+      assert {:error, %Error{reason: :econnrefused, message: "connection refused"}} =
+               MintClient.connect(refused_endpoint(), [])
+    end
+  end
+
   describe "one error contract:" do
     for client <- @clients do
       @client client
@@ -141,7 +183,7 @@ defmodule Arangox.ClientContractTest do
       assert_receive {:connected, connection}, 1_000
       assert {:ok, %Response{} = before} = Arangox.get(pool, "/fine")
 
-      # `/boom` answers with reason :closed, which is in
+      # `/boom` responds with reason :closed, which is in
       # Arangox.Client.connection_lost_reasons/0.
       assert {:error, %Error{reason: :closed}} = Arangox.get(pool, "/boom")
 
@@ -211,7 +253,7 @@ defmodule Arangox.ClientContractTest do
       assert Process.get(:alive_called), "Arangox.Client.alive?/1 did not reach the callback"
     end
 
-    # THE TRAP. `function_exported?/3` answers false for a module that has not
+    # THE TRAP. `function_exported?/3` returns false for a module that has not
     # been *loaded*, which under lazy loading is any module nothing has called
     # into yet. Without `Code.ensure_loaded?/1` first, a client that does
     # implement alive?/1 would be reported as not implementing it, and the
@@ -231,7 +273,7 @@ defmodule Arangox.ClientContractTest do
              "the module is still loaded, so this test proves nothing"
 
       refute function_exported?(Alive, :alive?, 1),
-             "function_exported?/3 answered true for an unloaded module; the trap is gone " <>
+             "function_exported?/3 returned true for an unloaded module; the trap is gone " <>
                "and this test no longer proves the guard is needed"
 
       assert Client.implements_alive?(Alive),

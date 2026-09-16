@@ -66,7 +66,7 @@ defmodule Arangox.DeadlineTest do
       }
 
     # Enough of the cursor protocol for one two-batch stream: the declare
-    # answers `hasMore`, so `handle_fetch/4` makes a second request.
+    # reports `hasMore`, so `handle_fetch/4` makes a second request.
     defp reply(:post, "/_api/cursor"),
       do: %Response{
         status: 201,

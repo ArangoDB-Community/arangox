@@ -79,24 +79,31 @@ if Code.ensure_loaded?(:gun) do
       connect_timeout = Keyword.get(opts, :connect_timeout, 5_000)
       client_opts = Keyword.get(opts, :client_opts, %{})
 
+      # Gun applies `{send_timeout, 15000}` only when `:tcp_opts` is *absent*
+      # from its options map (gun.erl `domain_lookup/3`), and this key is
+      # always present — so the bounds are merged under the caller's list
+      # rather than used as its default. Supplying `tcp_opts: [nodelay: true]`
+      # would otherwise remove the write bound as surely as passing an empty
+      # list did.
+      tcp_opts = Keyword.merge(@default_send_opts, Keyword.get(opts, :tcp_opts, []))
+      tls_opts = Keyword.get(opts, :ssl_opts, [])
+
       options =
-        Map.merge(
-          %{
-            http_opts: %{keepalive: :infinity},
-            retry: 0,
-            transport: if(ssl?, do: :tls, else: :tcp),
-            # Gun applies `{send_timeout, 15000}` only when `:tcp_opts` is
-            # *absent* from its options map (gun.erl `domain_lookup/3`), and
-            # this key is always present — so the bounds are merged under the
-            # caller's list rather than used as its default. Supplying
-            # `tcp_opts: [nodelay: true]` would otherwise remove the write
-            # bound as surely as passing an empty list did.
-            tcp_opts: Keyword.merge(@default_send_opts, Keyword.get(opts, :tcp_opts, [])),
-            tls_opts: Keyword.get(opts, :ssl_opts, []),
-            connect_timeout: connect_timeout
-          },
-          client_opts
-        )
+        %{
+          http_opts: %{keepalive: :infinity},
+          retry: 0,
+          transport: if(ssl?, do: :tls, else: :tcp),
+          tcp_opts: tcp_opts,
+          tls_opts: tls_opts,
+          connect_timeout: connect_timeout
+        }
+        |> Map.merge(client_opts)
+        # `:client_opts` merges per key, matching the mint client. A plain
+        # `Map.merge/2` would let a caller setting one unrelated transport
+        # option drop the write bounds above, or their own trust material.
+        |> merge_under(:tcp_opts, tcp_opts)
+        |> merge_under(:tls_opts, tls_opts)
+        |> Map.put(:transport, if(ssl?, do: :tls, else: :tcp))
 
       with {:ok, pid} <- open(addr, options),
            {:ok, _protocol} <- await_up(pid, connect_timeout) do
@@ -115,11 +122,13 @@ if Code.ensure_loaded?(:gun) do
         {:error, %Error{reason: :client_error, message: "threw: #{inspect(value)}"}}
     end
 
+    @spec open(Endpoint.addr(), map) :: {:ok, pid} | {:error, term}
     defp open({:unix, path}, options), do: Gun.open_unix(to_charlist(path), options)
     defp open({:tcp, host, port}, options), do: Gun.open(to_charlist(host), port, options)
 
     # `await_up/2` leaves the connection process running when it gives up, and
     # that process would outlive the failed connect.
+    @spec await_up(pid, timeout) :: {:ok, atom} | {:error, term}
     defp await_up(pid, timeout) do
       case Gun.await_up(pid, timeout) do
         {:ok, protocol} ->
@@ -168,6 +177,8 @@ if Code.ensure_loaded?(:gun) do
 
     # The budget covers the whole exchange, so it is re-derived
     # between the response and the body rather than applied to each.
+    @spec await_response(pid, reference, integer, keyword, Connection.t()) ::
+            {:ok, Response.t(), Connection.t()} | {:error, Error.t(), Connection.t()}
     defp await_response(pid, ref, deadline, opts, state) do
       with {:ok, timeout} <- timeout_for(deadline, opts, state),
            {:response, fin, status, headers} <- Gun.await(pid, ref, timeout) do
@@ -179,11 +190,11 @@ if Code.ensure_loaded?(:gun) do
             await_body(pid, ref, status, headers, deadline, opts, state)
         end
       else
-        # A 1xx is not the response; the real one follows on the same stream,
-        # and the deadline keeps a server streaming 1xx forever bounded.
+        # Gun's own message vocabulary, translated at this boundary. A 1xx is
+        # not the response; the real one follows on the same stream, and the
+        # deadline keeps a server streaming 1xx forever bounded.
         {:inform, _status, _headers} -> await_response(pid, ref, deadline, opts, state)
         {:error, reason} -> {:error, normalize(reason), state}
-        %Error{} = error -> {:error, error, state}
       end
     end
 
@@ -192,24 +203,56 @@ if Code.ensure_loaded?(:gun) do
     # the *same* duration after every `nofin` chunk (gun.erl `await_body/5`),
     # so a peer sending one byte before each expiry holds the connection
     # forever. A bound applied per receive is not a bound on the request.
-    defp await_body(pid, ref, status, headers, deadline, opts, state, acc \\ []) do
+    @spec await_body(
+            pid,
+            reference,
+            non_neg_integer,
+            [{binary, binary}],
+            integer,
+            keyword,
+            Connection.t()
+          ) ::
+            {:ok, Response.t(), Connection.t()} | {:error, Error.t(), Connection.t()}
+    defp await_body(pid, ref, status, headers, deadline, opts, state),
+      do: await_body(pid, ref, status, headers, deadline, opts, state, [], 0)
+
+    @spec await_body(
+            pid,
+            reference,
+            non_neg_integer,
+            [{binary, binary}],
+            integer,
+            keyword,
+            Connection.t(),
+            [binary],
+            non_neg_integer
+          ) ::
+            {:ok, Response.t(), Connection.t()} | {:error, Error.t(), Connection.t()}
+    defp await_body(pid, ref, status, headers, deadline, opts, state, acc, size) do
       with {:ok, timeout} <- timeout_for(deadline, opts, state),
            {:data, fin, data} <- Gun.await(pid, ref, timeout) do
-        acc = [data | acc]
+        size = size + byte_size(data)
 
-        case fin do
-          :fin -> {:ok, response(status, headers, acc), state}
-          :nofin -> await_body(pid, ref, status, headers, deadline, opts, state, acc)
+        if size > state.max_body_size do
+          {:error, Client.body_too_large(status, size, state.max_body_size), state}
+        else
+          acc = [data | acc]
+
+          case fin do
+            :fin -> {:ok, response(status, headers, acc), state}
+            :nofin -> await_body(pid, ref, status, headers, deadline, opts, state, acc, size)
+          end
         end
       else
+        # Gun's own message vocabulary, translated at this boundary.
         # Trailers end the body; the driver does not surface them here.
         {:trailers, _trailers} -> {:ok, response(status, headers, acc), state}
         {:error, reason} -> {:error, normalize(reason), state}
-        %Error{} = error -> {:error, error, state}
         other -> {:error, normalize(other), state}
       end
     end
 
+    @spec response(non_neg_integer, [{binary, binary}], [binary]) :: Response.t()
     defp response(status, headers, acc) do
       %Response{
         status: status,
@@ -220,16 +263,19 @@ if Code.ensure_loaded?(:gun) do
 
     # `:elapsed` mid-response means the stream was abandoned part-read, so the
     # reason has to be one that retires the connection.
+    @spec timeout_for(integer, keyword, Connection.t()) ::
+            {:ok, pos_integer} | {:error, Error.t()}
     defp timeout_for(deadline, opts, state) do
       case Client.socket_timeout(deadline, opts, state) do
         {:ok, timeout} ->
           {:ok, timeout}
 
         :elapsed ->
-          %Error{
-            reason: :timeout,
-            message: "the request timeout elapsed before the response was fully received"
-          }
+          {:error,
+           %Error{
+             reason: :timeout,
+             message: "the request timeout elapsed before the response was fully received"
+           }}
       end
     end
 
@@ -241,6 +287,7 @@ if Code.ensure_loaded?(:gun) do
 
     ## Error normalization
 
+    @spec normalize(term) :: Error.t()
     defp normalize(%Error{} = error), do: error
 
     defp normalize({:shutdown, reason}), do: normalize(reason)
@@ -290,6 +337,17 @@ if Code.ensure_loaded?(:gun) do
     defp normalize(reason),
       do: %Error{reason: :client_error, message: inspect(reason)}
 
+    @spec connection_error(term) :: Error.t()
+    # Anything that is not a list is left for gun to reject: its transport
+    # options are proplists, so a map or a binary here is already wrong and
+    # `Keyword.merge/2` would raise on it inside a callback that must not.
+    defp merge_under(options, key, derived) do
+      Map.update(options, key, derived, fn
+        given when is_list(given) -> Keyword.merge(derived, given)
+        given -> given
+      end)
+    end
+
     defp connection_error(reason) when is_atom(reason) do
       if Client.connection_lost?(%Error{reason: reason}),
         do: %Error{reason: reason, message: inspect(reason)},
@@ -299,10 +357,12 @@ if Code.ensure_loaded?(:gun) do
     defp connection_error(reason),
       do: %Error{reason: :closed, message: "the connection failed: #{inspect(reason)}"}
 
+    @spec option_name(term) :: binary
     defp option_name({name, _value}) when is_atom(name), do: inspect(name)
     defp option_name(name) when is_atom(name), do: inspect(name)
     defp option_name(_term), do: "unknown"
 
+    @spec caught_reason(term) :: atom
     defp caught_reason({reason, _stack}) when is_atom(reason), do: reason
     defp caught_reason(reason) when is_atom(reason), do: reason
     defp caught_reason(_reason), do: :client_error

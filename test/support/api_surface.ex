@@ -1,9 +1,9 @@
 defmodule Arangox.TestSupport.ApiSurface do
   @moduledoc """
-  Reads the owned `Arangox.Api.*` operation sources as data.
+  Reads the owned `Arangox.API.*` operation sources as data.
 
-  Both gates over the surface — the pure-source `Arangox.Api.SurfaceTest` and
-  the live `Arangox.Api.ConformanceTest` — need the same facts out of the same
+  Both gates over the surface — the pure-source `Arangox.API.SurfaceTest` and
+  the live `Arangox.API.ConformanceTest` — need the same facts out of the same
   files: which operations exist, and what each one puts on the wire. Parsing
   happens here once, from the AST rather than from the source text, so an
   operation written in a shape these checks cannot read raises instead of
@@ -55,13 +55,13 @@ defmodule Arangox.TestSupport.ApiSurface do
     case call_spec(body) do
       nil ->
         # A bang form delegates to its own non-bang twin rather than calling
-        # the adapter again; it carries no wire facts of its own. Any other
-        # shape is refused here rather than recorded as fact-free: the gates
-        # all skip an operation whose spec is nil, so accepting one would let
-        # it past every check silently.
-        unless bang?(name) do
+        # the adapter again; it carries no wire facts of its own. The target
+        # and forwarded arguments are still checked before recording it.
+        if bang?(name) do
+          validate_bang_delegate!(body, name, args, file)
+        else
           raise "#{file}: #{name}/#{length(args)} does not call the adapter directly; " <>
-                  "every operation reaches the network through Arangox.Api.Client.request/2"
+                  "every operation reaches the network through Arangox.API.Client.request/2"
         end
 
         %{fun: name, arity: length(args), bang?: true, spec: nil}
@@ -92,6 +92,51 @@ defmodule Arangox.TestSupport.ApiSurface do
     do: raise("#{file}: cannot read a function head from #{inspect(other)}")
 
   defp bang?(name), do: name |> Atom.to_string() |> String.ends_with?("!")
+
+  defp validate_bang_delegate!(
+         {:case, _, [{delegate, _, delegate_args}, [do: _clauses]]},
+         name,
+         args,
+         file
+       )
+       when is_atom(delegate) and is_list(delegate_args) do
+    expected_delegate =
+      name
+      |> Atom.to_string()
+      |> String.trim_trailing("!")
+
+    expected_args = Enum.map(args, &argument_name!(&1, file, name))
+    forwarded_args = Enum.map(delegate_args, &argument_name!(&1, file, name))
+
+    if Atom.to_string(delegate) != expected_delegate or forwarded_args != expected_args do
+      invalid_bang_delegate!(file, name, length(args), expected_delegate)
+    end
+  end
+
+  defp validate_bang_delegate!(_body, name, args, file) do
+    expected_delegate =
+      name
+      |> Atom.to_string()
+      |> String.trim_trailing("!")
+
+    invalid_bang_delegate!(file, name, length(args), expected_delegate)
+  end
+
+  defp argument_name!({:\\, _, [argument, _default]}, file, name),
+    do: argument_name!(argument, file, name)
+
+  defp argument_name!({argument, _, context}, _file, _name)
+       when is_atom(argument) and is_atom(context),
+       do: argument
+
+  defp argument_name!(argument, file, name) do
+    raise "#{file}: #{name} must use bare arguments, got: #{inspect(argument)}"
+  end
+
+  defp invalid_bang_delegate!(file, name, arity, expected_delegate) do
+    raise "#{file}: #{name}/#{arity} must delegate to #{expected_delegate}/#{arity} " <>
+            "with the same arguments"
+  end
 
   # The positional arguments an operation takes, in order, without `conn` and
   # without the trailing `opts \\ []`.

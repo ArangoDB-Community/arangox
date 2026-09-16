@@ -33,7 +33,7 @@ defmodule Arangox.Response do
 
   Present only when a query asked for the plan cache with `use_plan_cache: true`
   **and** the server had a cached plan to serve it from — which means the first
-  execution of a statement answers `nil` and later ones answer the key, since
+  execution of a statement returns `nil` and later ones return the key, since
   the first is what populates the entry.
 
   The same key identifies the entry in `Arangox.plan_cache/2`, under `"hash"`.

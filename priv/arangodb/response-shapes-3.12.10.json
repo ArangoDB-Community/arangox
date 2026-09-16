@@ -1,6 +1,6 @@
 {
   "captured": {
-    "Arangox.Api.Monitoring.statistics_description/2": {
+    "Arangox.API.Monitoring.statistics_description/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -24,7 +24,7 @@
         ]
       }
     },
-    "Arangox.Api.Users.database_permissions/4": {
+    "Arangox.API.Users.database_permissions/4": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -32,11 +32,11 @@
         "result": "string"
       }
     },
-    "Arangox.Api.Monitoring.metrics_v2/2": {
+    "Arangox.API.Monitoring.metrics_v2/2": {
       "outcome": "ok",
       "shape": "string"
     },
-    "Arangox.Api.Administration.status/2": {
+    "Arangox.API.Administration.status/2": {
       "outcome": "ok",
       "shape": {
         "foxxApi": "boolean",
@@ -61,7 +61,7 @@
         "version": "string"
       }
     },
-    "Arangox.Api.Collections.all/2": {
+    "Arangox.API.Collections.all/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -78,7 +78,7 @@
         ]
       }
     },
-    "Arangox.Api.Analyzers.all/2": {
+    "Arangox.API.Analyzers.all/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -101,7 +101,7 @@
         ]
       }
     },
-    "Arangox.Api.Users.get/3": {
+    "Arangox.API.Users.get/3": {
       "outcome": "ok",
       "shape": {
         "active": "boolean",
@@ -111,7 +111,7 @@
         "user": "string"
       }
     },
-    "Arangox.Api.Replication.wal_tail/2": {
+    "Arangox.API.Replication.wal_tail/2": {
       "outcome": "ok",
       "shape": [
         {
@@ -122,7 +122,7 @@
         }
       ]
     },
-    "Arangox.Api.Cluster.health/2": {
+    "Arangox.API.Cluster.health/2": {
       "outcome": "ok",
       "shape": {
         "ClusterId": "string",
@@ -249,7 +249,7 @@
         "error": "boolean"
       }
     },
-    "Arangox.Api.Monitoring.statistics/2": {
+    "Arangox.API.Monitoring.statistics/2": {
       "outcome": "ok",
       "shape": {
         "client": {
@@ -423,7 +423,7 @@
         "time": "float"
       }
     },
-    "Arangox.Api.Import.data/4": {
+    "Arangox.API.Import.data/4": {
       "outcome": "ok",
       "shape": {
         "created": "integer",
@@ -434,7 +434,7 @@
         "updated": "integer"
       }
     },
-    "Arangox.Api.Monitoring.log_entries/2": {
+    "Arangox.API.Monitoring.log_entries/2": {
       "outcome": "ok",
       "shape": {
         "messages": [
@@ -449,11 +449,11 @@
         "total": "integer"
       }
     },
-    "Arangox.Api.Queries.all/2": {
+    "Arangox.API.Queries.all/2": {
       "outcome": "ok",
       "shape": []
     },
-    "Arangox.Api.Administration.engine/2": {
+    "Arangox.API.Administration.engine/2": {
       "outcome": "ok",
       "shape": {
         "endianness": "string",
@@ -472,7 +472,7 @@
         }
       }
     },
-    "Arangox.Api.Indexes.all/3": {
+    "Arangox.API.Indexes.all/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -519,7 +519,7 @@
         ]
       }
     },
-    "Arangox.Api.Foxx.all/2": {
+    "Arangox.API.Foxx.all/2": {
       "outcome": "ok",
       "shape": [
         {
@@ -532,7 +532,7 @@
         }
       ]
     },
-    "Arangox.Api.Administration.all_crash_dumps/2": {
+    "Arangox.API.Administration.all_crash_dumps/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -540,7 +540,7 @@
         "result": []
       }
     },
-    "Arangox.Api.Documents.create/4": {
+    "Arangox.API.Documents.create/4": {
       "outcome": "ok",
       "shape": {
         "_id": "string",
@@ -548,7 +548,7 @@
         "_rev": "string"
       }
     },
-    "Arangox.Api.Collections.checksum/3": {
+    "Arangox.API.Collections.checksum/3": {
       "outcome": "ok",
       "shape": {
         "checksum": "string",
@@ -563,7 +563,7 @@
         "type": "integer"
       }
     },
-    "Arangox.Api.Views.all/2": {
+    "Arangox.API.Views.all/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -578,7 +578,7 @@
         ]
       }
     },
-    "Arangox.Api.Cluster.server_role/2": {
+    "Arangox.API.Cluster.server_role/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -587,7 +587,7 @@
         "role": "string"
       }
     },
-    "Arangox.Api.Cluster.server_id/2": {
+    "Arangox.API.Cluster.server_id/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -595,7 +595,7 @@
         "id": "string"
       }
     },
-    "Arangox.Api.Collections.get/3": {
+    "Arangox.API.Collections.get/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -608,7 +608,7 @@
         "type": "integer"
       }
     },
-    "Arangox.Api.Views.properties/3": {
+    "Arangox.API.Views.properties/3": {
       "outcome": "ok",
       "shape": {
         "cleanupIntervalStep": "integer",
@@ -636,7 +636,7 @@
         "writebufferSizeMax": "integer"
       }
     },
-    "Arangox.Api.Databases.delete/3": {
+    "Arangox.API.Databases.delete/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -644,12 +644,12 @@
         "result": "boolean"
       }
     },
-    "Arangox.Api.Administration.shutdown_progress/2": {
+    "Arangox.API.Administration.shutdown_progress/2": {
       "error_num": 405,
       "outcome": "error",
       "status": 405
     },
-    "Arangox.Api.Monitoring.recent_aql_queries/2": {
+    "Arangox.API.Monitoring.recent_aql_queries/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -669,7 +669,7 @@
         }
       }
     },
-    "Arangox.Api.Databases.all_user_accessible/2": {
+    "Arangox.API.Databases.all_user_accessible/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -679,11 +679,11 @@
         ]
       }
     },
-    "Arangox.Api.Monitoring.metrics/2": {
+    "Arangox.API.Monitoring.metrics/2": {
       "outcome": "ok",
       "shape": "string"
     },
-    "Arangox.Api.Queries.optimizer_rules/2": {
+    "Arangox.API.Queries.optimizer_rules/2": {
       "outcome": "ok",
       "shape": [
         {
@@ -700,7 +700,7 @@
         }
       ]
     },
-    "Arangox.Api.Administration.time/2": {
+    "Arangox.API.Administration.time/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -708,7 +708,7 @@
         "time": "float"
       }
     },
-    "Arangox.Api.Databases.all/2": {
+    "Arangox.API.Databases.all/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -718,7 +718,7 @@
         ]
       }
     },
-    "Arangox.Api.Authentication.server_jwt_secrets/2": {
+    "Arangox.API.Authentication.server_jwt_secrets/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -731,7 +731,7 @@
         }
       }
     },
-    "Arangox.Api.Indexes.get/3": {
+    "Arangox.API.Indexes.get/3": {
       "outcome": "ok",
       "shape": {
         "cacheEnabled": "boolean",
@@ -750,7 +750,7 @@
         "unique": "boolean"
       }
     },
-    "Arangox.Api.Documents.update/5": {
+    "Arangox.API.Documents.update/5": {
       "outcome": "ok",
       "shape": {
         "_id": "string",
@@ -759,7 +759,7 @@
         "_rev": "string"
       }
     },
-    "Arangox.Api.Collections.shards/3": {
+    "Arangox.API.Collections.shards/3": {
       "outcome": "ok",
       "shape": {
         "__keys__": 28,
@@ -776,7 +776,7 @@
         "__shape__": "map"
       }
     },
-    "Arangox.Api.Monitoring.log_level/2": {
+    "Arangox.API.Monitoring.log_level/2": {
       "outcome": "ok",
       "shape": {
         "__keys__": 55,
@@ -793,7 +793,7 @@
         "__shape__": "map"
       }
     },
-    "Arangox.Api.Graphs.all_vertex_collections/3": {
+    "Arangox.API.Graphs.all_vertex_collections/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -803,7 +803,7 @@
         "error": "boolean"
       }
     },
-    "Arangox.Api.Queries.tracking_properties/2": {
+    "Arangox.API.Queries.tracking_properties/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -817,7 +817,7 @@
         "trackSlowQueries": "boolean"
       }
     },
-    "Arangox.Api.Documents.create_many/3": {
+    "Arangox.API.Documents.create_many/3": {
       "outcome": "ok",
       "shape": [
         {
@@ -827,7 +827,7 @@
         }
       ]
     },
-    "Arangox.Api.Monitoring.recent_api_calls/2": {
+    "Arangox.API.Monitoring.recent_api_calls/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -844,7 +844,7 @@
         }
       }
     },
-    "Arangox.Api.Transactions.all/2": {
+    "Arangox.API.Transactions.all/2": {
       "outcome": "ok",
       "shape": {
         "transactions": [
@@ -855,7 +855,7 @@
         ]
       }
     },
-    "Arangox.Api.Administration.effective_startup_options/2": {
+    "Arangox.API.Administration.effective_startup_options/2": {
       "outcome": "ok",
       "shape": {
         "__keys__": 471,
@@ -872,7 +872,7 @@
         "__shape__": "map"
       }
     },
-    "Arangox.Api.Cluster.all_endpoints/2": {
+    "Arangox.API.Cluster.all_endpoints/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -884,11 +884,11 @@
         "error": "boolean"
       }
     },
-    "Arangox.Api.Monitoring.usage_metrics/2": {
+    "Arangox.API.Monitoring.usage_metrics/2": {
       "outcome": "ok",
       "shape": "null"
     },
-    "Arangox.Api.Replication.wal_range/2": {
+    "Arangox.API.Replication.wal_range/2": {
       "outcome": "ok",
       "shape": {
         "server": {
@@ -900,7 +900,7 @@
         "time": "string"
       }
     },
-    "Arangox.Api.Administration.database_version/2": {
+    "Arangox.API.Administration.database_version/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -908,7 +908,7 @@
         "version": "string"
       }
     },
-    "Arangox.Api.Databases.create/3": {
+    "Arangox.API.Databases.create/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -916,7 +916,7 @@
         "result": "boolean"
       }
     },
-    "Arangox.Api.Transactions.execute_javascript/3": {
+    "Arangox.API.Transactions.execute_javascript/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -924,7 +924,7 @@
         "result": "integer"
       }
     },
-    "Arangox.Api.Collections.count/3": {
+    "Arangox.API.Collections.count/3": {
       "outcome": "ok",
       "shape": {
         "cacheEnabled": "boolean",
@@ -955,7 +955,7 @@
         "writeConcern": "integer"
       }
     },
-    "Arangox.Api.Collections.figures/3": {
+    "Arangox.API.Collections.figures/3": {
       "outcome": "ok",
       "shape": {
         "cacheEnabled": "boolean",
@@ -996,7 +996,7 @@
         "writeConcern": "integer"
       }
     },
-    "Arangox.Api.Administration.version/2": {
+    "Arangox.API.Administration.version/2": {
       "outcome": "ok",
       "shape": {
         "apiVersions": [
@@ -1009,7 +1009,7 @@
         "version": "string"
       }
     },
-    "Arangox.Api.Administration.available_startup_options/2": {
+    "Arangox.API.Administration.available_startup_options/2": {
       "outcome": "ok",
       "shape": {
         "__keys__": 475,
@@ -1026,7 +1026,7 @@
         "__shape__": "map"
       }
     },
-    "Arangox.Api.Graphs.all/2": {
+    "Arangox.API.Graphs.all/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1053,7 +1053,7 @@
         ]
       }
     },
-    "Arangox.Api.Administration.license/2": {
+    "Arangox.API.Administration.license/2": {
       "outcome": "ok",
       "shape": {
         "diskUsage": {
@@ -1067,7 +1067,7 @@
         "upgrading": "boolean"
       }
     },
-    "Arangox.Api.Databases.current/2": {
+    "Arangox.API.Databases.current/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1080,7 +1080,7 @@
         }
       }
     },
-    "Arangox.Api.Collections.rename/4": {
+    "Arangox.API.Collections.rename/4": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1093,7 +1093,7 @@
         "type": "integer"
       }
     },
-    "Arangox.Api.Monitoring.log/2": {
+    "Arangox.API.Monitoring.log/2": {
       "outcome": "ok",
       "shape": {
         "level": [
@@ -1114,7 +1114,7 @@
         "totalAmount": "integer"
       }
     },
-    "Arangox.Api.Replication.logger_state/2": {
+    "Arangox.API.Replication.logger_state/2": {
       "outcome": "ok",
       "shape": {
         "clients": [],
@@ -1132,7 +1132,7 @@
         }
       }
     },
-    "Arangox.Api.Administration.server_mode/2": {
+    "Arangox.API.Administration.server_mode/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1140,7 +1140,7 @@
         "mode": "string"
       }
     },
-    "Arangox.Api.Users.collection_permissions/5": {
+    "Arangox.API.Users.collection_permissions/5": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1148,7 +1148,7 @@
         "result": "string"
       }
     },
-    "Arangox.Api.Queries.parse/3": {
+    "Arangox.API.Queries.parse/3": {
       "outcome": "ok",
       "shape": {
         "ast": [
@@ -1178,7 +1178,7 @@
         "warnings": []
       }
     },
-    "Arangox.Api.Administration.server_availability/2": {
+    "Arangox.API.Administration.server_availability/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1186,7 +1186,7 @@
         "mode": "string"
       }
     },
-    "Arangox.Api.Replication.cluster_inventory/2": {
+    "Arangox.API.Replication.cluster_inventory/2": {
       "outcome": "ok",
       "shape": {
         "collections": [
@@ -1226,7 +1226,7 @@
         "views": []
       }
     },
-    "Arangox.Api.Graphs.get_vertex/5": {
+    "Arangox.API.Graphs.get_vertex/5": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1239,7 +1239,7 @@
         }
       }
     },
-    "Arangox.Api.Administration.engine_stats/2": {
+    "Arangox.API.Administration.engine_stats/2": {
       "outcome": "ok",
       "shape": {
         "__keys__": 69,
@@ -1256,7 +1256,7 @@
         "__shape__": "map"
       }
     },
-    "Arangox.Api.Collections.properties/3": {
+    "Arangox.API.Collections.properties/3": {
       "outcome": "ok",
       "shape": {
         "cacheEnabled": "boolean",
@@ -1286,7 +1286,7 @@
         "writeConcern": "integer"
       }
     },
-    "Arangox.Api.Administration.public_startup_options/2": {
+    "Arangox.API.Administration.public_startup_options/2": {
       "outcome": "ok",
       "shape": {
         "cluster.api-jwt-policy": "string",
@@ -1297,7 +1297,7 @@
         "server.session-timeout": "integer"
       }
     },
-    "Arangox.Api.Views.get/3": {
+    "Arangox.API.Views.get/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1308,7 +1308,7 @@
         "type": "string"
       }
     },
-    "Arangox.Api.Transactions.get/3": {
+    "Arangox.API.Transactions.get/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1319,7 +1319,7 @@
         }
       }
     },
-    "Arangox.Api.Queries.create_cursor/3": {
+    "Arangox.API.Queries.create_cursor/3": {
       "outcome": "ok",
       "shape": {
         "cached": "boolean",
@@ -1357,7 +1357,7 @@
         ]
       }
     },
-    "Arangox.Api.Administration.support_info/2": {
+    "Arangox.API.Administration.support_info/2": {
       "outcome": "ok",
       "shape": {
         "date": "string",
@@ -1409,7 +1409,7 @@
         }
       }
     },
-    "Arangox.Api.Collections.key_generators/2": {
+    "Arangox.API.Collections.key_generators/2": {
       "outcome": "ok",
       "shape": {
         "keyGenerators": [
@@ -1417,7 +1417,7 @@
         ]
       }
     },
-    "Arangox.Api.Cluster.imbalance/2": {
+    "Arangox.API.Cluster.imbalance/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1460,7 +1460,7 @@
         }
       }
     },
-    "Arangox.Api.Queries.all_aql_user_functions/2": {
+    "Arangox.API.Queries.all_aql_user_functions/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1468,7 +1468,7 @@
         "result": []
       }
     },
-    "Arangox.Api.Security.server_tls/2": {
+    "Arangox.API.Security.server_tls/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1476,7 +1476,7 @@
         "result": {}
       }
     },
-    "Arangox.Api.Documents.get_many/3": {
+    "Arangox.API.Documents.get_many/3": {
       "outcome": "ok",
       "shape": [
         {
@@ -1487,13 +1487,13 @@
         }
       ]
     },
-    "Arangox.Api.Administration.deployment_id/2": {
+    "Arangox.API.Administration.deployment_id/2": {
       "outcome": "ok",
       "shape": {
         "id": "string"
       }
     },
-    "Arangox.Api.Tasks.all/2": {
+    "Arangox.API.Tasks.all/2": {
       "outcome": "ok",
       "shape": [
         {
@@ -1508,7 +1508,7 @@
         }
       ]
     },
-    "Arangox.Api.Collections.create/3": {
+    "Arangox.API.Collections.create/3": {
       "outcome": "ok",
       "shape": {
         "cacheEnabled": "boolean",
@@ -1538,7 +1538,7 @@
         "writeConcern": "integer"
       }
     },
-    "Arangox.Api.Analyzers.get/3": {
+    "Arangox.API.Analyzers.get/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1549,7 +1549,7 @@
         "type": "string"
       }
     },
-    "Arangox.Api.Queries.query_cache_properties/2": {
+    "Arangox.API.Queries.query_cache_properties/2": {
       "outcome": "ok",
       "shape": {
         "includeSystem": "boolean",
@@ -1559,7 +1559,7 @@
         "mode": "string"
       }
     },
-    "Arangox.Api.Collections.delete/3": {
+    "Arangox.API.Collections.delete/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1567,7 +1567,7 @@
         "id": "string"
       }
     },
-    "Arangox.Api.Documents.replace/5": {
+    "Arangox.API.Documents.replace/5": {
       "outcome": "ok",
       "shape": {
         "_id": "string",
@@ -1576,7 +1576,7 @@
         "_rev": "string"
       }
     },
-    "Arangox.Api.Users.all_databases/3": {
+    "Arangox.API.Users.all_databases/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1584,7 +1584,7 @@
         "result": {}
       }
     },
-    "Arangox.Api.Collections.revision/3": {
+    "Arangox.API.Collections.revision/3": {
       "outcome": "ok",
       "shape": {
         "cacheEnabled": "boolean",
@@ -1615,7 +1615,7 @@
         "writeConcern": "integer"
       }
     },
-    "Arangox.Api.Replication.wal_last_tick/2": {
+    "Arangox.API.Replication.wal_last_tick/2": {
       "outcome": "ok",
       "shape": {
         "server": {
@@ -1626,11 +1626,11 @@
         "time": "string"
       }
     },
-    "Arangox.Api.Queries.all_query_cache_results/2": {
+    "Arangox.API.Queries.all_query_cache_results/2": {
       "outcome": "ok",
       "shape": []
     },
-    "Arangox.Api.Graphs.all_edge_collections/3": {
+    "Arangox.API.Graphs.all_edge_collections/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1640,7 +1640,7 @@
         "error": "boolean"
       }
     },
-    "Arangox.Api.Collections.truncate/3": {
+    "Arangox.API.Collections.truncate/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1653,7 +1653,7 @@
         "type": "integer"
       }
     },
-    "Arangox.Api.Administration.all_endpoints/2": {
+    "Arangox.API.Administration.all_endpoints/2": {
       "outcome": "ok",
       "shape": [
         {
@@ -1661,13 +1661,13 @@
         }
       ]
     },
-    "Arangox.Api.Authentication.all_access_tokens/3": {
+    "Arangox.API.Authentication.all_access_tokens/3": {
       "outcome": "ok",
       "shape": {
         "tokens": []
       }
     },
-    "Arangox.Api.Users.all/2": {
+    "Arangox.API.Users.all/2": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1681,7 +1681,7 @@
         ]
       }
     },
-    "Arangox.Api.Queries.explain/3": {
+    "Arangox.API.Queries.explain/3": {
       "outcome": "ok",
       "shape": {
         "cacheable": "boolean",
@@ -1730,11 +1730,11 @@
         "warnings": []
       }
     },
-    "Arangox.Api.Monitoring.structured_log/2": {
+    "Arangox.API.Monitoring.structured_log/2": {
       "outcome": "ok",
       "shape": {}
     },
-    "Arangox.Api.Documents.get/4": {
+    "Arangox.API.Documents.get/4": {
       "outcome": "ok",
       "shape": {
         "_id": "string",
@@ -1743,7 +1743,7 @@
         "marker": "integer"
       }
     },
-    "Arangox.Api.Graphs.get/3": {
+    "Arangox.API.Graphs.get/3": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1768,19 +1768,19 @@
         }
       }
     },
-    "Arangox.Api.Queries.all_slow/2": {
+    "Arangox.API.Queries.all_slow/2": {
       "outcome": "ok",
       "shape": []
     },
-    "Arangox.Api.Queries.all_query_cache_plans/2": {
+    "Arangox.API.Queries.all_query_cache_plans/2": {
       "outcome": "ok",
       "shape": []
     },
-    "Arangox.Api.Documents.header/4": {
+    "Arangox.API.Documents.header/4": {
       "outcome": "ok",
       "shape": "string"
     },
-    "Arangox.Api.Graphs.vertex_edges/4": {
+    "Arangox.API.Graphs.vertex_edges/4": {
       "outcome": "ok",
       "shape": {
         "code": "integer",
@@ -1816,49 +1816,49 @@
     }
   },
   "skipped": {
-    "Arangox.Api.Administration.crash_dump/3": [
+    "Arangox.API.Administration.crash_dump/3": [
       "crash_id"
     ],
-    "Arangox.Api.Cluster.dbserver_maintenance/3": [
+    "Arangox.API.Cluster.dbserver_maintenance/3": [
       "dbserver_id"
     ],
-    "Arangox.Api.Cluster.statistics/3": [
+    "Arangox.API.Cluster.statistics/3": [
       "d_bserver"
     ],
-    "Arangox.Api.Foxx.all_scripts/3": [
+    "Arangox.API.Foxx.all_scripts/3": [
       "mount"
     ],
-    "Arangox.Api.Foxx.configuration/3": [
+    "Arangox.API.Foxx.configuration/3": [
       "mount"
     ],
-    "Arangox.Api.Foxx.dependencies/3": [
+    "Arangox.API.Foxx.dependencies/3": [
       "mount"
     ],
-    "Arangox.Api.Foxx.description/3": [
+    "Arangox.API.Foxx.description/3": [
       "mount"
     ],
-    "Arangox.Api.Foxx.readme/3": [
+    "Arangox.API.Foxx.readme/3": [
       "mount"
     ],
-    "Arangox.Api.Foxx.swagger_description/3": [
+    "Arangox.API.Foxx.swagger_description/3": [
       "mount"
     ],
-    "Arangox.Api.Graphs.get_edge/5": [
+    "Arangox.API.Graphs.get_edge/5": [
       "edge"
     ],
-    "Arangox.Api.Jobs.get/3": [
+    "Arangox.API.Jobs.get/3": [
       "job_id"
     ],
-    "Arangox.Api.Replication.dump/4": [
+    "Arangox.API.Replication.dump/4": [
       "batch_id"
     ],
-    "Arangox.Api.Replication.inventory/3": [
+    "Arangox.API.Replication.inventory/3": [
       "batch_id"
     ],
-    "Arangox.Api.Replication.revision_tree/4": [
+    "Arangox.API.Replication.revision_tree/4": [
       "batch_id"
     ],
-    "Arangox.Api.Tasks.get/3": [
+    "Arangox.API.Tasks.get/3": [
       "id"
     ]
   },

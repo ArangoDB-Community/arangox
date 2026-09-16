@@ -126,8 +126,11 @@ defmodule Arangox.Endpoint do
 
   # Every endpoint that reaches a message goes through here, so a malformed
   # endpoint carrying credentials cannot leak them into a connect-failure log.
+  @spec shown(term) :: binary
   defp shown(endpoint), do: endpoint |> redact() |> inspect()
 
+  @spec build({:ok, addr} | :error, URI.t(), Arangox.endpoint(), :unix | :tcp) ::
+          {:ok, t} | {:error, binary}
   defp build({:ok, addr}, uri, _endpoint, _kind),
     do: {:ok, %__MODULE__{addr: addr, ssl?: ssl?(uri)}}
 
@@ -141,16 +144,19 @@ defmodule Arangox.Endpoint do
   # for exactly these the difference between "the user wrote it" and "the
   # parser assumed it" has to be read back off the endpoint — and only from
   # the authority: `:80` in a path or userinfo is not a port.
+  @spec do_port(non_neg_integer | nil, Arangox.endpoint()) :: non_neg_integer | nil
   defp do_port(80 = port, endpoint), do: maybe_do_port(port, endpoint)
   defp do_port(443 = port, endpoint), do: maybe_do_port(port, endpoint)
   defp do_port(port, _endpoint), do: port
 
+  @spec maybe_do_port(pos_integer, Arangox.endpoint()) :: pos_integer | nil
   defp maybe_do_port(port, endpoint) do
     if String.ends_with?(authority(endpoint), ":" <> Integer.to_string(port)),
       do: port,
       else: nil
   end
 
+  @spec authority(Arangox.endpoint()) :: binary
   defp authority(endpoint) do
     case :binary.match(endpoint, "://") do
       {scheme_len, 3} ->
@@ -166,19 +172,23 @@ defmodule Arangox.Endpoint do
     end
   end
 
+  @spec do_unix(URI.t()) :: {:ok, addr} | :error
   defp do_unix(%URI{path: nil}), do: :error
   defp do_unix(%URI{path: path}), do: {:ok, {:unix, path}}
 
+  @spec do_tcp(URI.t()) :: {:ok, addr} | :error
   defp do_tcp(%URI{host: nil}), do: :error
   defp do_tcp(%URI{port: nil}), do: :error
   defp do_tcp(%URI{host: ""}), do: :error
   defp do_tcp(%URI{host: host, port: port}), do: {:ok, {:tcp, host, port}}
 
+  @spec ssl?(URI.t()) :: boolean
   defp ssl?(%URI{scheme: "https" <> _}), do: true
   defp ssl?(%URI{scheme: "ssl" <> _}), do: true
   defp ssl?(%URI{scheme: "tls" <> _}), do: true
   defp ssl?(_uri), do: false
 
+  @spec unix?(URI.t()) :: {:ok, boolean} | :error
   defp unix?(%URI{scheme: "http", host: "unix"}), do: {:ok, true}
   defp unix?(%URI{scheme: "https", host: "unix"}), do: {:ok, true}
   defp unix?(%URI{scheme: "tcp", host: "unix"}), do: {:ok, true}

@@ -321,6 +321,7 @@ defmodule Arangox.Connection do
   # values. An endpoint
   # reached by redirect is not among the configured ones and stays as it is —
   # a server-advertised endpoint carries no credentials to reveal.
+  @spec reveal(Error.t(), config) :: Error.t()
   defp reveal(%Error{endpoint: endpoint} = exception, %{show_sensitive?: true} = config)
        when is_binary(endpoint) do
     case Enum.find(config.endpoints, &(is_binary(&1) and Endpoint.redact(&1) == endpoint)) do
@@ -372,6 +373,7 @@ defmodule Arangox.Connection do
     }
   end
 
+  @spec resolve_request_timeout([Arangox.start_option()]) :: pos_integer
   defp resolve_request_timeout(opts) do
     value = Keyword.get(opts, :request_timeout, Client.default_request_timeout())
 
@@ -382,6 +384,7 @@ defmodule Arangox.Connection do
   end
 
   # `Resolve -> Exhausted`.
+  @spec walk([Arangox.endpoint()], config) :: {:ok, t} | {:error, Error.t()}
   defp walk([], _config), do: {:error, %Error{message: @exhausted}}
 
   # `Resolve -> Open`.
@@ -406,6 +409,8 @@ defmodule Arangox.Connection do
   # `Open`. Returns `{:ok, state}` holding an open socket, `{:next, reason}` to
   # continue the walk or `{:error, exception}` to stop it. No socket exists on
   # either error return, so there is nothing to close.
+  @spec do_connect(Arangox.endpoint(), config) ::
+          {:ok, t} | {:next, Error.t()} | {:error, Error.t()}
   defp do_connect(endpoint, %{client: client, opts: opts} = config) do
     case Endpoint.parse(endpoint) do
       {:ok, parsed} ->
@@ -441,6 +446,17 @@ defmodule Arangox.Connection do
 
   # A header value may be a credential, so the refusal reports the shape
   # rule and never an element.
+  #
+  # Dialyzer reads the second clause as dead — under the struct type's
+  # invariant `:headers` is always a list — but the state is built with
+  # `struct/2` from raw caller options, so at runtime the field holds
+  # whatever was configured: a map, from a caller predating 0.8 who started
+  # the pool through `DBConnection.start_link/2` directly. The clause is the
+  # connect-must-not-raise guard for exactly the input the type says cannot
+  # happen, and `Arangox.ConfigTest` proves it reachable ("map :headers
+  # around the validation still fail the connect in order").
+  @dialyzer {:no_match, check_connection_headers: 1}
+  @spec check_connection_headers(t) :: :ok | {:error, Error.t()}
   defp check_connection_headers(%__MODULE__{headers: headers}) when is_list(headers) do
     if Enum.all?(headers, fn
          {name, value} -> is_binary(name) and is_binary(value)
@@ -454,6 +470,7 @@ defmodule Arangox.Connection do
 
   defp check_connection_headers(%__MODULE__{}), do: {:error, headers_shape_error()}
 
+  @spec headers_shape_error() :: Error.t()
   defp headers_shape_error do
     %Error{
       reason: :client_error,
@@ -461,6 +478,7 @@ defmodule Arangox.Connection do
     }
   end
 
+  @spec open_failed(Arangox.endpoint(), term, config) :: {:next, Error.t()} | {:error, Error.t()}
   defp open_failed(endpoint, reason, %{failover?: true, opts: opts}) do
     exception = connect_exception(endpoint, reason)
     failover_callback(exception, opts)
@@ -481,6 +499,7 @@ defmodule Arangox.Connection do
   # and a client that predates the contract should degrade to a slightly poorer
   # error rather than to a `BadMapError`. Everything arangox ships takes the
   # first clause.
+  @spec connect_exception(Arangox.endpoint(), term) :: Error.t()
   defp connect_exception(endpoint, %Error{} = exception),
     do: %{exception | endpoint: Endpoint.redact(endpoint)}
 
@@ -492,6 +511,7 @@ defmodule Arangox.Connection do
   # `:reason` atom -- `%Mint.TransportError{reason: :closed}`, say -- keeps that
   # atom, so such a client still forces a disconnect through
   # `Arangox.Client.connection_lost?/1` rather than silently losing the signal.
+  @spec legacy_error(term) :: Error.t()
   defp legacy_error(%{__exception__: true, reason: reason} = exception) when is_atom(reason),
     do: %Error{reason: reason, message: Exception.message(exception)}
 
@@ -509,6 +529,13 @@ defmodule Arangox.Connection do
   # `probe_opts` is the one budget the stages share; a stage that makes a
   # request passes it straight to `Arangox.Client.request/3`. Adding a stage
   # therefore costs no extra budget, which is the point.
+  @spec connect_stages(config, [Client.request_option()]) :: [
+          (t ->
+             {:ok, t}
+             | {:next, term, t}
+             | {:redirect, Arangox.endpoint(), t}
+             | {:error, Error.t(), t})
+        ]
   defp connect_stages(config, probe_opts) do
     [
       &resolve_auth(&1, probe_opts),
@@ -522,6 +549,7 @@ defmodule Arangox.Connection do
   # open — not per stage. See the note above `@default_connect_timeout` for why
   # `:connect_timeout` is the option that governs here and why the budget spans
   # the stages rather than each of them.
+  @spec connect_probe_opts(config) :: [deadline: integer]
   defp connect_probe_opts(%{opts: opts, request_timeout: request_timeout}) do
     budget =
       case Keyword.fetch(opts, :connect_timeout) do
@@ -535,6 +563,8 @@ defmodule Arangox.Connection do
 
   # Explicit socket ownership. From here the socket is open, so the only
   # exit that does not close it is `{:ok, state}` with no stages left.
+  @spec owning_socket(t, [Arangox.endpoint()], config, [(t -> term)]) ::
+          {:ok, t} | {:error, Error.t()}
   defp owning_socket(state, _rest, _config, []), do: {:ok, state}
 
   defp owning_socket(state, rest, config, [stage | stages]) do
@@ -576,6 +606,18 @@ defmodule Arangox.Connection do
   # the walk's own `CloseAndFail` shape, which closes it. A crash is a bug in
   # that code, not an endpoint being unavailable, so it stops the walk rather
   # than spending the remaining endpoints on the same crash.
+  @spec run_stage(
+          (t ->
+             {:ok, t}
+             | {:next, term, t}
+             | {:redirect, Arangox.endpoint(), t}
+             | {:error, Error.t(), t}),
+          t
+        ) ::
+          {:ok, t}
+          | {:next, term, t}
+          | {:redirect, Arangox.endpoint(), t}
+          | {:error, Error.t(), t}
   defp run_stage(stage, state) do
     stage.(state)
   rescue
@@ -588,13 +630,14 @@ defmodule Arangox.Connection do
 
   # Every rejection of an endpoint drawn from a failover list is reported,
   # whether the socket never opened, the credentials were refused, or the
-  # server answered and declared itself unusable. All four official ArangoDB
+  # server responded and declared itself unusable. All four official ArangoDB
   # drivers classify a reachable-but-unavailable server as the same kind of
   # failure as an unreachable one, and this follows them.
   #
   # The socket is already closed when this runs, so a callback that blocks
   # holds no resource. A single configured endpoint has nothing to fail over
   # to and reports through the returned error alone.
+  @spec notify_failover(t, Error.t(), config) :: :ok
   defp notify_failover(%__MODULE__{failover?: true}, %Error{} = exception, %{opts: opts}) do
     _ = failover_callback(exception, opts)
     :ok
@@ -604,6 +647,7 @@ defmodule Arangox.Connection do
 
   # Closing must not raise either: a client may be handed a socket the peer has
   # already torn down.
+  @spec close(t) :: :ok
   defp close(%__MODULE__{socket: nil}), do: :ok
 
   defp close(%__MODULE__{} = state) do
@@ -615,8 +659,9 @@ defmodule Arangox.Connection do
     _kind, _reason -> :ok
   end
 
-  # An endpoint that answered but is not usable. Under failover the walk goes
+  # An endpoint that responded but is not usable. Under failover the walk goes
   # on; on a single endpoint there is nothing to go on to.
+  @spec unavailable(t, term) :: {:next, term, t} | {:error, Error.t(), t}
   defp unavailable(%__MODULE__{failover?: true} = state, reason), do: {:next, reason, state}
   defp unavailable(%__MODULE__{} = state, reason), do: {:error, exception(state, reason), state}
 
@@ -626,6 +671,7 @@ defmodule Arangox.Connection do
   # backoff — it exhausts the supervisor's restart intensity and takes
   # the pool down. Its failure is not the connect's to report, so it is
   # swallowed rather than turned into a different error.
+  @spec failover_callback(Error.t(), [Arangox.start_option()]) :: Error.t()
   defp failover_callback(%Error{} = exception, opts) do
     try do
       case Keyword.get(opts, :failover_callback) do
@@ -669,6 +715,7 @@ defmodule Arangox.Connection do
   # directly — and letting the value reach interpolation raises a message that
   # renders it, which the pool then logs. Refused *described* instead,
   # before any client-specific clause, so the rule covers VelocyStream too.
+  @spec resolve_auth(t, [Client.request_option()]) :: {:ok, t} | {:error, Error.t(), t}
   defp resolve_auth(%__MODULE__{auth: auth} = state, _probe_opts)
        when not is_renderable_auth(auth) do
     {:error,
@@ -710,6 +757,11 @@ defmodule Arangox.Connection do
   # pool never follows a leader redirect — landing on the leader is the one
   # thing `read_only?: true` exists to avoid — so it does not go near
   # `redirect/3`.
+  @spec check_availability(t, config, [Client.request_option()]) ::
+          {:ok, t}
+          | {:next, term, t}
+          | {:redirect, Arangox.endpoint(), t}
+          | {:error, Error.t(), t}
   defp check_availability(%__MODULE__{read_only?: true} = state, _config, probe_opts) do
     state = put_header(state, @header_dirty_read)
     request = assemble_headers(@request_mode, nil, state)
@@ -750,7 +802,7 @@ defmodule Arangox.Connection do
 
   ## Leader redirects
 
-  # A follower in an active-failover setup answers 503 and names the current
+  # A follower in an active-failover setup responds 503 and names the current
   # leader in `x-arango-endpoint`. Following that header means handing the
   # pool's credentials to whatever host the server named, so the target is
   # admitted by policy rather than trusted:
@@ -776,9 +828,11 @@ defmodule Arangox.Connection do
   # the pool's credentials.
   #
   # A refused redirect is reported as exactly what it is — an endpoint that
-  # answered and is not usable — so it goes through `unavailable/2` like every
-  # other such answer: the walk moves on under failover, `:failover_callback`
+  # responded and is not usable — so it goes through `unavailable/2` like every
+  # other such response: the walk moves on under failover, `:failover_callback`
   # fires, and a single configured endpoint returns the refusal as its error.
+  @spec redirect(Response.t(), t, config) ::
+          {:next, term, t} | {:redirect, Arangox.endpoint(), t} | {:error, Error.t(), t}
   defp redirect(%Response{} = response, %__MODULE__{} = state, config) do
     case redirect_header(response) do
       nil -> unavailable(state, "service unavailable")
@@ -786,6 +840,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec redirect_header(Response.t()) :: binary | nil
   defp redirect_header(%Response{headers: headers}) when is_map(headers) or is_list(headers) do
     Enum.find_value(headers, fn
       {name, value} when is_binary(value) and value != "" ->
@@ -798,12 +853,16 @@ defmodule Arangox.Connection do
 
   defp redirect_header(%Response{}), do: nil
 
+  @spec header_name(term) :: binary
   defp header_name(name) when is_binary(name), do: String.downcase(name)
   defp header_name(name), do: name |> to_string() |> String.downcase()
 
+  @spec spend_redirect(config) :: config
   defp spend_redirect(%{redirects_left: left} = config),
     do: %{config | redirects_left: left - 1}
 
+  @spec admit(binary, t, config) ::
+          {:next, term, t} | {:redirect, Arangox.endpoint(), t} | {:error, Error.t(), t}
   defp admit(advertised, %__MODULE__{} = state, %{redirects_left: left}) when left <= 0 do
     unavailable(
       state,
@@ -815,7 +874,7 @@ defmodule Arangox.Connection do
     case admit_target(advertised, state, config) do
       {:ok, target} ->
         if same_origin?(target, state.parsed_endpoint) do
-          # The server named itself while answering 503, which is what an
+          # The server named itself while responding 503, which is what an
           # election in progress looks like. Reconnecting would fetch the same
           # 503, and spending redirect budget on it would starve a legitimate
           # redirect later in the walk, so this is simply an unavailable
@@ -835,6 +894,7 @@ defmodule Arangox.Connection do
   # is redacted and a redacted value does not parse. Fails closed -- an
   # unparseable target, or a state built without a parsed endpoint, is not the
   # same origin.
+  @spec same_origin?(binary, Endpoint.t() | nil) :: boolean
   defp same_origin?(target, %Endpoint{} = current) do
     case Endpoint.parse(target) do
       {:ok, parsed} -> origin(parsed) == origin(current)
@@ -844,6 +904,7 @@ defmodule Arangox.Connection do
 
   defp same_origin?(_target, _current), do: false
 
+  @spec admit_target(binary, t, config) :: {:ok, binary} | {:error, binary}
   defp admit_target(advertised, %__MODULE__{} = state, config) do
     with {:ok, parsed} <- parse_advertised(advertised),
          {:ok, target, target_parsed} <- resolve_target(advertised, parsed, config),
@@ -852,6 +913,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec parse_advertised(binary) :: {:ok, Endpoint.t()} | {:error, binary}
   defp parse_advertised(advertised) do
     case Endpoint.parse(advertised) do
       {:ok, parsed} -> {:ok, parsed}
@@ -862,6 +924,8 @@ defmodule Arangox.Connection do
   # The membership check is against the *configured* `:endpoints`, never against
   # an endpoint an earlier redirect arrived at, so a redirect cannot bootstrap
   # itself into trusting further redirects.
+  @spec resolve_target(binary, Endpoint.t(), config) ::
+          {:ok, binary, Endpoint.t()} | {:error, binary}
   defp resolve_target(advertised, %Endpoint{} = parsed, config) do
     if configured?(parsed, config) do
       {:ok, advertised, parsed}
@@ -870,6 +934,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec configured?(Endpoint.t(), config) :: boolean
   defp configured?(%Endpoint{} = parsed, %{endpoints: endpoints}) do
     origin = origin(parsed)
 
@@ -885,8 +950,10 @@ defmodule Arangox.Connection do
   # consumes the scheme into exactly these two fields, so `tcp://` and `http://`
   # (and `ssl://`, `tls://` and `https://`) have already collapsed by the time
   # they are compared.
+  @spec origin(Endpoint.t()) :: {Endpoint.addr(), boolean}
   defp origin(%Endpoint{addr: addr, ssl?: ssl?}), do: {addr, ssl?}
 
+  @spec map_target(binary, Endpoint.t(), config) :: {:ok, binary, Endpoint.t()} | {:error, binary}
   defp map_target(advertised, _parsed, %{endpoint_mapper: nil}) do
     {:error,
      refused(
@@ -925,6 +992,7 @@ defmodule Arangox.Connection do
   # A mapper is user code running inside `connect/1`. It must fail closed —
   # anything that is not an endpoint binary refuses the redirect — and it must
   # not be able to raise out of the `DBConnection` callback.
+  @spec call_mapper(term, binary, Endpoint.t()) :: {:ok, term} | {:refused, binary}
   defp call_mapper(mapper, advertised, parsed) when is_map(mapper) do
     case Map.fetch(mapper, advertised) do
       {:ok, mapped} -> {:ok, mapped}
@@ -948,8 +1016,9 @@ defmodule Arangox.Connection do
   # A lookup miss refuses; it never falls through to the advertised value. The
   # keys are matched on their normalized origin as well as literally, because
   # the vocabulary a server advertises in is not the one a user writes: a map
-  # keyed `"http://leader:8529"` still answers an advertised
+  # keyed `"http://leader:8529"` still matches an advertised
   # `"tcp://leader:8529"`.
+  @spec lookup_by_origin(map, Endpoint.t()) :: {:ok, term} | {:refused, binary}
   defp lookup_by_origin(mapper, %Endpoint{} = parsed) do
     origin = origin(parsed)
 
@@ -965,6 +1034,7 @@ defmodule Arangox.Connection do
     end)
   end
 
+  @spec guarded((-> term)) :: {:ok, binary} | {:refused, binary}
   defp guarded(fun) do
     case fun.() do
       mapped when is_binary(mapped) ->
@@ -985,6 +1055,7 @@ defmodule Arangox.Connection do
   # endpoint; the stored binary is for display only. The target may be a
   # mapper's output -- user code, so it can carry anything -- and is redacted
   # like every endpoint that reaches a message.
+  @spec refuse_downgrade(t, binary, Endpoint.t()) :: :ok | {:error, binary}
   defp refuse_downgrade(
          %__MODULE__{parsed_endpoint: %Endpoint{ssl?: true}} = state,
          target,
@@ -1000,9 +1071,11 @@ defmodule Arangox.Connection do
 
   # The advertised value comes off the wire, so it is redacted like any other
   # endpoint before it reaches a message.
+  @spec refused(binary, binary) :: binary
   defp refused(advertised, why),
     do: "refused redirect to #{inspect(Endpoint.redact(advertised))}: #{why}"
 
+  @spec readonly?(Response.t(), t) :: boolean
   defp readonly?(%Response{} = response, %__MODULE__{} = state) do
     case decode_body(response, state) do
       {:ok, %Response{body: %{"mode" => "readonly"}}} -> true
@@ -1012,8 +1085,10 @@ defmodule Arangox.Connection do
 
   # `Ready`. Read the server version once and cache it in connection state, so
   # version-gated behaviour reads it from there instead of probing per request.
-  # Anything unreadable or unparseable stays `nil`: unknown is a real answer
+  # Anything unreadable or unparseable stays `nil`: unknown is a real result
   # and gates fail closed on it, where a guessed version would open them.
+  @spec discover_version(t, [Client.request_option()]) ::
+          {:ok, t} | {:next, term, t} | {:error, Error.t(), t}
   defp discover_version(%__MODULE__{} = state, probe_opts) do
     request = assemble_headers(@request_version, nil, state)
 
@@ -1031,6 +1106,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec version_from(Response.t(), t) :: Version.t() | nil
   defp version_from(%Response{} = response, %__MODULE__{} = state) do
     case decode_body(response, state) do
       {:ok, %Response{body: %{"version" => version}}} -> parse_version(version)
@@ -1038,6 +1114,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec parse_version(term) :: Version.t() | nil
   defp parse_version(version) when is_binary(version) do
     case Version.parse(version) do
       {:ok, parsed} -> parsed
@@ -1050,6 +1127,7 @@ defmodule Arangox.Connection do
   # ArangoDB mostly reports semver ("3.12.5", "3.12.5-1", "3.13.0-devel"), but
   # accept a leading "major.minor" too rather than calling such a server
   # unknown.
+  @spec parse_version_prefix(binary) :: Version.t() | nil
   defp parse_version_prefix(version) do
     case Regex.run(~r/^(\d+)\.(\d+)(?:\.(\d+))?/, version) do
       [_match, major, minor] -> build_version(major, minor, "0")
@@ -1058,6 +1136,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec build_version(binary, binary, binary) :: Version.t()
   defp build_version(major, minor, patch) do
     %Version{
       major: String.to_integer(major),
@@ -1067,8 +1146,9 @@ defmodule Arangox.Connection do
   end
 
   # Non-raising body decode, for the connect pipeline only. `maybe_decode_body/2`
-  # uses `decode!/1`; a server answering a connect probe with a non-JSON body
+  # uses `decode!/1`; a server responding to a connect probe with a non-JSON body
   # would raise out of `connect/1` and cost the process its backoff.
+  @spec decode_body(Response.t(), t) :: {:ok, Response.t()} | :error
   defp decode_body(%Response{} = response, %__MODULE__{client: VelocyClient}), do: {:ok, response}
 
   defp decode_body(%Response{body: nil} = response, %__MODULE__{}), do: {:ok, response}
@@ -1097,7 +1177,7 @@ defmodule Arangox.Connection do
   # header on every request, so queries running between begin and
   # commit/rollback join the server-side transaction automatically.
   #
-  # "No transaction in flight" is a normal answer, not a failure: each of
+  # "No transaction in flight" is a normal outcome, not a failure: each of
   # status/commit/rollback resolves it in its own function head, locally
   # and without a request. Only genuine request failures share the error
   # clauses.
@@ -1122,7 +1202,7 @@ defmodule Arangox.Connection do
           # `{:error, exception, state}` is not among `handle_begin/2`'s
           # documented returns, and `DBConnection` would raise it out of
           # `Arangox.transaction/3` rather than rolling back. A server that
-          # answers 201 with an identifier this driver cannot address has
+          # responds 201 with an identifier this driver cannot address has
           # left a transaction running that nothing can commit or abort, so
           # the connection goes rather than the call.
           {:disconnect,
@@ -1156,13 +1236,13 @@ defmodule Arangox.Connection do
   end
 
   # `handle_status` keeps its server round-trip rather
-  # than answering from local state. The transaction is server-side state,
-  # and a local answer can lie in both directions — the server aborts
+  # than reporting from local state. The transaction is server-side state,
+  # and a local report can lie in both directions — the server aborts
   # transactions on its own (TTL, failover), and a transaction can be
   # finished through another handle to it. The cost concern does not bite:
   # DBConnection's pool-management paths (`DBConnection.run/3` brackets
   # every pool checkout with two status calls) reach this callback on
-  # connections with no transaction in flight, which the first head answers
+  # connections with no transaction in flight, which the first head handles
   # locally with no request. The round-trip happens only when a transaction
   # is actually in flight — a caller inside `Arangox.transaction/3` asking
   # a real question — and `Arangox.status/1` documents itself as fetching
@@ -1172,7 +1252,7 @@ defmodule Arangox.Connection do
 
   def handle_status(opts, %__MODULE__{trx_id: id} = state) do
     trx_request(Transaction.status(id), opts, state, :keep, fn response, state ->
-      # A transaction committed or aborted through another handle answers
+      # A transaction committed or aborted through another handle returns
       # `:idle`. Keeping its identifier in state would then send a finished
       # transaction's header on every later request in this checkout, and the
       # next `handle_begin/2` would report a transaction already in flight.
@@ -1223,6 +1303,9 @@ defmodule Arangox.Connection do
   # The identifier is read off the state itself rather than passed alongside
   # it: a second copy could disagree, and `retain_trx/3` would then rewrite
   # state to name a different transaction than the one in flight.
+  @spec trx_request(Request.t(), keyword, t, :keep | :strip, (Response.t(), t -> result)) ::
+          result | {:error, t} | {:disconnect, Error.t(), t}
+        when result: var
   defp trx_request(%Request{} = request, opts, %__MODULE__{trx_id: id} = state, wire, on_200) do
     request_state = if wire == :strip, do: %{state | trx_id: nil}, else: state
 
@@ -1241,15 +1324,16 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec retain_trx(t, binary | nil, :keep | :strip) :: t
   defp retain_trx(state, _id, :keep), do: state
   defp retain_trx(state, id, :strip), do: %{state | trx_id: id}
 
-  # `GET /_api/transaction/{id}` answers 200 for any transaction the server
+  # `GET /_api/transaction/{id}` returns 200 for any transaction the server
   # still remembers; the actual state is in the body:
   #
   #     {"code":200,"error":false,"result":{"id":"...","status":"running"}}
   #
-  # The status line is not the answer: a 200 means the server answered, not
+  # The status line does not settle it: a 200 means the server responded, not
   # that a transaction is running, so matching on it alone reports
   # :transaction for one the server has already aborted or committed.
   # "committed" means no transaction is in flight any more, which in
@@ -1257,6 +1341,7 @@ defmodule Arangox.Connection do
   # driver does not recognize — reports :error, DBConnection's "inside an
   # aborted transaction", whose recovery path (a rollback) is safe in
   # either case.
+  @spec trx_status(term) :: :transaction | :idle | :error
   defp trx_status(%{"result" => %{"status" => "running"}}), do: :transaction
   defp trx_status(%{"result" => %{"status" => "committed"}}), do: :idle
   defp trx_status(_aborted_or_unrecognized), do: :error
@@ -1304,7 +1389,7 @@ defmodule Arangox.Connection do
         # A single-batch result: the server issued no id, so this cursor
         # exists only in driver memory. A reference keys it — a reference
         # cannot be interpolated into a request path even by accident, and
-        # `handle_fetch/4`/`handle_deallocate/4` answer it locally.
+        # `handle_fetch/4`/`handle_deallocate/4` serve it locally.
         {:ok, _req, %Response{} = initial, state} ->
           cursor = make_ref()
           {:ok, query, cursor, %{state | cursors: Map.put(state.cursors, cursor, initial)}}
@@ -1346,6 +1431,11 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec fetch_batch(binary, keyword, t) ::
+          {:cont, Response.t(), t}
+          | {:halt, Response.t(), t}
+          | {:error, Error.t(), t}
+          | {:disconnect, Error.t(), t}
   defp fetch_batch(cursor, opts, %__MODULE__{} = state) do
     request = %Request{method: :put, path: @cursor_path <> cursor}
 
@@ -1360,6 +1450,8 @@ defmodule Arangox.Connection do
 
   # A cursor the server has finished with is marked `:noop` rather than
   # forgotten, so `handle_deallocate/4` knows there is nothing left to delete.
+  @spec deliver(Response.t(), binary | reference, map, t) ::
+          {:cont, Response.t(), t} | {:halt, Response.t(), t}
   defp deliver(%Response{body: %{"hasMore" => true}} = response, _cursor, cursors, state),
     do: {:cont, response, %{state | cursors: cursors}}
 
@@ -1452,8 +1544,10 @@ defmodule Arangox.Connection do
   #
   # The initial response is what carries the query's own metadata, so it is the
   # one handed back, with the accumulated rows in place of its first batch and
-  # `hasMore` answered honestly. Nothing deletes the cursor afterwards because
+  # `hasMore` reported honestly. Nothing deletes the cursor afterwards because
   # a fully drained cursor no longer exists server-side.
+  @spec drain(Query.t(), Response.t(), keyword, t) ::
+          {:ok, Query.t(), Response.t(), t} | {:error, Error.t(), t} | {:disconnect, Error.t(), t}
   defp drain(%Query{} = query, %Response{} = initial, opts, %__MODULE__{} = state) do
     case collect(initial, [rows(initial)], opts, state) do
       {:ok, rows, state} ->
@@ -1469,6 +1563,8 @@ defmodule Arangox.Connection do
   # end: appending each batch to a flat list instead re-copies everything
   # collected so far on every batch, which is quadratic in exactly the
   # many-batch case draining exists for.
+  @spec collect(Response.t(), [list], keyword, t) ::
+          {:ok, list, t} | {:error, Error.t(), t} | {:disconnect, Error.t(), t}
   defp collect(%Response{body: %{"hasMore" => true, "id" => id}}, batches, opts, state) do
     request = %Request{method: :put, path: @cursor_path <> id}
 
@@ -1495,13 +1591,14 @@ defmodule Arangox.Connection do
   defp collect(%Response{}, batches, _opts, state),
     do: {:ok, batches |> Enum.reverse() |> Enum.concat(), state}
 
+  @spec rows(Response.t()) :: list
   defp rows(%Response{body: %{"result" => rows}}) when is_list(rows), do: rows
   defp rows(%Response{}), do: []
 
   ## The plan cache's version gate
 
   # The floor `usePlanCache` was introduced at. Below it the option is not
-  # merely unsupported — it is *ignored*, measured: 3.11 answers 201 with the
+  # merely unsupported — it is *ignored*, measured: 3.11 responds 201 with the
   # full result, no key, and no complaint, exactly as it does for an option name
   # invented on the spot. So a caller who asked for plan caching and did not get
   # it would never find out from the server. That silence is the whole reason
@@ -1515,6 +1612,7 @@ defmodule Arangox.Connection do
   #
   # A query that did not ask is never gated, which is what keeps every other
   # query working against servers below the floor.
+  @spec gate_plan_cache(map, t) :: :ok | {:error, Error.t()}
   defp gate_plan_cache(body, %__MODULE__{} = state) do
     if plan_cache_requested?(body), do: plan_cache_supported?(state), else: :ok
   end
@@ -1524,6 +1622,7 @@ defmodule Arangox.Connection do
   # and asks for the cache as surely as the mapped option does. An atom-only
   # lookup misses it, and the request then reaches a server below the floor
   # that ignores the option silently — the outcome this gate exists to prevent.
+  @spec plan_cache_requested?(map) :: boolean
   defp plan_cache_requested?(body) do
     # Both containers are examined, not just the first one present: a mapped
     # option writes `:options` while `:properties` merges `"options"`
@@ -1532,12 +1631,14 @@ defmodule Arangox.Connection do
     |> Enum.any?(&plan_cache_flag?/1)
   end
 
+  @spec plan_cache_flag?(term) :: boolean
   defp plan_cache_flag?(options) when is_map(options) do
     Map.get(options, :usePlanCache) == true or Map.get(options, "usePlanCache") == true
   end
 
   defp plan_cache_flag?(_options), do: false
 
+  @spec plan_cache_supported?(t) :: :ok | {:error, Error.t()}
   defp plan_cache_supported?(%__MODULE__{server_version: %Version{} = version}) do
     if Version.compare(version, @plan_cache_floor) == :lt do
       {:error,
@@ -1572,7 +1673,7 @@ defmodule Arangox.Connection do
   #
   # Every request this driver makes crosses this function: the hand-written
   # ones `DBConnection` routes through `handle_execute/4`, the transaction
-  # callbacks, `ping/1`, the three cursor callbacks, and the `Arangox.Api.*`
+  # callbacks, `ping/1`, the three cursor callbacks, and the `Arangox.API.*`
   # operations. That is what makes it the one place path interpolation can be
   # validated.
   #
@@ -1602,6 +1703,10 @@ defmodule Arangox.Connection do
   # never reaches the wire, and the connection — which was never touched —
   # stays checked in and healthy. Raising here instead would make DBConnection
   # retire a perfectly good connection over a caller's typo.
+  @spec execute_request(Request.t(), keyword, t) ::
+          {:ok, Request.t(), Response.t(), t}
+          | {:error, Error.t(), t}
+          | {:disconnect, Error.t(), t}
   defp execute_request(%Request{} = request, opts, %__MODULE__{} = state) do
     with :ok <- check_request_timeout(opts),
          {:ok, option_trx} <- transaction_option(opts),
@@ -1616,6 +1721,7 @@ defmodule Arangox.Connection do
   # Like an invalid `:transaction`, an invalid value is a plain
   # `{:error, exception, state}` — nothing reached the wire, so the connection
   # is healthy and stays checked in.
+  @spec check_request_timeout(keyword) :: :ok | {:error, Error.t()}
   defp check_request_timeout(opts) do
     case Keyword.fetch(opts, :request_timeout) do
       :error ->
@@ -1629,6 +1735,10 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec run_execute(Request.t(), binary | nil, keyword, t) ::
+          {:ok, Request.t(), Response.t(), t}
+          | {:error, Error.t(), t}
+          | {:disconnect, Error.t(), t}
   defp run_execute(%Request{} = request, option_trx, opts, %__MODULE__{} = state) do
     # The codec is chosen from the request's *own* headers, before assembly:
     # after it, the caller's content-type could not be told apart from one
@@ -1677,13 +1787,14 @@ defmodule Arangox.Connection do
   # second-guess a correct decision — and would put back exactly the bug
   # `block_deadline/1` removes, since a request to an unrelated pool arrives
   # here carrying its own correctly-stamped deadline. `deadline: nil` is that
-  # decision saying "no block deadline applies", which is why it is answered
+  # decision saying "no block deadline applies", which is why it is met
   # with the request-local fallback rather than with the carrier.
   #
   # An absent key means the request never passed through `Arangox`: a cursor's
   # per-batch fetches (`DBConnection` invokes `handle_fetch/4` itself, with the
   # stream's option list), the transaction callbacks, `ping/1`. Those are the
   # requests the carrier exists for.
+  @spec with_deadline(keyword, t) :: keyword
   defp with_deadline(opts, %__MODULE__{} = state) do
     deadline =
       case Keyword.fetch(opts, :deadline) do
@@ -1707,6 +1818,7 @@ defmodule Arangox.Connection do
   # every idle ping would elapse before the send and disconnect a healthy
   # pool once per idle interval, forever. Ordinary requests are unaffected —
   # their deadline is stamped from `:timeout` at pool entry.
+  @spec internal_budget(keyword, t) :: pos_integer
   defp internal_budget(opts, state) do
     max(
       Client.request_timeout(opts, state),
@@ -1715,12 +1827,13 @@ defmodule Arangox.Connection do
   end
 
   # A remainder too small to spend is refused before anything
-  # is written, so no round trip is started whose answer cannot be read.
+  # is written, so no round trip is started whose response cannot be read.
   #
   # Deliberately *not* a connection-lost reason: nothing went on the wire, the
   # socket is untouched, and disconnecting here would destroy a healthy
   # connection every time a caller queued too long — precisely when connections
   # are scarce and destroying them makes the queue worse.
+  @spec elapsed_error() :: Error.t()
   defp elapsed_error do
     %Error{
       reason: :deadline_exceeded,
@@ -1745,7 +1858,7 @@ defmodule Arangox.Connection do
   #
   # It is per *process*, not per pool, so on its own it cannot tell a request
   # that belongs to the block from one issued to an unrelated pool from inside
-  # it. That distinction is made where the answer is available — in `Arangox`,
+  # it. That distinction is made where the fact is visible — in `Arangox`,
   # which has the `conn` argument and can see whether it is the block's own
   # `%DBConnection{}` — and travels here as a stamped `:deadline`, which is why
   # the reader above consults this carrier only for requests that carry no
@@ -1772,6 +1885,10 @@ defmodule Arangox.Connection do
     :ok
   end
 
+  @spec do_run_execute(Request.t(), keyword, t) ::
+          {:ok, Request.t(), Response.t(), t}
+          | {:error, Error.t(), t}
+          | {:disconnect, Error.t(), t}
   defp do_run_execute(%Request{} = request, opts, %__MODULE__{} = state) do
     case Client.request(request, opts, state) do
       {:ok, %Response{status: status} = response, state} when status in 400..599 ->
@@ -1809,17 +1926,20 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec error_or_disconnect(Error.t()) :: :error | :disconnect
   defp error_or_disconnect(%Error{} = exception) do
     if Client.connection_lost?(exception), do: :disconnect, else: :error
   end
 
   # A client cannot know the configured endpoint (it is handed a parsed one), so
   # the redacted endpoint is stamped on here rather than left blank.
+  @spec stamp(t, Error.t()) :: Error.t()
   defp stamp(%__MODULE__{endpoint: endpoint}, %Error{endpoint: nil} = exception),
     do: %{exception | endpoint: endpoint}
 
   defp stamp(%__MODULE__{}, %Error{} = exception), do: exception
 
+  @spec err_or_disc(pos_integer, [integer]) :: :error | :disconnect
   defp err_or_disc(status, codes) do
     if status in codes, do: :disconnect, else: :error
   end
@@ -1831,6 +1951,7 @@ defmodule Arangox.Connection do
   # identifier — control characters, anything non-digit — is rejected *here*,
   # before it can touch a header or the wire. The rejected value is never
   # echoed into the error.
+  @spec transaction_option(keyword) :: {:ok, binary | nil} | {:error, Error.t()}
   defp transaction_option(opts) do
     case Keyword.fetch(opts, :transaction) do
       :error ->
@@ -1854,6 +1975,7 @@ defmodule Arangox.Connection do
   # Describes the type only. A bare binary handed to `:transaction` is most
   # likely a real transaction identifier, which must not reach an error
   # message or a log.
+  @spec describe_transaction_value(term) :: binary
   defp describe_transaction_value(%module{}), do: "a #{inspect(module)} struct"
   defp describe_transaction_value(value) when is_binary(value), do: "a binary"
   defp describe_transaction_value(value) when is_atom(value), do: "an atom"
@@ -1894,13 +2016,14 @@ defmodule Arangox.Connection do
 
   # Step 9's catch-all. `DBConnection` closes whatever it was handed whenever
   # `describe/2` or `encode/3` raises, including values this driver never
-  # produces, so this clause answers instead of raising a second error over the
+  # produces, so this clause returns instead of raising a second error over the
   # first one.
   def handle_close(_q, _opts, %__MODULE__{} = state),
     do: {:error, %{@exception_not_a_query | endpoint: state.endpoint}, state}
 
   # Utils
 
+  @spec put_header(t, {binary, binary}) :: t
   defp put_header(%__MODULE__{headers: headers} = struct, {_key, _value} = header),
     do: %{struct | headers: headers ++ [header]}
 
@@ -1915,6 +2038,7 @@ defmodule Arangox.Connection do
   # it would put two transaction identities on one request, which the server
   # may bind to either. The per-request `:transaction` option outranks the
   # connection's in-flight identifier the same way.
+  @spec assemble_headers(Request.t(), binary | nil, t) :: Request.t()
   defp assemble_headers(%Request{headers: req_headers} = request, option_trx, state) do
     %__MODULE__{headers: conn_headers, trx_id: state_trx} = state
 
@@ -1924,6 +2048,7 @@ defmodule Arangox.Connection do
     }
   end
 
+  @spec trx_entry(binary | nil, Arangox.headers()) :: [{binary, binary}]
   defp trx_entry(nil, _req_headers), do: []
 
   defp trx_entry(id, req_headers) do
@@ -1932,6 +2057,7 @@ defmodule Arangox.Connection do
 
   # `lower_name` must already be lowercase. Tolerates non-tuple entries so a
   # malformed caller list fails at the transport with its own error, not here.
+  @spec has_header?(list, binary) :: boolean
   defp has_header?(headers, lower_name) do
     Enum.any?(headers, fn
       {name, _value} -> String.downcase(to_string(name)) == lower_name
@@ -1945,6 +2071,7 @@ defmodule Arangox.Connection do
   # on `Arangox.Request` so the two `Inspect` implementations and this
   # sanitizer share one definition.
 
+  @spec sanitize_headers(Request.t()) :: Request.t()
   defp sanitize_headers(%Request{headers: headers} = request) when is_list(headers) do
     headers =
       Enum.map(headers, fn
@@ -1980,18 +2107,23 @@ defmodule Arangox.Connection do
   def interpolate_path(%Request{} = request, opts, %__MODULE__{} = state) do
     request = encode_cursor_id(request)
 
-    # The option is checked whenever it is present, whether or not this
-    # particular path ends up carrying it. A value that cannot name a database
-    # is refused either way, so the same call does not start working because of
-    # where it happens to point.
-    case Keyword.fetch(opts, :database) do
-      {:ok, database} -> prepend_validated(request, database, state)
-      :error -> do_db_prepend(request, state)
+    if Keyword.get(opts, :_arangox_server_scope, false) do
+      {:ok, request}
+    else
+      # The option is checked whenever it is present, whether or not this
+      # particular path ends up carrying it. A value that cannot name a database
+      # is refused either way, so the same call does not start working because of
+      # where it happens to point.
+      case Keyword.fetch(opts, :database) do
+        {:ok, database} -> prepend_validated(request, database, state)
+        :error -> do_db_prepend(request, state)
+      end
     end
   end
 
   # The one validate-then-prepend step, shared by the per-request option and
   # the pool's own database so the two cannot drift.
+  @spec prepend_validated(Request.t(), term, t) :: {:ok, Request.t()} | {:error, Error.t()}
   defp prepend_validated(%Request{} = request, database, %__MODULE__{} = state) do
     case validate_database(database) do
       :ok -> {:ok, prepend_database(request, database, state)}
@@ -2001,6 +2133,7 @@ defmodule Arangox.Connection do
 
   # VelocyStream reads the connection's database from state rather than from a
   # path, and a `nil` one means the server's default (`_system`).
+  @spec do_db_prepend(Request.t(), t) :: {:ok, Request.t()} | {:error, Error.t()}
   defp do_db_prepend(%Request{} = request, %__MODULE__{client: VelocyClient}),
     do: {:ok, request}
 
@@ -2018,7 +2151,8 @@ defmodule Arangox.Connection do
   # documents it — one rule for the pool option and the per-request one alike.
   # A path the caller already prefixed wins — they named a database explicitly
   # and it is not this function's to override. Prepending regardless produces
-  # `/_db/b/_db/a/...`, which no server can answer.
+  # `/_db/b/_db/a/...`, which no server can serve.
+  @spec prepend_database(Request.t(), binary, t) :: Request.t()
   defp prepend_database(%Request{path: "/_db/" <> _} = request, _database, %__MODULE__{}),
     do: request
 
@@ -2032,15 +2166,17 @@ defmodule Arangox.Connection do
   # that client the prefix stays raw — it is a carrier, not a URL. Validation
   # still applies: a name that can alter a path is refused whatever the
   # transport, because the same option reaches an HTTP pool unchanged.
+  @spec encode_database(binary, t) :: binary
   defp encode_database(database, %__MODULE__{client: VelocyClient}), do: database
   defp encode_database(database, %__MODULE__{}), do: encode_segment(database)
 
   # The cursor identifier is the server's own value echoed straight back into a
   # path. Encoding it here rather than at the two callbacks that build that
-  # path is what keeps the one-seam promise: the `Arangox.Api.*` cursor
+  # path is what keeps the one-seam promise: the `Arangox.API.*` cursor
   # operations interpolate the same identifier into the same path and reach the
   # wire through this function too, so they inherit the encoding instead of
   # needing their own.
+  @spec encode_cursor_id(Request.t()) :: Request.t()
   defp encode_cursor_id(%Request{path: @cursor_path <> id} = request) when id != "",
     do: %{request | path: @cursor_path <> encode_segment(id)}
 
@@ -2050,17 +2186,18 @@ defmodule Arangox.Connection do
   # ArangoDB names — letters, digits, `-`, `_` — pass through untouched;
   # extended names carrying spaces or unicode are encoded, which is what makes
   # them legal in a path at all.
+  @spec encode_segment(binary) :: binary
   defp encode_segment(value), do: URI.encode(value, &URI.char_unreserved?/1)
 
   @doc false
   # The interpolation rule, in one place, in the module that owns the seam.
   # `Arangox.start_link/1` raises on a bad value at option validation; the
-  # request seam answers with the same message inside an `%Arangox.Error{}`.
+  # request seam returns the same message inside an `%Arangox.Error{}`.
   #
   # Rejects only bytes that can alter the request path: the path separator,
   # query and fragment delimiters, the percent-encoding escape and control
   # characters. Anything else — spaces, unicode — is a legal ArangoDB extended
-  # database name, answered with encoding rather than rejection.
+  # database name, handled by encoding rather than rejection.
   @spec validate_database(term) :: :ok | {:error, String.t()}
   def validate_database(database) when not is_binary(database),
     do: {:error, "The :database option expects a binary, got: #{inspect(database)}"}
@@ -2078,6 +2215,7 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec database_has_forbidden_byte?(binary) :: boolean
   defp database_has_forbidden_byte?(name), do: Client.path_altering_byte?(name)
 
   ## The content-type seam
@@ -2089,6 +2227,8 @@ defmodule Arangox.Connection do
   # VelocyStream carries its own body encoding, so the codec seam does not apply
   # to it at all: `Arangox.VelocyClient` encodes and decodes inside its own
   # `request/3`.
+  @spec maybe_encode_body(Request.t(), :json | :velocypack | :raw, t) ::
+          {:ok, Request.t()} | {:error, Error.t()}
   defp maybe_encode_body(%Request{} = request, _codec, %__MODULE__{client: VelocyClient}),
     do: {:ok, request}
 
@@ -2128,6 +2268,7 @@ defmodule Arangox.Connection do
   # pool's `:content_type` decides. A type that names neither codec —
   # `text/plain` for `/_api/import`, `application/octet-stream`, multipart
   # uploads — is the caller saying the body is already in its wire form.
+  @spec effective_request_codec(Request.t(), t) :: :json | :velocypack | :raw
   defp effective_request_codec(%Request{headers: headers}, %__MODULE__{content_type: fallback}) do
     case request_content_type(headers) do
       nil -> fallback
@@ -2138,6 +2279,7 @@ defmodule Arangox.Connection do
 
   # First matching entry wins, any casing. Runs on the request's own headers,
   # before assembly — see the note in `run_execute/4`.
+  @spec request_content_type(list) :: binary | nil
   defp request_content_type(headers) do
     Enum.find_value(headers, fn
       {name, value} ->
@@ -2151,8 +2293,9 @@ defmodule Arangox.Connection do
   # Both codecs are driven through their raising variants — `:json_library`'s
   # contract only requires `encode!/1` — so an unencodable body arrives here as
   # an exception. It is the caller's data, not a connection fault: the request
-  # never reached the wire, and the answer is an error tuple on a healthy
+  # never reached the wire, and the result is an error tuple on a healthy
   # connection.
+  @spec encode_body((-> encoded)) :: {:ok, encoded} | {:error, Error.t()} when encoded: var
   defp encode_body(encode) do
     {:ok, encode.()}
   rescue
@@ -2161,9 +2304,10 @@ defmodule Arangox.Connection do
   end
 
   # The accept header goes on every request a VelocyPack pool makes, body or
-  # not: a GET has nothing to encode but still wants a VelocyPack answer.
+  # not: a GET has nothing to encode but still wants a VelocyPack response.
   # `maybe_encode_body/3` only sees requests that have a body, so bodyless ones
   # are covered by the call in `run_execute/4`.
+  @spec accept_header(Request.t(), t) :: Request.t()
   defp accept_header(%Request{} = request, %__MODULE__{client: VelocyClient}), do: request
 
   defp accept_header(%Request{} = request, %__MODULE__{content_type: :velocypack}),
@@ -2176,6 +2320,7 @@ defmodule Arangox.Connection do
   # never puts a second copy of a name on the wire. Runs after assembly, so a
   # pool-configured entry suppresses the label too. Appends at the end —
   # `name` must be lowercase.
+  @spec put_new_header(Request.t(), binary, binary) :: Request.t()
   defp put_new_header(%Request{headers: headers} = request, name, value) do
     if has_header?(headers, name) do
       request
@@ -2184,24 +2329,18 @@ defmodule Arangox.Connection do
     end
   end
 
+  @spec maybe_decode_body(Response.t(), t) :: {:ok, Response.t()} | {:error, Error.t()}
   defp maybe_decode_body(%Response{} = response, %__MODULE__{client: VelocyClient}),
     do: {:ok, response}
 
   defp maybe_decode_body(%Response{body: nil} = response, %__MODULE__{}), do: {:ok, response}
 
   # Decoding follows the *response's* content type rather than the pool's. A
-  # server that declines VelocyPack answers in JSON, and a pool that asked for
+  # server that declines VelocyPack responds in JSON, and a pool that asked for
   # VelocyPack still has to read that.
   defp maybe_decode_body(%Response{body: body} = response, %__MODULE__{max_body_size: max})
        when is_binary(body) and byte_size(body) > max do
-    {:error,
-     %Error{
-       reason: :body_too_large,
-       status: response.status,
-       message:
-         "response body of #{byte_size(body)} bytes exceeds :max_body_size (#{max}); " <>
-           "raise the pool option if the workload is legitimate"
-     }}
+    {:error, Client.body_too_large(response.status, byte_size(body), max)}
   end
 
   defp maybe_decode_body(
@@ -2225,7 +2364,7 @@ defmodule Arangox.Connection do
           # Foxx zip bundle — is already in its wire form; the JSON decoder
           # would turn every such success into `:decode_error`. An absent
           # content type still decodes as JSON: `response_content_type/1`
-          # answers JSON when no header names one.
+          # returns JSON when no header names one.
           {:ok, response}
         end
     end
@@ -2239,6 +2378,7 @@ defmodule Arangox.Connection do
   # quadratic length parsing, CPU the sender controls. Rejecting the run here
   # keeps it away from the codec regardless of which codec version is
   # installed.
+  @spec check_length_prefix(term, Response.t()) :: :ok | {:error, Error.t()}
   defp check_length_prefix(
          <<compact, prefix::binary-size(11), _::binary>>,
          %Response{} = response
@@ -2259,6 +2399,7 @@ defmodule Arangox.Connection do
 
   defp check_length_prefix(_body, %Response{}), do: :ok
 
+  @spec continuation_bytes_only?(binary) :: boolean
   defp continuation_bytes_only?(<<>>), do: true
 
   defp continuation_bytes_only?(<<byte, rest::binary>>) when byte >= 0x80,
@@ -2269,6 +2410,7 @@ defmodule Arangox.Connection do
   # The body is server-supplied bytes, so decode failure is a normal outcome,
   # not a crash: any raise from the codec becomes a structured error carrying
   # the response status.
+  @spec decode_body_with(Response.t(), (-> term)) :: {:ok, Response.t()} | {:error, Error.t()}
   defp decode_body_with(%Response{} = response, decode) do
     {:ok, %{response | body: decode.()}}
   rescue
@@ -2281,10 +2423,11 @@ defmodule Arangox.Connection do
        }}
   end
 
-  # First matching entry, any casing. Every client arangox ships answers a
+  # First matching entry, any casing. Every client arangox ships delivers a
   # list since 0.8; the map clause tolerates a third-party client that still
   # builds one, because misreading its content type would decode a VelocyPack
   # body as JSON rather than fail loudly.
+  @spec response_content_type(term) :: binary
   defp response_content_type(headers) when is_list(headers) or is_map(headers) do
     Enum.find_value(headers, @content_type_json, fn
       {name, value} when is_binary(name) ->
@@ -2299,6 +2442,7 @@ defmodule Arangox.Connection do
 
   # Content types arrive with parameters (`application/json; charset=utf-8`),
   # so the media type is matched rather than the whole header value.
+  @spec media_type(term) :: binary
   defp media_type(value) do
     value
     |> to_string()
@@ -2308,6 +2452,7 @@ defmodule Arangox.Connection do
     |> String.downcase()
   end
 
+  @spec decode_dump(binary, module) :: [term]
   defp decode_dump(body, json_library) do
     body
     |> String.split("\n")
@@ -2326,6 +2471,7 @@ defmodule Arangox.Connection do
   @body_excerpt 256
 
   # A client's error, already conforming. Only the endpoint is missing.
+  @spec exception(t, term) :: Error.t()
   defp exception(state, %Error{} = exception), do: stamp(state, exception)
 
   defp exception(state, %Response{body: nil} = response),
@@ -2365,6 +2511,7 @@ defmodule Arangox.Connection do
   # plus the atom reason derived from `errorNum`. An `errorNum` the vendored
   # table does not contain yields `Arangox.Errno.unknown/0` rather than `nil` or
   # a crash, so a newer server cannot break a caller matching on `:reason`.
+  @spec from_body(t, pos_integer, map) :: Error.t()
   defp from_body(state, status, %{"errorNum" => error_num} = body) when is_integer(error_num) do
     %Error{
       endpoint: state.endpoint,
@@ -2384,6 +2531,7 @@ defmodule Arangox.Connection do
     }
   end
 
+  @spec excerpt(term) :: binary
   defp excerpt(body) when is_binary(body) and byte_size(body) <= @body_excerpt, do: body
 
   defp excerpt(body) when is_binary(body) do
@@ -2424,12 +2572,14 @@ defimpl Inspect, for: Arangox.Connection do
     )
   end
 
+  @spec field({atom, term}, Inspect.Opts.t()) :: Inspect.Algebra.t()
   defp field({key, value}, opts) do
     concat([Atom.to_string(key), ": ", to_doc(value, opts)])
   end
 
   # The username goes too. It is authentication material, and the marker still
   # says a credential was configured.
+  @spec redact_auth(term) :: {:basic, binary, binary} | {:bearer, binary} | nil | binary
   defp redact_auth({:basic, _username, _password}), do: {:basic, @redacted, @redacted}
   defp redact_auth({:bearer, _token}), do: {:bearer, @redacted}
   defp redact_auth(nil), do: nil
@@ -2437,6 +2587,7 @@ defimpl Inspect, for: Arangox.Connection do
 
   # The in-flight transaction identifier is a bearer capability; the
   # marker still says a transaction is open.
+  @spec redact_trx_id(binary | nil) :: binary | nil
   defp redact_trx_id(nil), do: nil
   defp redact_trx_id(_id), do: @redacted
 
@@ -2444,6 +2595,7 @@ defimpl Inspect, for: Arangox.Connection do
   # own, and the echoed-request sanitizer cannot drift apart. The transaction
   # identifier is in state's headers whenever a transaction is open, so it is
   # as much connection material as the credential.
+  @spec redact_headers(term) :: term
   defp redact_headers(headers) when is_map(headers) do
     Map.new(headers, fn {name, value} ->
       if Arangox.Request.sensitive_header?(name), do: {name, @redacted}, else: {name, value}

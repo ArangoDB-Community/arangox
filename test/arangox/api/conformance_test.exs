@@ -1,6 +1,6 @@
-defmodule Arangox.Api.ConformanceTest do
+defmodule Arangox.API.ConformanceTest do
   @moduledoc """
-  The live gate over the owned `Arangox.Api.*` surface.
+  The live gate over the owned `Arangox.API.*` surface.
 
   The operations are hand-maintained source with no generator behind them, so
   nothing re-derives them when the server moves. This gate fetches the API
@@ -17,7 +17,7 @@ defmodule Arangox.Api.ConformanceTest do
 
   The description lists several operations at one address, distinguished only
   by a `#fragment`, when the same endpoint accepts more than one body or
-  answers more than one shape — eight documented ways to create an index, all
+  returns more than one shape — eight documented ways to create an index, all
   of them `POST /_api/index`. The surface carries one operation per address,
   so the comparison is a set relation: every documented address is reachable,
   and every address the surface calls is documented. Mirroring the
@@ -81,7 +81,7 @@ defmodule Arangox.Api.ConformanceTest do
              Arangox.get(conn, @document_path, [], @fetch_opts)
 
     assert is_map(document) and is_map(document["paths"]),
-           "the server answered #{@document_path} without a decodable paths map"
+           "the server responded to #{@document_path} without a decodable paths map"
 
     %{document: document, operations: document_operations(document), surface: surface()}
   end
@@ -131,6 +131,24 @@ defmodule Arangox.Api.ConformanceTest do
            #{ApiSurface.surface_dir()} calls these addresses and the server describes none \
            of them — a typo in a path, or an endpoint the server dropped:
            #{format(Enum.sort(surplus))}
+           """
+  end
+
+  test "server-global addresses are marked so no database prefix is added", ctx do
+    documented =
+      for op <- ctx.operations, into: %{}, do: {op.address, op.database_scope}
+
+    wrong =
+      for op <- ctx.surface,
+          expected = Map.fetch!(documented, op.address),
+          actual = Keyword.get(op.spec, :database_scope, :database),
+          actual != expected,
+          do: "#{op.address}: document says #{expected}, surface declares #{actual}"
+
+    assert Enum.sort(wrong) == [],
+           """
+           these operations would send a database prefix that disagrees with the server description:
+           #{format(Enum.sort(wrong))}
            """
   end
 
@@ -215,6 +233,7 @@ defmodule Arangox.Api.ConformanceTest do
 
       %{
         address: address(method, path),
+        database_scope: if(String.starts_with?(path, "/_db/"), do: :database, else: :server),
         required:
           for(p <- params, p["in"] == "query", p["required"], into: MapSet.new(), do: p["name"]),
         query: for(p <- params, p["in"] == "query", into: MapSet.new(), do: p["name"]),

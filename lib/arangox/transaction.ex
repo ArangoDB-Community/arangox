@@ -19,7 +19,7 @@ defmodule Arangox.Transaction do
   Any pooled connection to the same deployment can therefore serve any request
   of the transaction. Verified against an ArangoDB 3.12 cluster (3.12.4, three
   coordinators): a transaction begun through one coordinator accepted writes,
-  served isolated reads, answered status, and committed or aborted through the
+  served isolated reads, reported status, and committed or aborted through the
   other coordinators — the identifier encodes the issuing coordinator and
   foreign coordinators forward to it. That is the measured scope: any
   connection, any coordinator, one deployment. A handle means nothing to a
@@ -123,12 +123,14 @@ defmodule Arangox.Transaction do
   def valid_id?(id) when is_binary(id) and id != "", do: digits_only?(id)
   def valid_id?(_id), do: false
 
+  @spec digits_only?(binary) :: boolean
   defp digits_only?(<<byte, rest::binary>>) when byte in ?0..?9, do: digits_only?(rest)
   defp digits_only?(<<>>), do: true
   defp digits_only?(_other), do: false
 
   # The rejected value is deliberately not echoed: it may be, or contain, a
   # live transaction identifier, and this message ends up in logs.
+  @spec shape_error :: Error.t()
   defp shape_error do
     %Error{
       message:
@@ -186,6 +188,7 @@ defmodule Arangox.Transaction do
   @spec abort(id) :: Request.t()
   def abort(id) when is_binary(id), do: %Request{method: :delete, path: path(id)}
 
+  @spec path(id) :: binary
   defp path(id), do: @path <> "/" <> id
 end
 

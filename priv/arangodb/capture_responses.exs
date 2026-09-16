@@ -1,4 +1,4 @@
-# Records what the operations in `lib/arangox/api/` actually answer, against a
+# Records what the operations in `lib/arangox/api/` actually return, against a
 # live server, and writes the result to `priv/arangodb/response-shapes-<tag>.json`.
 #
 # The API description the server serves does not describe most success bodies:
@@ -17,7 +17,7 @@
 # deliberately, because a sweep that guesses at write operations is a sweep
 # that eventually calls something irreversible.
 
-alias Arangox.Api
+alias Arangox.API
 alias Arangox.TestSupport.ApiSurface
 
 endpoint = System.get_env("ARANGOX_ENDPOINT", "http://localhost:8529")
@@ -131,7 +131,7 @@ operations =
   for file <- ApiSurface.surface_files(),
       op <- ApiSurface.operations(file),
       op.spec != nil do
-    Map.put(op, :module, Module.concat([Arangox.Api, file |> Path.basename(".ex") |> Macro.camelize()]))
+    Map.put(op, :module, Module.concat([Arangox.API, file |> Path.basename(".ex") |> Macro.camelize()]))
   end
 
 record = fn acc, op, result ->
@@ -220,7 +220,7 @@ captured =
   end)
 
 # ----------------------------------------------------------------- cluster --
-# A single server answers 501 or 403 for the cluster reads: they are not
+# A single server responds 501 or 403 for the cluster reads: they are not
 # unimplemented here, they are meaningless. Compose runs a real cluster, so
 # they are recorded against a coordinator instead of left as errors.
 cluster_endpoint = System.get_env("ARANGOX_CLUSTER_ENDPOINT", "http://localhost:8006")
@@ -291,7 +291,7 @@ ok = Enum.count(captured, fn {_k, v} -> v["outcome"] == "ok" end)
 
 IO.puts("""
 
-captured #{map_size(captured)} operations (#{ok} answered, #{map_size(captured) - ok} errored)
+captured #{map_size(captured)} operations (#{ok} succeeded, #{map_size(captured) - ok} errored)
 skipped #{length(skipped)} reads whose arguments the fixture cannot fill
 wrote #{path}
 """)

@@ -50,7 +50,7 @@ if Code.ensure_loaded?(VelocyPack) do
     or `30_720`.
 
     Deprecated in 0.8 and removed in the next release, along with the
-    application-config read it reports on. It answers the *fallback*, not what any particular pool uses:
+    application-config read it reports on. It returns the *fallback*, not what any particular pool uses:
     since 0.8 the chunk size is a per-pool start option, resolved at connect and
     held in `Arangox.Connection`, so two pools can disagree and neither has to
     agree with this. Pass `:vst_maxsize` to `Arangox.start_link/1` instead.
@@ -93,6 +93,8 @@ if Code.ensure_loaded?(VelocyPack) do
     # `DBConnection` callback and costs the process its backoff. A
     # chunk header declaring a length below the 24-byte header, for one,
     # reaches `recv` with a negative length.
+    @spec do_maybe_authenticate(Connection.t(), [Client.request_option()], list) ::
+            :ok | {:error, Error.t()}
     defp do_maybe_authenticate(state, opts, auth_msg) do
       do_authenticate(state, opts, auth_msg)
     rescue
@@ -106,6 +108,8 @@ if Code.ensure_loaded?(VelocyPack) do
         {:error, %Error{reason: :client_error, message: "threw: #{inspect(value)}"}}
     end
 
+    @spec do_authenticate(Connection.t(), [Client.request_option()], list) ::
+            :ok | {:error, Error.t()}
     defp do_authenticate(
            %Connection{socket: socket, endpoint: endpoint, vst_maxsize: vst_maxsize} = state,
            opts,
@@ -121,12 +125,26 @@ if Code.ensure_loaded?(VelocyPack) do
         {:ok, header} <-
           recv_header(socket, deadline, opts, state),
         {:ok, stream} <-
-          recv_stream(socket, header, deadline, opts, state),
-        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} <-
-          decode_stream(stream)
+          recv_stream(socket, header, deadline, opts, state)
       ) do
-        :ok
+        check_auth_response(stream, endpoint)
       else
+        # Every step normalizes its own failure into this one shape;
+        # `normalize/1` passes an `%Error{}` through and translates the
+        # transport's raw reasons.
+        {:error, reason} -> {:error, normalize(reason)}
+      end
+    end
+
+    # The server refuses an authentication with an ordinary error body, so a
+    # non-200 response is decoded into the driver's error rather than
+    # reported as malformed bytes.
+    @spec check_auth_response(binary, binary) :: :ok | {:error, Error.t()}
+    defp check_auth_response(stream, endpoint) do
+      case decode_stream(stream) do
+        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} ->
+          :ok
+
         {:ok, [[@vst_version_trunc, 2, status, _headers] | [body | _]]} ->
           error_num = body["errorNum"]
 
@@ -139,11 +157,11 @@ if Code.ensure_loaded?(VelocyPack) do
              endpoint: endpoint
            }}
 
+        {:ok, _decoded} = other ->
+          {:error, malformed(other)}
+
         {:error, reason} ->
           {:error, normalize(reason)}
-
-        other ->
-          {:error, malformed(other)}
       end
     end
 
@@ -205,9 +223,11 @@ if Code.ensure_loaded?(VelocyPack) do
         {:error, %Error{reason: :client_error, message: "threw: #{inspect(value)}"}}
     end
 
+    @spec addr_for(Endpoint.addr()) :: {:local, charlist} | charlist
     defp addr_for({:unix, path}), do: {:local, to_charlist(path)}
     defp addr_for({:tcp, host, _port}), do: to_charlist(host)
 
+    @spec port_for(Endpoint.addr()) :: non_neg_integer
     defp port_for({:unix, _path}), do: 0
     defp port_for({:tcp, _host, port}), do: port
 
@@ -223,7 +243,7 @@ if Code.ensure_loaded?(VelocyPack) do
       {database, path} =
         case path do
           # A caller can write the prefix with no trailing segment —
-          # `/_db/mydb` — so the split answers one part as well as two.
+          # `/_db/mydb` — so the split yields one part as well as two.
           "/_db/" <> rest ->
             case :binary.split(rest, "/") do
               [database, path] -> {database, "/" <> path}
@@ -260,31 +280,20 @@ if Code.ensure_loaded?(VelocyPack) do
           recv_header(socket, deadline, opts, state),
         {:ok, stream} <-
           recv_stream(socket, header, deadline, opts, state),
-        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} <-
-          decode_stream(stream)
+        {:ok, status, headers, body} <-
+          decode_response(stream)
       ) do
         {:ok,
          %Response{status: status, headers: response_headers(headers), body: body_from(body)},
          state}
       else
-        {:unsupported_method, method} ->
-          {:error,
-           %Error{
-             reason: :client_error,
-             message:
-               "VelocyStream defines no method #{inspect(method)}; expected one of " <>
-                 ":get, :head, :delete, :post, :put, :patch or :options"
-           }, state}
-
-        # `:closed` is in `Arangox.Client.connection_lost_reasons/0` and so
-        # forces a disconnect.
+        # Every step normalizes its own failure into this one shape;
+        # `normalize/1` passes an `%Error{}` through and translates the
+        # transport's raw reasons. `:closed` is in
+        # `Arangox.Client.connection_lost_reasons/0` and so forces a
+        # disconnect.
         {:error, reason} ->
           {:error, normalize(reason), state}
-
-        # Decoded, but not a VelocyStream response message. Without this
-        # clause a `WithClauseError` escapes the callback.
-        other ->
-          {:error, malformed(other), state}
       end
     rescue
       # A raise here can land after the request was written — a response the
@@ -308,17 +317,37 @@ if Code.ensure_loaded?(VelocyPack) do
     # An exit mid-request leaves the socket in an unknown state, so a reason
     # the pool would not retire on is replaced with one it does; `:noproc` and
     # friends keep their more precise selves.
+    @spec retiring(atom) :: atom
     defp retiring(reason) do
       if Client.connection_lost?(reason), do: reason, else: :closed
     end
 
+    # The response boundary: whatever `decode_stream/1` yields is normalized
+    # here, so `request/3`'s `else` sees one error shape. A decoded term that
+    # is not a VelocyStream response message must not escape the callback as
+    # a `WithClauseError`.
+    @spec decode_response(binary) :: {:ok, term, term, list} | {:error, term}
+    defp decode_response(stream) do
+      case decode_stream(stream) do
+        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} ->
+          {:ok, status, headers, body}
+
+        {:ok, _decoded} = other ->
+          {:error, malformed(other)}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+
     # `Arangox.method/0` names seven methods and nothing enforces that at
-    # runtime, so the fallback is reachable. It must not answer a sentinel
+    # runtime, so the fallback is reachable. It must not return a sentinel
     # integer: VelocyStream defines no such method, so the request would go
     # out, the server could not reply, and the caller would wait out its budget
     # for a `:timeout`.
     # It returns rather than raises because `request/3` must not raise,
     # which `Arangox.ClientContractTest` pins for every client.
+    @spec method_for(term) :: {:ok, 0..6} | {:error, Error.t()}
     defp method_for(:delete), do: {:ok, 0}
     defp method_for(:get), do: {:ok, 1}
     defp method_for(:post), do: {:ok, 2}
@@ -326,10 +355,20 @@ if Code.ensure_loaded?(VelocyPack) do
     defp method_for(:head), do: {:ok, 4}
     defp method_for(:patch), do: {:ok, 5}
     defp method_for(:options), do: {:ok, 6}
-    defp method_for(method), do: {:unsupported_method, method}
+
+    defp method_for(method) do
+      {:error,
+       %Error{
+         reason: :client_error,
+         message:
+           "VelocyStream defines no method #{inspect(method)}; expected one of " <>
+             ":get, :head, :delete, :post, :put, :patch or :options"
+       }}
+    end
 
     # ------- Begin Query Parsing Functions (Plataformatec) --------
 
+    @spec query_for(binary | nil) :: map | list
     defp query_for(nil), do: %{}
 
     defp query_for(query) do
@@ -338,6 +377,7 @@ if Code.ensure_loaded?(VelocyPack) do
       Enum.reduce(Enum.reverse(parts), %{}, &decode_www_pair(&1, &2))
     end
 
+    @spec decode_www_pair(binary, map | list) :: map | list
     defp decode_www_pair("", acc), do: acc
 
     defp decode_www_pair(binary, acc) do
@@ -353,8 +393,10 @@ if Code.ensure_loaded?(VelocyPack) do
       decode_pair(current, acc)
     end
 
+    @spec decode_www_form(binary) :: binary
     defp decode_www_form(value), do: URI.decode_www_form(value)
 
+    @spec decode_pair({binary, binary | nil}, map | list) :: map | list
     defp decode_pair({key, value}, acc) do
       if key != "" and :binary.last(key) == ?] do
         subkey = :binary.part(key, 0, byte_size(key) - 1)
@@ -365,6 +407,7 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    @spec assign_split([binary], binary | nil, map | list | :none, :binary.cp()) :: map | list
     defp assign_split(["", rest], value, acc, pattern) do
       parts = :binary.split(rest, pattern)
 
@@ -409,6 +452,7 @@ if Code.ensure_loaded?(VelocyPack) do
       assign_map(acc, key, value)
     end
 
+    @spec assign_map(map | list | :none, binary, binary | nil) :: map
     defp assign_map(acc, key, value) do
       case acc do
         %{^key => _} -> acc
@@ -424,6 +468,7 @@ if Code.ensure_loaded?(VelocyPack) do
     # the right-most occurrence and drops the rest, and names keep whatever
     # casing the caller used. This collapse is this client's own — the HTTP
     # clients deliver the list as given.
+    @spec headers_for(map | Arangox.headers()) :: map
     defp headers_for(%{} = headers), do: headers
     defp headers_for(headers) when is_list(headers), do: :maps.from_list(headers)
 
@@ -431,9 +476,11 @@ if Code.ensure_loaded?(VelocyPack) do
     # built from it: no repeated name can arrive, and the order is the map's
     # key order, not the order the server wrote them. Names keep the server's
     # casing.
+    @spec response_headers(term) :: term
     defp response_headers(headers) when is_map(headers), do: Map.to_list(headers)
     defp response_headers(headers), do: headers
 
+    @spec body_for(term) :: {:ok, binary} | {:error, term}
     defp body_for(""), do: {:ok, ""}
     defp body_for(body), do: encode_term(body)
 
@@ -441,6 +488,7 @@ if Code.ensure_loaded?(VelocyPack) do
     # term it has no encoder for — a struct with no `Enumerable`, say. That is
     # the caller's data failing before anything reached the wire, so it must
     # not take the `request/3` rescue, whose reason retires the connection.
+    @spec encode_term(term) :: {:ok, binary} | {:error, term}
     defp encode_term(term) do
       VelocyPack.encode(term)
     rescue
@@ -448,12 +496,14 @@ if Code.ensure_loaded?(VelocyPack) do
         {:error, %Error{reason: :encode_error, message: Exception.message(exception)}}
     end
 
+    @spec body_from(list) :: term
     defp body_from([]), do: nil
     defp body_from([body]), do: body
     defp body_from(body), do: body
 
     # The chunk size is resolved per pool at connect and arrives from
     # connection state, so it is an argument rather than a module attribute.
+    @spec build_stream(binary, pos_integer) :: [binary, ...]
     defp build_stream(message, vst_maxsize) do
       [first_chunk | rest_chunks] =
         chunks = chunk_every(message, vst_maxsize - @chunk_header_size)
@@ -475,14 +525,17 @@ if Code.ensure_loaded?(VelocyPack) do
     # both depend on that: a bare binary for the single-chunk case forces a
     # second branch in each, and makes the numbering comprehension build a
     # descending range for a message that fits in one chunk.
+    @spec chunk_every(binary, pos_integer) :: [binary, ...]
     defp chunk_every(bytes, size) when byte_size(bytes) <= size, do: [bytes]
 
     defp chunk_every(bytes, size) do
-      <<chunk::binary-size(size), rest::binary>> = bytes
+      <<chunk::binary-size(^size), rest::binary>> = bytes
 
       [chunk | chunk_every(rest, size)]
     end
 
+    @spec prepend_chunk(binary, non_neg_integer, 0 | 1, non_neg_integer, non_neg_integer) ::
+            binary
     defp prepend_chunk(chunk, chunk_n, is_first, msg_id, msg_length) do
       <<
         @chunk_header_size + byte_size(chunk)::little-32,
@@ -493,13 +546,20 @@ if Code.ensure_loaded?(VelocyPack) do
       >>
     end
 
-    # Stops at the first chunk that fails and answers with its reason. Must be
+    # Stops at the first chunk that fails and returns its reason. Must be
     # an error return rather than a throw: the caller cannot match on a throw.
     #
     # The write half of the deadline: each chunk's send is bounded by the budget remaining
     # *at that chunk*, re-derived through a per-chunk `setopts`. A fixed bound
     # would let an N-chunk stream against a peer that stopped reading block
     # for N bounds, with the deadline consulted only at the first receive.
+    @spec send_stream(
+            {module, term},
+            [binary],
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: :ok | {:error, term}
     defp send_stream({mod, port}, chunks, deadline, opts, state) do
       Enum.reduce_while(chunks, :ok, fn chunk, :ok ->
         case Client.socket_timeout(deadline, opts, state) do
@@ -526,6 +586,7 @@ if Code.ensure_loaded?(VelocyPack) do
     # anyway, with a better-typed error than this call could build. A
     # transport module other than the two real ones (the config suite drives
     # this client over a fake) bounds its own sends.
+    @spec set_send_timeout(module, term, pos_integer) :: :ok | {:error, term}
     defp set_send_timeout(:gen_tcp, port, timeout),
       do: :inet.setopts(port, send_timeout: timeout)
 
@@ -536,6 +597,8 @@ if Code.ensure_loaded?(VelocyPack) do
 
     # The receive bound. Both receives must use the three-argument
     # `recv/3`; the two-argument form takes no timeout and waits forever.
+    @spec timeout_for(integer, [Client.request_option()], Connection.t()) ::
+            {:ok, pos_integer} | {:error, Error.t()}
     defp timeout_for(deadline, opts, state) do
       case Client.socket_timeout(deadline, opts, state) do
         {:ok, timeout} ->
@@ -550,6 +613,8 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    @spec recv_header({module, term}, integer, [Client.request_option()], Connection.t()) ::
+            {:ok, [non_neg_integer, ...]} | {:error, term}
     defp recv_header(socket, deadline, opts, state) do
       case timeout_for(deadline, opts, state) do
         {:ok, timeout} -> do_recv_header(socket, timeout)
@@ -557,6 +622,8 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    @spec do_recv_header({module, term}, pos_integer) ::
+            {:ok, [non_neg_integer, ...]} | {:error, term}
     defp do_recv_header({mod, port}, timeout) do
       case mod.recv(port, @chunk_header_size, timeout) do
         {:ok,
@@ -584,6 +651,13 @@ if Code.ensure_loaded?(VelocyPack) do
     end
 
     # TODO: this could be refactored to decode streams as they are received
+    @spec recv_stream(
+            {module, term},
+            [non_neg_integer, ...],
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: {:ok, binary} | {:error, term}
     defp recv_stream(socket, [chunk_length, 1, 1, _msg_id, _msg_length], deadline, opts, state),
       do: recv_chunk(socket, chunk_length, deadline, opts, state)
 
@@ -604,11 +678,19 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    @spec recv_stream(
+            {module, term},
+            non_neg_integer,
+            binary,
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: {:ok, binary} | {:error, term}
     defp recv_stream(_socket, n_chunks, _buffer, _deadline, _opts, _state) when n_chunks < 2 do
       {:error,
        %Error{
          reason: :malformed_header,
-         message: "a chunked message declared #{n_chunks} chunks, which cannot be answered"
+         message: "a chunked message declared #{n_chunks} chunks, which cannot be read"
        }}
     end
 
@@ -635,6 +717,13 @@ if Code.ensure_loaded?(VelocyPack) do
     # An empty chunk must not reach `recv/3`: length 0 on a raw-mode socket
     # means "whatever bytes are buffered", not "nothing", so it would swallow
     # the next chunk's header and desynchronise the stream.
+    @spec recv_chunk(
+            {module, term},
+            pos_integer,
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: {:ok, binary} | {:error, term}
     defp recv_chunk(_socket, @chunk_header_size, _deadline, _opts, _state), do: {:ok, ""}
 
     defp recv_chunk({mod, port}, chunk_length, deadline, opts, state) do
@@ -644,6 +733,7 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    @spec decode_stream(binary, [term]) :: {:ok, [term]} | {:error, term}
     defp decode_stream(stream, acc \\ [])
 
     defp decode_stream("", acc), do: {:ok, acc}
@@ -682,6 +772,7 @@ if Code.ensure_loaded?(VelocyPack) do
     # module only ever sees a parsed `Arangox.Endpoint`, which carries no
     # userinfo, and `Arangox.Connection` fills in the redacted configured
     # endpoint.
+    @spec normalize(term) :: Error.t()
     defp normalize(%Error{} = error), do: error
 
     # `:gen_tcp`/`:ssl` speak in bare POSIX atoms, including `:closed`, which is
@@ -697,7 +788,7 @@ if Code.ensure_loaded?(VelocyPack) do
     # options rather than on the handshake. The raw tuple names neither the
     # cause nor the fix, and this is the first thing anyone enabling TLS on this
     # client meets. Reporting it is this driver's job; supplying a default
-    # answer to it is not.
+    # for it is not.
     defp normalize({:options, :incompatible, details} = reason) do
       if Keyword.get(details, :cacerts) == :undefined and
            Keyword.get(details, :verify) == :verify_peer do
@@ -725,6 +816,7 @@ if Code.ensure_loaded?(VelocyPack) do
 
     defp normalize(reason), do: %Error{reason: :client_error, message: inspect(reason)}
 
+    @spec malformed({:ok, term}) :: Error.t()
     defp malformed(other) do
       %Error{
         reason: :client_error,
@@ -732,6 +824,7 @@ if Code.ensure_loaded?(VelocyPack) do
       }
     end
 
+    @spec caught_reason(term) :: atom
     defp caught_reason(reason) when is_atom(reason), do: reason
     defp caught_reason(_reason), do: :client_error
   end

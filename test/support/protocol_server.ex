@@ -58,7 +58,7 @@ defmodule Arangox.ProtocolServer do
           `/hang`.
         * `{:delay, milliseconds, route}` - sleep, then serve `route`. A
           request that outlives a client's timeout still arrives and is still
-          answered, which is how "the late body is never delivered to any
+          served, which is how "the late body is never delivered to any
           caller" becomes assertable.
 
   ## Paths (`:cowboy` listener)
@@ -248,7 +248,7 @@ defmodule Arangox.ProtocolServer do
 
   @doc false
   # Read one field at a time: the state also holds every request the harness
-  # has answered, and `Agent.get/2` copies whatever the function returns to
+  # has responded, and `Agent.get/2` copies whatever the function returns to
   # the calling process.
   def __config__(agent, field), do: Agent.get(agent, &Map.fetch!(&1, field))
 

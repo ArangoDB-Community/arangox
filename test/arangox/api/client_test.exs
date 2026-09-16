@@ -1,11 +1,11 @@
-defmodule Arangox.Api.ClientTest do
+defmodule Arangox.API.ClientTest do
   @moduledoc """
-  The `Arangox.Api` adapter: the one module through which every
-  `Arangox.Api.*` operation reaches the network.
+  The `Arangox.API` adapter: the one module through which every
+  `Arangox.API.*` operation reaches the network.
 
   An operation hands it a method, a list of path segments and the parameters
   it accepts; the adapter turns that into `Arangox.request/6` and turns the
-  answer back into a body. These tests assert on both halves — what crossed
+  response back into a body. These tests assert on both halves — what crossed
   the wire, and what the caller got back.
 
   Protocol tier: each test runs a real Mint pool against
@@ -15,7 +15,7 @@ defmodule Arangox.Api.ClientTest do
   use ExUnit.Case, async: true
 
   alias Arangox.{Error, ProtocolServer, Transaction}
-  alias Arangox.Api.Client
+  alias Arangox.API.{Authentication, Client}
 
   @availability "/_admin/server/availability"
   @version "/_api/version"
@@ -119,7 +119,7 @@ defmodule Arangox.Api.ClientTest do
 
     # An ArangoDB index identifier is `collection/number`, so the separator is
     # structure the server parses: percent-encoding it makes every index read
-    # and delete answer 400. Only a segment declared `{:path, value}` keeps it,
+    # and delete return 400. Only a segment declared `{:path, value}` keeps it,
     # and the parts between the separators are still encoded, so the value
     # cannot open a query or a fragment.
     test "a segment declared as a path keeps its separators and encodes the rest" do
@@ -184,7 +184,7 @@ defmodule Arangox.Api.ClientTest do
   ## What comes back
 
   describe "what comes back:" do
-    test "a success answers the decoded body, not a response struct" do
+    test "a success returns the decoded body, not a response struct" do
       {conn, _} = connected!(%{"/_api/version" => {200, @json, ~s({"version":"3.12.10"})}})
 
       assert {:ok, %{"version" => "3.12.10"}} =
@@ -217,7 +217,7 @@ defmodule Arangox.Api.ClientTest do
 
     # A HEAD carries no body, so returning one would hand the caller nothing.
     # The revision lives in the etag, quoted, and the quotes are not part of it.
-    test "a revision response answers the unquoted etag" do
+    test "a revision response returns the unquoted etag" do
       {url, _server} =
         start_server!(%{"/_api/document/c/k" => {200, [{"etag", "\"_hAbC123\""}], ""}})
 
@@ -227,7 +227,7 @@ defmodule Arangox.Api.ClientTest do
                Client.request(conn,
                  method: :head,
                  segments: ["_api", "document", "c", "k"],
-                 response: :revision
+                 response_type: :revision
                )
     end
   end
@@ -361,6 +361,24 @@ defmodule Arangox.Api.ClientTest do
 
       assert [entry] = adapter_requests(server)
       assert entry["path"] == "/_db/mydb/_api/version"
+    end
+
+    test "a server-global operation ignores pool and per-call databases" do
+      {conn, server} =
+        connected!(%{"/_open/auth" => {200, @json, ~s({"jwt":"token"})}}, database: "tenant")
+
+      for opts <- [[], [database: "override"]] do
+        assert {:ok, %{"jwt" => "token"}} =
+                 Authentication.create_session_token(
+                   conn,
+                   %{"username" => "root", "password" => "secret"},
+                   opts
+                 )
+      end
+
+      assert [first, second] = adapter_requests(server)
+      assert first["path"] == "/_open/auth"
+      assert second["path"] == "/_open/auth"
     end
 
     test "an invalid :database is refused exactly as the hand-written path refuses it" do

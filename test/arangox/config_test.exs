@@ -293,6 +293,56 @@ defmodule Arangox.ConfigTest do
     end
   end
 
+  describe "socket options no endpoint can read:" do
+    @unreadable "no endpoint in this pool can read it"
+
+    test ":ssl_opts is flagged when every endpoint is cleartext" do
+      log = capture_log(fn -> start_pool(endpoints: "http://localhost:8529", ssl_opts: []) end)
+
+      assert log =~ @unreadable
+      assert log =~ ":ssl_opts"
+    end
+
+    test ":tcp_opts is flagged when every endpoint is encrypted" do
+      log = capture_log(fn -> start_pool(endpoints: "https://localhost:8529", tcp_opts: []) end)
+
+      assert log =~ @unreadable
+      assert log =~ ":tcp_opts"
+    end
+
+    test "an endpoint list that mixes schemes reads both, so neither is flagged" do
+      log =
+        capture_log(fn ->
+          start_pool(
+            endpoints: ["http://localhost:8529", "https://localhost:8530"],
+            tcp_opts: [],
+            ssl_opts: []
+          )
+        end)
+
+      refute log =~ @unreadable
+    end
+
+    test "a redirect admitted by :endpoint_mapper can reach either scheme, so neither is flagged" do
+      log =
+        capture_log(fn ->
+          start_pool(
+            endpoints: "http://localhost:8529",
+            ssl_opts: [],
+            endpoint_mapper: fn endpoint -> endpoint end
+          )
+        end)
+
+      refute log =~ @unreadable
+    end
+
+    test "passing neither option is silent" do
+      log = capture_log(fn -> start_pool(endpoints: "http://localhost:8529") end)
+
+      refute log =~ @unreadable
+    end
+  end
+
   describe "deprecated readers:" do
     test "Arangox.json_library/0 returns the fallback and warns" do
       assert capture_log(fn -> assert deprecated_json_library() == Jason end) =~ @deprecation

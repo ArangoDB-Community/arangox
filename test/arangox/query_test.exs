@@ -8,7 +8,7 @@ defmodule Arangox.QueryTest.StubClient do
 
   A script value may be a **list** of responses, which the client serves in
   order and then repeats the last one. That is what makes a multi-batch drain
-  assertable: `PUT /_api/cursor/c1` has to answer differently the second time.
+  assertable: `PUT /_api/cursor/c1` has to respond differently the second time.
   The cursor into that list lives in an unnamed `Agent` carried in the
   fabricated socket, so the tests stay `async: true`.
   """
@@ -179,7 +179,7 @@ defmodule Arangox.QueryTest do
       refute_received {:request, %Request{}}
     end
 
-    test "anything else still answers the documented unsupported error" do
+    test "anything else still returns the documented unsupported error" do
       assert {:error, %Error{} = exception, %Connection{}} =
                Connection.handle_close(%Request{method: :get, path: "/_api/version"}, [], state())
 
@@ -187,7 +187,7 @@ defmodule Arangox.QueryTest do
     end
 
     # DBConnection calls close for whatever it was handed whenever describe or
-    # encode raises, so the clause has to answer for types this driver never
+    # encode raises, so the clause has to return for types this driver never
     # produces rather than raising a second error over the first.
     test "a value this driver never produces does not raise a function-clause error" do
       assert {:error, %Error{}, %Connection{}} = Connection.handle_close(:nonsense, [], state())
@@ -252,8 +252,8 @@ defmodule Arangox.QueryTest do
   ## The plan-cache option
 
   describe "the plan cache option" do
-    # The server refuses to cache some statements outright — an UPSERT
-    # answers 1584 — and the driver gates the option on server version. Sending it
+    # The server refuses to cache some statements outright — an UPSERT is
+    # refused with 1584 — and the driver gates the option on server version. Sending it
     # uninvited would hand both of those to a caller who never asked.
     test "a query does not ask for the cache unless told to" do
       conn = start_pool(%{{:post, @cursor} => one_batch([])})
@@ -311,7 +311,7 @@ defmodule Arangox.QueryTest do
       refute_received {:request, %Request{method: :delete}}
     end
 
-    test "a fetch that misses its stored batch answers locally, not from the wire" do
+    test "a fetch that misses its stored batch is served locally, not from the wire" do
       assert {:error, %Arangox.Error{}, %Connection{}} =
                Connection.handle_fetch(nil, make_ref(), [], state())
 
@@ -509,7 +509,7 @@ defmodule Arangox.QueryTest do
   ## The one-shot door
 
   describe "query/4" do
-    test "answers with the drained response rather than a cursor to read" do
+    test "returns the drained response rather than a cursor to read" do
       script = %{
         {:post, @cursor} =>
           {201, Jason.encode!(%{"result" => [1], "hasMore" => true, "id" => "c1"})},
@@ -608,7 +608,7 @@ defmodule Arangox.QueryTest do
 
     # Stopping early is the only case where a server-side cursor is still
     # standing when the stream ends. A drained one is already gone — the server
-    # drops it on delivery of the last batch and answers `cursor not found` for
+    # drops it on delivery of the last batch and responds `cursor not found` for
     # it afterwards — so `handle_deallocate/4`'s DELETE has something to delete
     # here and nowhere else. That also makes this the only path where getting
     # the fetch bookkeeping wrong leaks a cursor rather than merely erroring.
@@ -652,7 +652,7 @@ defmodule Arangox.QueryTest do
     end
   end
 
-  ## The plan-cache listing's answer shape
+  ## The plan-cache listing's response shape
 
   # The listing's contract is a list of entries. A body of any other shape —
   # an error envelope behind a 200, a body left undecoded — must be an error,

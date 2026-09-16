@@ -13,7 +13,7 @@ defmodule Arangox.TransactionTest.StubClient do
   that nothing was.
 
   A scripted response is `{status, json_binary}`; `{:error, reason}`
-  returns an `%Arangox.Error{reason: reason}`. Anything unscripted answers
+  returns an `%Arangox.Error{reason: reason}`. Anything unscripted returns
   `200 {}`, which is also what lets `connect/2` pass the connect pipeline's
   availability and version probes in the pool-backed tests.
   """
@@ -252,7 +252,7 @@ defmodule Arangox.TransactionTest do
     end
 
     test "a success status other than 201 is an error" do
-      # Unscripted answers 200 {} — a success, but not a begun transaction.
+      # Unscripted returns 200 {} — a success, but not a begun transaction.
       assert {:error, %Connection{} = new_state} = Connection.handle_begin([], state(%{}))
       assert new_state.trx_id == nil
     end
@@ -297,7 +297,7 @@ defmodule Arangox.TransactionTest do
     end
 
     # The body's status decides, not the HTTP 200 — a 200 only means the
-    # server answered, and its body can already name the transaction aborted.
+    # server responded, and its body can already name the transaction aborted.
     test "a transaction the server has aborted reports :error" do
       script = %{{:get, "/_api/transaction/123"} => {200, trx_body("aborted")}}
 
@@ -475,7 +475,7 @@ defmodule Arangox.TransactionTest do
       assert {@trx_header, "123"} in headers
     end
 
-    # DBConnection answers a commit failure by calling handle_rollback,
+    # DBConnection responds to a commit failure by calling handle_rollback,
     # so the failed commit must still name the transaction — a rollback that
     # reports :idle without a request leaks the server-side transaction until
     # it times out. The
@@ -693,7 +693,7 @@ defmodule Arangox.TransactionTest do
       refute Enum.any?(unrelated.headers, fn {name, _} -> name == @trx_header end)
 
       # DBConnection's own view of the checked-in connection agrees: no
-      # transaction in flight, answered locally without a request.
+      # transaction in flight, handled locally without a request.
       assert Arangox.status(conn) == :idle
     end
 
@@ -706,7 +706,7 @@ defmodule Arangox.TransactionTest do
       assert %Response{status: 200} = Arangox.get!(conn, "/alive")
     end
 
-    test "a begin answered without a transaction id is an error, not a crash" do
+    test "a begin response without a transaction id is an error, not a crash" do
       # A success that is not a 201...
       conn = start_pool(%{})
       assert {:error, %Error{status: 200}} = Arangox.begin_transaction(conn)
@@ -766,7 +766,7 @@ defmodule Arangox.TransactionTest do
       assert {:ok, %Response{status: 200}} = Arangox.abort_transaction(conn, trx)
     end
 
-    test "transaction_status/3 answers from the body, not the HTTP status" do
+    test "transaction_status/3 reads from the body, not the HTTP status" do
       trx = Transaction.new("9")
 
       for {body_status, expected} <- [

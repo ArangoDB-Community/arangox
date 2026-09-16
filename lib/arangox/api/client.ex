@@ -1,18 +1,19 @@
-defmodule Arangox.Api.Client do
+defmodule Arangox.API.Client do
   @moduledoc """
-  The adapter every `Arangox.Api.*` operation calls.
+  The adapter every `Arangox.API.*` operation calls.
 
   An operation names a method, a list of path segments, and the query
   parameters it accepts. This module turns that into a driver request, so the
   pool, timeout budget, transaction handling and error contract apply to
-  `Arangox.Api` calls exactly as they do to hand-written ones. It holds no
+  `Arangox.API` calls exactly as they do to hand-written ones. It holds no
   connection state and opens no socket: a transport change touches this
   module, never the operations above it.
 
   ## Options every operation accepts
 
-    * `:database` - the database to run against. Falls back to the pool's own
-      `:database`, and then to `_system`.
+    * `:database` - the database to run a database-scoped operation against.
+      Falls back to the pool's own `:database`, and then to `_system`.
+      Server-global operations ignore it and never receive a `/_db/` prefix.
     * `:headers` - extra request headers as `{name, value}` tuples, for the
       header parameters an operation does not expose (`if-match`, and so on).
     * any query parameter the operation declares, written in snake_case
@@ -21,11 +22,11 @@ defmodule Arangox.Api.Client do
 
   ## What comes back
 
-  A successful call answers `{:ok, body}` — the decoded response body, not a
-  response struct. A success that carries no body (`204 No Content`) answers
+  A successful call returns `{:ok, body}` — the decoded response body, not a
+  response struct. A success that carries no body (`204 No Content`) returns
   `{:ok, nil}`.
 
-  Any error status answers `{:error, %Arangox.Error{}}`, carrying the HTTP
+  Any error status returns `{:error, %Arangox.Error{}}`, carrying the HTTP
   status and ArangoDB's own `errorNum`. A `404` is an error like any other:
   ask for a document that is not there and you get
   `{:error, %Arangox.Error{status: 404}}`.
@@ -36,7 +37,7 @@ defmodule Arangox.Api.Client do
   ## Bounds
 
   Every value a caller can influence is bounded here, because every
-  `Arangox.Api` call passes through:
+  `Arangox.API` call passes through:
 
     * path segments are percent-encoded one segment at a time, so a value
       carrying `/` or `?` becomes part of that segment instead of altering the
@@ -60,6 +61,7 @@ defmodule Arangox.Api.Client do
   @denied_headers ["authorization", "host"]
 
   @headers_shape "the :headers option must be a list of {name, value} tuples"
+  @server_scope_option :_arangox_server_scope
 
   # The spec is an operation's whole description of itself:
   #
@@ -75,8 +77,10 @@ defmodule Arangox.Api.Client do
   #   * `:body` — the request body, default `""`
   #   * `:media` — a non-JSON request media type, set as the content type
   #     when the caller supplies none of their own
-  #   * `:response` — `:body` (default), or `:revision` for a HEAD operation
-  #     whose answer is the `etag` header
+  #   * `:response_type` — `:body` (default), or `:revision` for a HEAD
+  #     operation whose return value is the `etag` header
+  #   * `:database_scope` — `:server` for an address the server defines without
+  #     a database prefix; omitted for an ordinary database-scoped operation
   #   * `:opts` — the caller's options: `:headers`, the offered query
   #     parameters, and everything the driver accepts per request
   #
@@ -91,22 +95,24 @@ defmodule Arangox.Api.Client do
     forced = Keyword.get(spec, :forced, [])
     body = Keyword.get(spec, :body, "")
     media = Keyword.get(spec, :media)
-    response = Keyword.get(spec, :response, :body)
+    response_type = Keyword.get(spec, :response_type, :body)
     opts = Keyword.get(spec, :opts, [])
     headers = Keyword.get(opts, :headers, [])
 
     with {:ok, path} <- path(segments),
          {:ok, path} <- with_query(path, declared, forced, opts),
          :ok <- check_headers(headers) do
-      conn
-      |> Arangox.request(
-        method,
-        path,
-        body,
-        headers_with_media(headers, media),
-        forwarded(opts, declared)
-      )
-      |> answer(response)
+      response =
+        Arangox.request(
+          conn,
+          method,
+          path,
+          body,
+          headers_with_media(headers, media),
+          forwarded(opts, declared, Keyword.get(spec, :database_scope))
+        )
+
+      do_response(response, response_type)
     end
   end
 
@@ -121,6 +127,7 @@ defmodule Arangox.Api.Client do
 
   ## The path
 
+  @spec path(list) :: {:ok, binary} | {:error, Error.t()}
   defp path(segments) do
     Enum.reduce_while(segments, {:ok, ""}, fn segment, {:ok, acc} ->
       case encode(segment) do
@@ -134,6 +141,7 @@ defmodule Arangox.Api.Client do
   # value is itself a path — an index identifier is `collection/number`. The
   # parts between the separators are escaped like any other segment, so the
   # value can add path depth but cannot introduce a query or a fragment.
+  @spec encode(term) :: {:ok, binary} | {:error, Error.t()}
   defp encode({:path, value}) do
     with {:ok, value} <- checked(value) do
       {:ok, value |> String.split("/") |> Enum.map_join("/", &escape/1)}
@@ -149,6 +157,7 @@ defmodule Arangox.Api.Client do
 
   # Control characters are refused rather than escaped: no ArangoDB name may
   # contain one, so escaping would only move the rejection to the server.
+  @spec checked(term) :: {:ok, binary} | {:error, Error.t()}
   defp checked(value) do
     value = to_string(value)
 
@@ -162,14 +171,18 @@ defmodule Arangox.Api.Client do
     end
   end
 
+  @spec escape(binary) :: binary
   defp escape(value), do: URI.encode(value, &URI.char_unreserved?/1)
 
+  @spec control_byte?(binary) :: boolean
   defp control_byte?(<<byte, _rest::binary>>) when byte < 0x20 or byte == 0x7F, do: true
   defp control_byte?(<<_byte, rest::binary>>), do: control_byte?(rest)
   defp control_byte?(<<>>), do: false
 
   ## The query string
 
+  @spec with_query(binary, keyword, [{binary, term}], keyword) ::
+          {:ok, binary} | {:error, Error.t()}
   defp with_query(path, declared, forced, opts) do
     pairs = forced ++ offered(declared, opts)
 
@@ -188,23 +201,35 @@ defmodule Arangox.Api.Client do
   # `[snake_case_name: "wireName"]`. A caller writes the snake_case name; the
   # wire name is what ArangoDB reads. Anything the operation does not declare
   # is left in `opts` for the driver.
+  @spec offered(keyword, keyword) :: [{binary, term}]
   defp offered(declared, opts) do
     for {name, wire} <- declared,
         Keyword.has_key?(opts, name),
         do: {wire, Keyword.fetch!(opts, name)}
   end
 
+  @spec append_query(binary, [{binary, term}]) :: binary
   defp append_query(path, []), do: path
   defp append_query(path, pairs), do: path <> "?" <> URI.encode_query(pairs)
 
   # The operation's own query parameters are consumed here; everything else —
   # `:database`, `:transaction`, `:timeout` — belongs to the driver.
-  defp forwarded(opts, declared) do
-    Keyword.drop(opts, [:headers | Keyword.keys(declared)])
+  @spec forwarded(keyword, keyword, :server | nil) :: keyword
+  defp forwarded(opts, declared, database_scope) do
+    opts = Keyword.drop(opts, [@server_scope_option, :headers | Keyword.keys(declared)])
+
+    if database_scope == :server do
+      opts
+      |> Keyword.delete(:database)
+      |> Keyword.put(@server_scope_option, true)
+    else
+      opts
+    end
   end
 
   ## The headers
 
+  @spec check_headers(term) :: :ok | {:error, Error.t()}
   defp check_headers(headers) when is_list(headers) do
     Enum.reduce_while(headers, :ok, fn header, :ok ->
       case check_header(header) do
@@ -216,6 +241,7 @@ defmodule Arangox.Api.Client do
 
   defp check_headers(_headers), do: refuse(@headers_shape)
 
+  @spec check_header(term) :: :ok | {:error, Error.t()}
   defp check_header({name, value}) do
     name = name |> to_string() |> String.downcase()
 
@@ -223,7 +249,7 @@ defmodule Arangox.Api.Client do
       name in @denied_headers ->
         refuse(
           "the #{name} header belongs to the pool and cannot be " <>
-            "set by an Arangox.Api operation"
+            "set by an Arangox.API operation"
         )
 
       # The offending name cannot be named without repeating the refused
@@ -245,6 +271,7 @@ defmodule Arangox.Api.Client do
   # the content type, which routes its body past the JSON codec and onto the
   # wire as given. JSON is never injected: the pool's `:content_type` decides
   # the default codec. A caller-supplied content type always wins.
+  @spec headers_with_media([{term, term}], binary | nil) :: [{term, term}]
   defp headers_with_media(headers, nil), do: headers
 
   defp headers_with_media(headers, declared) do
@@ -257,29 +284,37 @@ defmodule Arangox.Api.Client do
   # form, so a name is matched case-insensitively wherever one is looked up.
   # Only the caller-written key is normalised: the sought `name` must already
   # be lowercase.
+  @spec header(Arangox.headers(), binary) :: binary | nil
   defp header(headers, name) do
     Enum.find_value(headers, fn {key, value} -> if named?(key, name), do: value end)
   end
 
+  @spec has_header?([{term, term}], binary) :: boolean
   defp has_header?(headers, name) do
     Enum.any?(headers, fn {key, _value} -> named?(key, name) end)
   end
 
+  @spec named?(term, binary) :: boolean
   defp named?(key, name), do: String.downcase(to_string(key)) == name
 
-  ## The answer
+  ## The response
 
-  defp answer({:ok, _request, %Response{body: body}}, :body), do: {:ok, body}
+  @spec do_response(
+          {:ok, Arangox.Request.t(), Response.t()} | {:error, term},
+          :body | :revision
+        ) :: {:ok, Arangox.body()} | {:error, term}
+  defp do_response({:ok, _request, %Response{body: body}}, :body), do: {:ok, body}
 
-  # A `HEAD` request has no body at all; its answer is the document revision,
-  # which the server returns as a quoted `etag`. Handing back an empty body
+  # A `HEAD` request has no body at all; it returns the document revision,
+  # which the server sends as a quoted `etag`. Handing back an empty body
   # would make the operation useless.
-  defp answer({:ok, _request, %Response{headers: headers}}, :revision) do
+  defp do_response({:ok, _request, %Response{headers: headers}}, :revision) do
     {:ok, headers |> header("etag") |> unquote_etag()}
   end
 
-  defp answer({:error, exception}, _response), do: {:error, exception}
+  defp do_response({:error, exception}, _response_type), do: {:error, exception}
 
+  @spec unquote_etag(binary | nil) :: binary | nil
   defp unquote_etag(nil), do: nil
   defp unquote_etag(<<?", rest::binary>>), do: String.trim_trailing(rest, "\"")
   defp unquote_etag(value), do: value
@@ -288,7 +323,9 @@ defmodule Arangox.Api.Client do
 
   # A refusal names the field and the rule, never the value: a rejected header
   # or path segment may be a credential or a transaction identifier.
+  @spec refuse(binary) :: {:error, Error.t()}
   defp refuse(message), do: {:error, %Error{message: message}}
 
+  @spec smuggles?(term) :: boolean
   defp smuggles?(value), do: Client.smuggling_byte?(to_string(value))
 end

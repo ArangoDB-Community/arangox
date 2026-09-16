@@ -1,6 +1,6 @@
 # ARANGO_VERSION selects the server for the main integration tier. The default
 # is the driver's pinned tag (Arangox.Errno.tag/0): the conformance gate
-# verifies the Arangox.Api surface against the OpenAPI document this very
+# verifies the Arangox.API surface against the OpenAPI document this very
 # server serves, and first asserts the server's reported version equals the
 # pin — so an override here fails that gate, which is the point of the
 # assert. It resolves without any env file — the default lives here, not in
@@ -63,7 +63,7 @@ services:
         retries: 30
         start_period: 15s
 
-  # Authentication is enabled (U18): the JWT secret turns it on, and the root
+  # Authentication is enabled: the JWT secret turns it on, and the root
   # user keeps the empty password the rest of the tier uses. This is what lets
   # `"auth resolution with velocy client"` assert that wrong credentials are
   # *refused* — 3.12 has authentication but no VelocyStream, so this 3.11
@@ -90,11 +90,10 @@ services:
         start_period: 30s
 
   # A local 3-member cluster: three coordinators (the mapped ports), three
-  # dbservers and three agents in one container. This is the only topology
-  # that can answer cross-coordinator questions — resilient_single is active
-  # failover (one leader, followers), not a cluster. Q6 (whether stream-
-  # transaction identity routes across coordinators) is measured against
-  # this service, and U7's cross-coordinator transaction tests run here.
+  # dbservers and three agents in one container. Stream-transaction identity
+  # and cross-coordinator transaction behavior are tested against this
+  # service; resilient_single is active failover (one leader, followers),
+  # not a cluster.
   cluster:
       image: arangodb:${ARANGO_VERSION:-3.12.10}
       profiles: ["3.12"]

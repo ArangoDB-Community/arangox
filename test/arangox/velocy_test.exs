@@ -74,7 +74,7 @@ defmodule Arangox.VelocyTest do
          acc
        ) do
     payload_size = length - 24
-    <<payload::binary-size(payload_size), tail::binary>> = rest
+    <<payload::binary-size(^payload_size), tail::binary>> = rest
 
     <<chunk_n::31, is_first::1>> =
       packed |> :binary.bin_to_list() |> Enum.reverse() |> :binary.list_to_bin()
@@ -297,7 +297,7 @@ defmodule Arangox.VelocyTest do
                VelocyClient.request(%Request{method: :get, path: "/_db/mydb"}, [], state)
 
       # The request reached the wire naming the database; the silent listener
-      # simply never answered it.
+      # simply never replied to it.
       assert wire() =~ "mydb"
     end
   end

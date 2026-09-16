@@ -1,4 +1,4 @@
-# Tiers (U18): the containerless job runs the unit and protocol tiers on the
+# The containerless job runs the unit and protocol tiers on the
 # full Elixir/OTP matrix — TLS defaults changed in OTP 26, so one release is
 # not evidence about the rest. The integration legs each start only their
 # server line's compose profile. README doctests need both lines at once (the

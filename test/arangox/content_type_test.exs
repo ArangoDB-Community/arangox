@@ -2,12 +2,12 @@ defmodule Arangox.ContentTypeTest.StubClient do
   @moduledoc """
   A scripted `Arangox.Client` that reports the wire request to the owning test
   process as `{:request, %Arangox.Request{}}` — headers merged, body encoded —
-  and answers with a scripted `{status, headers, body}`, so a test can assert
+  and responds with a scripted `{status, headers, body}`, so a test can assert
   both on what the pool put on the wire and on how it decodes what comes back.
 
   Scripts are keyed by `{method, path}` and travel in the fabricated socket, so
   there is no named process and the tests stay `async: true`. Anything
-  unscripted answers `200 {}` with no content type.
+  unscripted returns `200 {}` with no content type.
   """
 
   @behaviour Arangox.Client
@@ -151,7 +151,7 @@ defmodule Arangox.ContentTypeTest do
   ## The encode boundary
 
   # A body the codec rejects is the caller's mistake, not the connection's:
-  # nothing reached the wire, so the answer is an error tuple and the
+  # nothing reached the wire, so the result is an error tuple and the
   # connection stays usable.
   describe "encode boundary" do
     test "a body the JSON codec cannot encode returns a structured error rather than raising" do

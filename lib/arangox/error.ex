@@ -18,7 +18,7 @@ defmodule Arangox.Error do
       — and `:deadline_exceeded`, a request that was never sent because the
       caller's budget was already spent queueing for a connection, which leaves
       the connection healthy and checked in.
-    * `:status` - the HTTP status, when the server answered.
+    * `:status` - the HTTP status, when the server responded.
     * `:error_num` - the raw ArangoDB `errorNum`, when the body supplied one.
       Always present together with `:status`, and preserved even when the
       number is absent from the vendored table and `:reason` is therefore
@@ -91,6 +91,7 @@ defmodule Arangox.Error do
   end
 
   # The server controls this string, so it is bounded before it reaches a log.
+  @spec bound(binary) :: binary
   defp bound(message) when byte_size(message) <= @message_limit, do: message
 
   defp bound(message) do
@@ -102,6 +103,7 @@ defmodule Arangox.Error do
   # valid message into an invalid binary. Backing off past UTF-8 continuation
   # bytes (0b10xxxxxx) lands it on a boundary; input that was never UTF-8 has
   # no boundaries to respect and is cut wherever the walk stops.
+  @spec codepoint_cut(binary, non_neg_integer) :: non_neg_integer
   defp codepoint_cut(message, position) when position > 0 do
     case :binary.at(message, position) do
       byte when byte >= 0x80 and byte < 0xC0 -> codepoint_cut(message, position - 1)
@@ -111,6 +113,7 @@ defmodule Arangox.Error do
 
   defp codepoint_cut(_message, position), do: position
 
+  @spec prepend(t) :: binary
   defp prepend(%__MODULE__{} = exception) do
     for key <- @keys, into: "" do
       exception
@@ -119,6 +122,7 @@ defmodule Arangox.Error do
     end
   end
 
+  @spec format_key(term) :: binary
   defp format_key(nil), do: ""
   defp format_key(value), do: "[#{value}] "
 end

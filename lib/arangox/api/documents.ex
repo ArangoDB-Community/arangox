@@ -1,13 +1,13 @@
-defmodule Arangox.Api.Documents do
+defmodule Arangox.API.Documents do
   @moduledoc """
   ArangoDB's Documents operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   Create a document
@@ -360,7 +360,7 @@ defmodule Arangox.Api.Documents do
   Cluster only: The search document _may_ contain
   values for the collection's pre-defined shard keys. Values for the shard keys
   are treated as hints to improve performance. Should the shard keys
-  values be incorrect ArangoDB may answer with a *not found* error.
+  values be incorrect ArangoDB may respond with a *not found* error.
 
   The returned array of documents contain three special attributes: 
   - `_id`, containing the document identifier with the format `<collection-name>/<document-key>`.
@@ -410,7 +410,7 @@ defmodule Arangox.Api.Documents do
     Client.request(conn,
       method: :head,
       segments: ["_api", "document", collection, key],
-      response: :revision,
+      response_type: :revision,
       opts: opts
     )
   end
@@ -457,7 +457,7 @@ defmodule Arangox.Api.Documents do
   Cluster only: The replace documents _may_ contain
   values for the collection's pre-defined shard keys. Values for the shard keys
   are treated as hints to improve performance. Should the shard keys
-  values be incorrect ArangoDB may answer with a *not found* error.
+  values be incorrect ArangoDB may respond with a *not found* error.
 
   Optionally, the query parameter `waitForSync` can be used to force
   synchronization of the document replacement operation to disk even in case
@@ -549,7 +549,7 @@ defmodule Arangox.Api.Documents do
   Cluster only: The replace documents _may_ contain
   values for the collection's pre-defined shard keys. Values for the shard keys
   are treated as hints to improve performance. Should the shard keys
-  values be incorrect ArangoDB may answer with a `not found` error.
+  values be incorrect ArangoDB may respond with a `not found` error.
 
   Optionally, the query parameter `waitForSync` can be used to force
   synchronization of the document replacement operation to disk even in case
@@ -658,7 +658,7 @@ defmodule Arangox.Api.Documents do
   Cluster only: The patch document _may_ contain
   values for the collection's pre-defined shard keys. Values for the shard keys
   are treated as hints to improve performance. Should the shard keys
-  values be incorrect ArangoDB may answer with a `not found` error
+  values be incorrect ArangoDB may respond with a `not found` error
 
   Optionally, the query parameter `waitForSync` can be used to force
   synchronization of the updated document operation to disk even in case
@@ -759,7 +759,7 @@ defmodule Arangox.Api.Documents do
   Cluster only: The patch document _may_ contain
   values for the collection's pre-defined shard keys. Values for the shard keys
   are treated as hints to improve performance. Should the shard keys
-  values be incorrect ArangoDB may answer with a *not found* error
+  values be incorrect ArangoDB may respond with a *not found* error
 
   Optionally, the query parameter `waitForSync` can be used to force
   synchronization of the document replacement operation to disk even in case

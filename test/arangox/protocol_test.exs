@@ -358,19 +358,19 @@ defmodule Arangox.ProtocolTest do
     end
   end
 
-  ## The connect callback answers instead of raising
+  ## The connect callback returns instead of raising
 
   # `Arangox.Connection.connect/1` is a `DBConnection` callback, and an
   # exception escaping it is not a failed connection: it crashes the connection
   # process, and DBConnection's own sanitizer reports the crash by advising that
   # sensitive-data logging be turned on to see what happened. Both clients
-  # rescue for that reason and answer with an `Arangox.Error` instead. Nothing
+  # rescue for that reason and return an `Arangox.Error` instead. Nothing
   # asserted it until now -- `client_error` appeared in no test.
   #
   # Both triggers below are ordinary mistakes rather than contrived ones, which
   # matters because an unreachable rescue is untestable and an untested rescue
   # is the one that stops working.
-  describe "connect answers instead of raising" do
+  describe "connect returns instead of raising" do
     # This client documents `client_opts: [protocols: [:http2]]`, and `h2` is
     # what the very same protocol is called on the wire and in ALPN. Writing it
     # that way is the obvious slip, and `Mint.HTTP.connect/4` raises a
@@ -556,7 +556,7 @@ defmodule Arangox.ProtocolTest do
     end
 
     # `103 Early Hints` is a complete status-and-headers pair that is not the
-    # answer; the real response follows on the same stream.
+    # response; the real one follows on the same stream.
     test "an informational response is superseded by the real one" do
       port = h2_server!()
       state = h2_state!(port)
@@ -584,7 +584,7 @@ defmodule Arangox.ProtocolTest do
 
   ## The Gun client
 
-  # This block answers for Gun the same questions the Mint blocks answer:
+  # This block covers for Gun the same questions the Mint blocks cover:
   # the negotiated protocol, the request-budget bound, and what a failure may
   # carry. `:gun.info/1` reports the connection's negotiated protocol. The
   # rejected-transport-option and connection-lost scenarios run in
@@ -617,7 +617,19 @@ defmodule Arangox.ProtocolTest do
       assert %{protocol: :http} = :gun.info(pid)
     end
 
-    # `/stall` answers the response line and headers, sends part of the body,
+    test "client options cannot downgrade a TLS endpoint to cleartext" do
+      port = tls_server!()
+
+      assert {:ok, pid} =
+               GunClient.connect(Endpoint.new(tls_url(port)),
+                 ssl_opts: [cacertfile: ProtocolServer.ca_path()],
+                 client_opts: %{transport: :tcp}
+               )
+
+      assert %{transport: :tls} = :gun.info(pid)
+    end
+
+    # `/stall` sends the response line and headers, sends part of the body,
     # then hangs — so the budget has to cover the body, not just the first
     # await.
     test "a request whose budget elapses mid-response reports :timeout" do
@@ -683,7 +695,7 @@ defmodule Arangox.ProtocolTest do
 
   # `Arangox.query/4` drains a multi-batch result inside one request budget, so
   # a slow server can exhaust that budget in either of two ways, and they need
-  # opposite answers.
+  # opposite handling.
   #
   # A wait that actually expires leaves an unread reply on the socket: retire
   # the connection or the next caller reads this caller's response. A budget
@@ -716,7 +728,7 @@ defmodule Arangox.ProtocolTest do
       )
     end
 
-    # The second batch is written and its answer never arrives in time. The
+    # The second batch is written and its response never arrives in time. The
     # socket now has a reply on it that nobody read.
     test "a wait that expires mid-batch retires the connection" do
       {_port, url, server} =
@@ -759,7 +771,7 @@ defmodule Arangox.ProtocolTest do
   ## Connect-time hangs
 
   describe "connect pipeline" do
-    test "a probe that never answers does not wedge connect/1, and leaks no socket" do
+    test "a probe that never responds does not wedge connect/1, and leaks no socket" do
       {port, url, _server} = start_server!(%{@availability => :hang})
 
       # A single binary endpoint rather than a list: failover collapses every
@@ -778,7 +790,7 @@ defmodule Arangox.ProtocolTest do
       result = Task.yield(task, 5_000) || Task.shutdown(task, :brutal_kill)
 
       assert {:ok, {:error, %Error{} = error}} = result,
-             "connect/1 did not return within 5s against a server that never answers a probe"
+             "connect/1 did not return within 5s against a server that never responds to a probe"
 
       assert error.reason == :timeout,
              "expected the probe to time out, got #{inspect(error.reason)}"
@@ -807,7 +819,7 @@ defmodule Arangox.ProtocolTest do
           )
         end)
 
-      # Each probe answers inside 600ms on its own, so a budget stamped fresh
+      # Each probe responds inside 600ms on its own, so a budget stamped fresh
       # per stage admits both and the handshake runs for ~800ms — and every
       # stage added later would extend that by another 600ms. One budget for
       # the whole handshake does not: the availability probe spends 400ms of
@@ -871,7 +883,7 @@ defmodule Arangox.ProtocolTest do
     end
   end
 
-  ## A request the server never answers
+  ## A request that gets no response
 
   describe "a server that accepts a request and never responds" do
     test "errors within the request timeout, disconnects, and the next request is served fresh" do
@@ -895,7 +907,7 @@ defmodule Arangox.ProtocolTest do
       assert {:ok, %Response{body: %{"marker" => "fresh"}}} = Arangox.get(pool, "/fast")
 
       # The abandoned request really did reach the server and really was
-      # answered late -- otherwise the assertion above proves nothing.
+      # responded late -- otherwise the assertion above proves nothing.
       assert Enum.any?(ProtocolServer.requests(server), &(&1["path"] == "/slow"))
     end
   end
@@ -1235,6 +1247,33 @@ defmodule Arangox.ProtocolTest do
     end
   end
 
+  describe "a response body is bounded while it is received" do
+    for {client, connect} <- [
+          {MintClient, &MintClient.connect/2},
+          {GunClient, &GunClient.connect/2}
+        ] do
+      @client client
+      @connect connect
+
+      test "#{inspect(client)} stops a streaming response at :max_body_size" do
+        {_port, url, _server} = start_server!()
+
+        assert {:ok, socket} = @connect.(Endpoint.new(url), [])
+        state = state_for(@client, socket, request_timeout: 1_500, max_body_size: 4)
+
+        {elapsed, result} =
+          timed(fn ->
+            @client.request(%Request{method: :get, path: "/trickle"}, [], state)
+          end)
+
+        assert {:error, %Error{reason: :body_too_large, status: 200} = error, _state} = result
+        assert error.message =~ ":max_body_size (4)"
+        assert elapsed < 1_000, "#{inspect(@client)} buffered past the configured limit"
+        assert Client.connection_lost?(error)
+      end
+    end
+  end
+
   describe "Arangox.MintClient" do
     test "times out on a server that sends headers then stalls mid-body" do
       {:ok, port, server} = ProtocolServer.start(listener: :raw)
@@ -1277,7 +1316,7 @@ defmodule Arangox.ProtocolTest do
   end
 
   describe "Arangox.VelocyClient" do
-    test "times out against a socket that accepts and never answers" do
+    test "times out against a socket that accepts and never responds" do
       port = silent_listener!()
 
       assert {:ok, socket} = VelocyClient.connect(Endpoint.new("http://localhost:#{port}"), [])
@@ -1312,7 +1351,7 @@ defmodule Arangox.ProtocolTest do
 
     @tag integration: :arango_3_11
     test "a real VelocyStream request against 3.11 still completes with the bound in place" do
-      # All three members: only the leader answers the availability probe with
+      # All three members: only the leader responds to the availability probe with
       # 200, and which member leads is not fixed across container restarts, so
       # naming one port would tie the test to the current election. The walk
       # finding the leader is the driver's own failover behaviour.

@@ -1,13 +1,13 @@
-defmodule Arangox.Api.BatchRequests do
+defmodule Arangox.API.BatchRequests do
   @moduledoc """
   ArangoDB's BatchRequests operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   Execute a batch request

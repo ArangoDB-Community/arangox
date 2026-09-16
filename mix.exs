@@ -96,12 +96,7 @@ defmodule Arangox.MixProject do
   defp deps do
     [
       {:db_connection, "~> 2.10"},
-      # TEMPORARY: the local clone carries fixes for four defects in
-      # 0.1.7 — dates decoded as unsigned, `from_unix!` raising out of
-      # `decode/2`, unbounded variable-length integers, and `encode/2` raising
-      # for unencodable terms. Restore to `{:velocy, "~> 0.1.8", optional: true}`
-      # once that release is published.
-      {:velocy, path: "/Users/suazi/Repos/velocy_pack", optional: true, override: true},
+      {:velocy, "~> 0.2", optional: true},
       {:gun, "~> 2.0", optional: true},
       {:mint, "~> 1.9", optional: true},
       {:jason, "~> 1.4", optional: true},

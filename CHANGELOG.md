@@ -66,24 +66,24 @@ for ArangoDB 3.11, which is the last server release that speaks them.
     above rely on that.
 
 * Enhancements
-  * A resource API: 230 operations across 22 `Arangox.Api.*` modules —
-    `Arangox.Api.Collections.create/3`, `Arangox.Api.Documents.get/4`, and so
+  * A resource API: 230 operations across 22 `Arangox.API.*` modules —
+    `Arangox.API.Collections.create/3`, `Arangox.API.Documents.get/4`, and so
     on — derived from ArangoDB's API description at tag 3.12.10 and owned as
     hand-maintained source. The connection is the first argument and path
     parameters follow it; the database, headers, and every per-request driver
-    option are options. A call answers the decoded body, any error status
-    answers `{:error, %Arangox.Error{}}`, and every operation has a bang twin
+    option are options. A call returns the decoded body, any error status
+    returns `{:error, %Arangox.Error{}}`, and every operation has a bang twin
     that raises. Query parameters are written in snake_case and translated to
     ArangoDB's own spelling on the wire. The integration suite checks the
     surface against the API description the tested server itself serves,
     address by address. Reading several documents by key is
-    `Arangox.Api.Documents.get_many/4`, which always sends `onlyget=true` —
+    `Arangox.API.Documents.get_many/4`, which always sends `onlyget=true` —
     the flag that separates that read from a bulk replace on the same URL, and
     which arangox therefore does not let a caller set.
   * Opt-in VelocyPack bodies over HTTP: `content_type: :velocypack` (requires
     the optional `:velocy` dependency) encodes request bodies as VelocyPack
     and asks for the same in return. Responses are decoded by their own
-    content type, so a server that answers JSON is still read correctly.
+    content type, so a server that responds in JSON is still read correctly.
   * HTTP/2 support on both HTTP clients. On `Arangox.MintClient` it is opt-in
     per pool with `client_opts: [protocols: [:http2]]` — settled by ALPN on
     TLS, prior knowledge on cleartext — and HTTP/1.1 remains its default on
@@ -121,12 +121,12 @@ for ArangoDB 3.11, which is the last server release that speaks them.
   * Raw request bodies: a `content-type` naming neither JSON nor VelocyPack
     (`text/plain` for `/_api/import`, `application/octet-stream`) sends a
     binary body byte-for-byte instead of running it through the JSON codec —
-    which had quietly quoted such bodies since 0.7. `Arangox.Api` operations
+    which had quietly quoted such bodies since 0.7. `Arangox.API` operations
     declaring a single non-JSON request media type set the header themselves.
 
 * Fixes
   * A cursor the server issued no id for — a single-batch result — is keyed
-    under a reference and answered entirely from driver memory: abandoning it
+    under a reference and served entirely from driver memory: abandoning it
     before its batch was delivered no longer builds a `DELETE` for an id the
     server never issued (previously a crash that retired the connection), and
     its cleanup is the local no-op it always should have been. A cursor-create
@@ -184,7 +184,7 @@ for ArangoDB 3.11, which is the last server release that speaks them.
     the remaining endpoints are still tried.
   * A per-request `:database` no longer double-prefixes a path that already
     names one.
-  * The VelocyStream client answers with an error instead of raising when
+  * The VelocyStream client returns an error instead of raising when
     given an unsupported HTTP method or a body it cannot encode, and its
     connect timeout budget is per endpoint rather than shared across probe
     stages.
@@ -235,9 +235,11 @@ Work through these in order; most upgrades need only the first two.
 
 **Pick your client.** If you never set `:client`, v0.7 gave you VelocyStream
 and v0.8 gives you HTTP via Mint — add `{:mint, "~> 1.9"}` and `{:jason, "~> 1.4"}`
-to your deps and you are done. Requests and responses behave the same. If you
-must stay on VelocyStream, set `client: Arangox.VelocyClient` explicitly and
-stay on an ArangoDB 3.11 server; 3.12 closes VST connections on sight.
+to your deps. If you pass request headers or inspect response headers, migrate
+them to the `{name, value}` list shape described above: request maps are no
+longer accepted, and responses expose headers as lists rather than maps. If
+you must stay on VelocyStream, set `client: Arangox.VelocyClient` explicitly
+and stay on an ArangoDB 3.11 server; 3.12 closes VST connections on sight.
 
 **TLS now verifies.** A `ssl://` endpoint that connected fine under v0.7
 (against any certificate, silently) fails under v0.8 until the trust question

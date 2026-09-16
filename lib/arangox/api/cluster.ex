@@ -1,13 +1,13 @@
-defmodule Arangox.Api.Cluster do
+defmodule Arangox.API.Cluster do
   @moduledoc """
   ArangoDB's Cluster operations.
 
   Every function takes the pool as its first argument and returns the decoded
-  response body. See `Arangox.Api.Client` for the options they all accept and
-  for what a `404` answers.
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
   """
 
-  alias Arangox.Api.Client
+  alias Arangox.API.Client
 
   @doc """
   List all Coordinator endpoints
@@ -36,6 +36,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_api", "cluster", "endpoints"],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -64,6 +65,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "cluster", "rebalance"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -93,6 +95,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "cluster", "maintenance", dbserver_id],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -123,6 +126,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :post,
       segments: ["_admin", "cluster", "rebalance", "execute"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -311,6 +315,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "cluster", "health"],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -370,6 +375,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "cluster", "rebalance"],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -404,6 +410,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :put,
       segments: ["_admin", "cluster", "uniqId"],
+      database_scope: :server,
       query: [number: "number", minimum: "minimum"],
       opts: opts
     )
@@ -443,6 +450,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "server", "id"],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -482,6 +490,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "server", "role"],
+      database_scope: :server,
       opts: opts
     )
   end
@@ -515,6 +524,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :put,
       segments: ["_admin", "cluster", "maintenance", dbserver_id],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -548,6 +558,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :put,
       segments: ["_admin", "cluster", "maintenance"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -577,6 +588,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :put,
       segments: ["_admin", "cluster", "rebalance"],
+      database_scope: :server,
       body: body,
       opts: opts
     )
@@ -611,6 +623,7 @@ defmodule Arangox.Api.Cluster do
     Client.request(conn,
       method: :get,
       segments: ["_admin", "cluster", "statistics"],
+      database_scope: :server,
       forced: [{"DBserver", d_bserver}],
       opts: opts
     )

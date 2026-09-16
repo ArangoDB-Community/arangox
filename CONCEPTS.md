@@ -9,7 +9,7 @@ A pluggable transport implementation — the thing that actually speaks a wire p
 
 A Client owns connecting, liveness checking, issuing a Request, and closing. It does not own encoding or decoding of bodies, or header merging — those belong to the driver, so every Client sees the same Request and returns the same Response regardless of protocol. A Client is selected per pool at start time, and is the only place a protocol-specific assumption is allowed to live.
 
-Nor does a Client own transport defaults. It passes the caller's transport options through as given and forces only the few its own framing depends on, so what a connection does when the caller says nothing — including whether certificates are verified — stays the transport library's to decide and to improve. Where a transport's own default is safe but its failure is unreadable, a Client may translate the error; it may not substitute an answer.
+Nor does a Client own transport defaults. It passes the caller's transport options through as given and forces only the few its own framing depends on, so what a connection does when the caller says nothing — including whether certificates are verified — stays the transport library's to decide and to improve. Where a transport's own default is safe but its failure is unreadable, a Client may translate the error; it may not substitute a result.
 
 ### Socket
 Whatever handle a Client returns from connecting, held in a connection's state and passed back to that same Client on later calls. It is deliberately opaque — a raw TCP socket for one Client, a protocol connection struct for another — so nothing outside the Client may inspect or act on it.
@@ -34,10 +34,10 @@ Taking a connection out of service instead of returning it to the pool, forced w
 ## API surface
 
 ### API surface
-The resource-object operations under `Arangox.Api.*` — one Elixir function per operation of ArangoDB's HTTP API, each reaching the network only through the Adapter. Spec-derived owned source: the functions were originally produced from ArangoDB's published OpenAPI document and are hand-maintained, with conformance to the server's own document enforced by the Conformance gate rather than by regeneration. That conformance covers the addresses an operation reaches and the parameters it names, not the values the operations put into them.
+The resource-object operations under `Arangox.API.*` — one Elixir function per operation of ArangoDB's HTTP API, each reaching the network only through the Adapter. Spec-derived owned source: the functions were originally produced from ArangoDB's published OpenAPI document and are hand-maintained, with conformance to the server's own document enforced by the Conformance gate rather than by regeneration. That conformance covers the addresses an operation reaches and the parameters it names, not the values the operations put into them.
 
 ### Adapter
-The single module (`Arangox.Api.Client`) every API-surface operation calls, translating an operation's request map into a driver request. It is operation-agnostic — nothing in it is keyed to a specific operation — and it is the seam that keeps the surface transport-independent: a transport change touches the Adapter, never the operations.
+The single module (`Arangox.API.Client`) every API-surface operation calls, translating an operation's request map into a driver request. It is operation-agnostic — nothing in it is keyed to a specific operation — and it is the seam that keeps the surface transport-independent: a transport change touches the Adapter, never the operations.
 
 A segment may declare that its value is a Composite path parameter, and the Adapter honours that declaration generically — it reads the shape an operation states, never the identity of the operation stating it.
 
@@ -52,7 +52,7 @@ A query parameter an operation always sends under a value it fixes itself, never
 The distinction from an offered parameter is a safety one, not a convenience one. Some parameters decide what an endpoint does rather than how it does it — one flag separates reading many documents from replacing a whole collection at the same address and method — so letting a caller supply a value is the hazard. Forcing it puts the decision in the operation's own source, where it can be read, rather than in the Adapter, which stays operation-agnostic. A parameter that is both forced and offered would hand the choice back, so the two sets never overlap.
 
 ### Conformance gate
-The integration-tier test proving the API surface matches the Live oracle: operation addresses (compared as sets — the document describes one endpoint several times when it takes more than one body or answers more than one shape), query-parameter sets, request media, and required-parameter declarations. It asserts the server's version equals the driver's single pinned server version first, so the error table, the surface, and the test server always describe the same release.
+The integration-tier test proving the API surface matches the Live oracle: operation addresses (compared as sets — the document describes one endpoint several times when it takes more than one body or returns more than one shape), query-parameter sets, request media, and required-parameter declarations. It asserts the server's version equals the driver's single pinned server version first, so the error table, the surface, and the test server always describe the same release.
 
 Every dimension it compares is one the description states. Anything the description leaves unstated — the internal structure of a parameter's value among it — is outside its reach, so a green gate means the surface addresses the right endpoints under the right parameter names, not that a call works.
 
@@ -61,14 +61,14 @@ A second, server-free tier checks what can be read from the operation sources al
 ### Live oracle
 The API description the tested server itself serves, used as the authority the Conformance gate checks the API surface against. Distinct from a vendored copy of the same description, which can drift from the server it claims to describe; the live oracle and the system under test cannot disagree about which release they are.
 
-It is an authority on shape, not on behaviour: it states what an operation is called and what it accepts, never what the server does with a particular value. The same server's answers to real calls are a separate authority, and the only one that settles what an operation returns or whether it works at all.
+It is an authority on shape, not on behaviour: it states what an operation is called and what it accepts, never what the server does with a particular value. The same server's responses to real calls are a separate authority, and the only one that settles what an operation returns or whether it works at all.
 
 ## Transactions
 
 ### Stream Transaction
 A server-side ArangoDB transaction addressed by an identifier, so that individual requests — possibly on different connections — participate by carrying that identifier rather than by being bound to one connection.
 
-The identifier is a bearer capability: whoever presents it acts inside the transaction, so it is redacted from inspection and logs like authentication material. It encodes the coordinator that issued it, and other coordinators forward participating requests there, which is what makes the transaction usable from any pooled connection. The server ends transactions on its own timeout, so a driver's local bookkeeping about whether one is running can be wrong in both directions; and a finished transaction remains queryable for a retention window, answering with its final status rather than disappearing.
+The identifier is a bearer capability: whoever presents it acts inside the transaction, so it is redacted from inspection and logs like authentication material. It encodes the coordinator that issued it, and other coordinators forward participating requests there, which is what makes the transaction usable from any pooled connection. The server ends transactions on its own timeout, so a driver's local bookkeeping about whether one is running can be wrong in both directions; and a finished transaction remains queryable for a retention window, responding with its final status rather than disappearing.
 
 ## Flagged ambiguities
 

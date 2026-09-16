@@ -13,7 +13,7 @@ defmodule Arangox.ConnectionTest.ScriptClient do
   A response is `{status, body}`, or `{status, headers, body}` when the test
   needs response headers (the leader-redirect header, for instance).
 
-  Anything unscripted answers `200 {}`. Every socket handed out is unique and
+  Anything unscripted returns `200 {}`. Every socket handed out is unique and
   every open, request and close is recorded, so a test can assert exactly which
   sockets the pipeline still owns when it returns.
 
@@ -348,7 +348,7 @@ defmodule Arangox.ConnectionTest do
       refute_receive {:failover, _exception}, 50
     end
 
-    # An endpoint that answers and declares itself unusable is the same class of
+    # An endpoint that responds and declares itself unusable is the same class of
     # failure as one whose socket never opened. Every official ArangoDB driver
     # classifies it that way, so the callback reports both.
     test "failover_callback fires when an endpoint is reachable but unavailable" do
@@ -905,7 +905,7 @@ defmodule Arangox.ConnectionTest do
 
     @members [TestHelper.failover_1(), TestHelper.failover_2(), TestHelper.failover_3()]
 
-    # The leader is whichever member completes a connect; the others answer 503
+    # The leader is whichever member completes a connect; the others respond 503
     # and are refused, since the address they advertise is not reachable from
     # the host. Discovered rather than hard-coded: leadership moves.
     defp failover_follower do
@@ -924,7 +924,7 @@ defmodule Arangox.ConnectionTest do
     @tag integration: :arango_3_11
     test "a real follower's redirect is refused without a mapper" do
       follower = failover_follower()
-      assert follower, "no member answered 503 — is the resilient_single container up?"
+      assert follower, "no member responded 503 — is the resilient_single container up?"
 
       assert {:error, %Error{} = error} =
                Connection.connect(
@@ -957,7 +957,7 @@ defmodule Arangox.ConnectionTest do
     @tag integration: :arango_3_11
     test "a pool pointed at a follower reaches the leader through :endpoint_mapper" do
       follower = failover_follower()
-      assert follower, "no member answered 503 — is the resilient_single container up?"
+      assert follower, "no member responded 503 — is the resilient_single container up?"
 
       assert {:ok, %Connection{} = state} =
                Connection.connect(

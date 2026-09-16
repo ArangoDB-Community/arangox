@@ -1,27 +1,34 @@
-defmodule Arangox.Api.SurfaceTest do
+defmodule Arangox.API.SurfaceTest do
   @moduledoc """
-  Pure-source checks over the owned `Arangox.Api.*` surface.
+  A source-code linter for Arangox's public API wrappers.
 
-  The operation modules under `lib/arangox/api/` are hand-maintained source:
-  no generator stands behind them, so nothing re-derives them when an edit
-  goes wrong. These checks read only the sources — no Docker, no document —
-  so a broken edit fails plain `mix test` instead of surfacing in the
-  integration leg. Conformance against the API description the server itself
-  serves lives in `Arangox.Api.ConformanceTest` (integration tier).
+  Arangox has 230 small, hand-maintained functions under `lib/arangox/api/`.
+  Each function turns ordinary Elixir arguments into a request description
+  and hands that description to `Arangox.API.Client`. A typo in one of these
+  wrappers can compile successfully while sending the wrong method, path, or
+  option to ArangoDB, so this module reads the wrapper source as Elixir syntax
+  and checks the conventions that keep them uniform.
 
-  What these pin:
+  These tests need no running ArangoDB server, Docker container, or downloaded
+  API description. Plain `mix test` can therefore catch structural mistakes:
 
     * No operation file reaches the network except through the adapter.
     * Every path is built from literal segments and bare arguments, so no
       operation can assemble an address by string building.
-    * Every operation has a bang twin, and the twin delegates rather than
-      issuing a second request.
+    * Every operation has a bang twin, and that twin calls the matching
+      non-bang function with the same arguments.
     * The operation count is pinned, so an accidental deletion or duplication
       turns the unit tier red.
     * A parameter the operation forces is never also offered as an option —
       the guard that keeps a caller from setting a flag the driver fixes.
     * Every local `fun/arity` reference in the docs resolves, so a bang
       twin's "See `twin/n`." line cannot go stale when a signature changes.
+
+  `Arangox.API.ConformanceTest` answers a separate question. In the integration
+  tier it asks a live ArangoDB server for its API description and compares
+  Arangox's methods, addresses, query parameters, and request media against
+  that description. This module checks how the wrappers are written; the
+  conformance test checks whether the resulting surface matches the server.
   """
 
   use ExUnit.Case, async: true
@@ -36,7 +43,7 @@ defmodule Arangox.Api.SurfaceTest do
     for file <- ApiSurface.surface_files() do
       source = File.read!(file)
 
-      assert source =~ "alias Arangox.Api.Client",
+      assert source =~ "alias Arangox.API.Client",
              "#{file} does not alias the adapter"
 
       for forbidden <- [
@@ -101,6 +108,41 @@ defmodule Arangox.Api.SurfaceTest do
     end
   end
 
+  test "a bang form delegates to its matching twin with the same arguments" do
+    file =
+      Path.join(
+        System.tmp_dir!(),
+        "arangox-api-surface-#{System.unique_integer([:positive])}.ex"
+      )
+
+    on_exit(fn -> File.rm(file) end)
+
+    for delegate <- ["remove(conn, id, opts)", "fetch(conn, opts, id)"] do
+      File.write!(file, """
+      defmodule BrokenBang do
+        def fetch(conn, id, opts) do
+          Client.request(conn,
+            method: :get,
+            segments: ["_api", "document", id],
+            opts: opts
+          )
+        end
+
+        def fetch!(conn, id, opts) do
+          case #{delegate} do
+            {:ok, body} -> body
+            {:error, exception} -> raise exception
+          end
+        end
+      end
+      """)
+
+      assert_raise RuntimeError,
+                   ~r/fetch!\/3 must delegate to fetch\/3 with the same arguments/,
+                   fn -> ApiSurface.operations(file) end
+    end
+  end
+
   ## Forced parameters
 
   # A forced parameter carries a value ArangoDB requires but a caller must not
@@ -124,7 +166,7 @@ defmodule Arangox.Api.SurfaceTest do
   # an operation's signature changes.
   test "every local function reference in the docs resolves to a defined arity" do
     for {file, ops} <- operations_by_file() do
-      # `opts` carries a default, so an operation also answers one below its
+      # `opts` carries a default, so an operation is also callable one below its
       # head arity — the arity its docs conventionally cite.
       callable =
         for op <- ops,
@@ -136,7 +178,7 @@ defmodule Arangox.Api.SurfaceTest do
 
       for [whole, name, arity] <- Regex.scan(~r|`([a-z_][a-z0-9_]*!?)/(\d+)`|, source) do
         assert MapSet.member?(callable, {name, String.to_integer(arity)}),
-               "#{file}: the docs reference #{whole}, which no operation there answers to"
+               "#{file}: the docs reference #{whole}, which no operation there matches"
       end
     end
   end

@@ -151,8 +151,10 @@ defmodule Arangox do
     `Arangox.MintClient`. `Arangox.VelocyClient` speaks VelocyStream, which ArangoDB
     removed in server 3.12 — it remains supported as an explicit opt-in for 3.11
     deployments.
-    * `:client_opts` - Options for the client library being used. *WARNING*: If `:transport_opts`
-    is set here it will override the options given to `:tcp_opts` _and_ `:ssl_opts`.
+    * `:client_opts` - Options passed to the client library itself, for settings that
+    belong to the library rather than to the socket. Its shape is the library's own:
+    a keyword list for mint, a map for gun. See each client's moduledoc for what it
+    accepts and how it combines with `:tcp_opts` and `:ssl_opts`.
     * `:failover_callback` - A function to call every time arangox fails to establish a
     connection. This is only called if a list of endpoints is given, regardless of whether or not
     it's connecting to an endpoint in an _active failover_ setup. Can be either an anonymous function
@@ -169,7 +171,7 @@ defmodule Arangox do
     HTTP client encodes request bodies. `:velocypack` requires the `:velocy`
     library, sends `content-type: application/x-velocypack`, and asks for the
     same in return with an `accept` header. Responses are decoded by *their own*
-    content type, so a server that declines _VelocyPack_ and answers in JSON is
+    content type, so a server that declines _VelocyPack_ and responds in JSON is
     still read correctly. A `content-type` or `accept` header set among a
     request's *own* headers wins over the pool's setting — the codec is chosen
     from the first `content-type` entry there, any casing, and never from the
@@ -178,14 +180,14 @@ defmodule Arangox do
     it must already be a binary in its wire form. Ignored by
     `Arangox.VelocyClient`, which carries its own body encoding.
     * `:max_body_size` - The largest response body, in bytes, handed to a codec.
-    A larger body is answered with a structured error (`reason: :body_too_large`)
+    A larger body is refused with a structured error (`reason: :body_too_large`)
     before any decoding runs, bounding what a hostile or broken server can make
     the pool parse. Defaults to `134_217_728` (128 MiB). Ignored by
     `Arangox.VelocyClient`.
 
   ## Leader redirects
 
-  In an _active failover_ setup a follower answers `503` and names the current leader in an
+  In an _active failover_ setup a follower responds `503` and names the current leader in an
   _x-arango-endpoint_ response header. Arangox follows that header during connect, but only
   when the target passes an admission policy. The pool holds your credentials and would send
   them to whatever host the server named, so:
@@ -203,7 +205,7 @@ defmodule Arangox do
     4. At most three redirects are followed per connect attempt, counted across the whole
     endpoint walk, so a pair of servers redirecting to each other terminates.
 
-  A refused redirect is treated as what it is — an endpoint that answered and is unusable. The
+  A refused redirect is treated as what it is — an endpoint that responded and is unusable. The
   walk moves on to the next endpoint, `:failover_callback` fires, and the error says which
   redirect was refused and why. A redirect that *is* followed is normal operation rather than a
   failure and does not fire `:failover_callback`.
@@ -214,7 +216,7 @@ defmodule Arangox do
   `:endpoints`. Its output is validated the same way — it must parse, and it may not downgrade
   encryption — but it is **not** re-checked against `:endpoints`, because remapping to an
   address you never configured is the whole point. A mapper that returns its input unchanged
-  therefore switches the policy off entirely and lets any server that can answer a connect
+  therefore switches the policy off entirely and lets any server that can satisfy a connect
   probe send your credentials anywhere. Map the advertised endpoints you recognise and refuse
   everything else; the map form does exactly that.
 
@@ -230,7 +232,7 @@ defmodule Arangox do
         endpoint_mapper: %{"http://localhost:8539" => "http://localhost:8004"}
       )
 
-  Map keys are matched on their normalized origin too, so the key above also answers an
+  Map keys are matched on their normalized origin too, so the key above also matches an
   advertised `tcp://localhost:8539`.
 
   A topology whose members sit on their real published addresses — the usual bare-metal
@@ -324,9 +326,11 @@ defmodule Arangox do
   # The whole once-per-pool preamble, shared so `start_link/1` and
   # `child_spec/1` cannot drift: a step applied in only one of them splits
   # pool behavior by how the pool was started.
+  @spec prepared_start_opts([start_option()]) :: [start_option()]
   defp prepared_start_opts(opts) do
     ensure_opts_valid!(opts)
     warn_deprecated_app_config(opts)
+    warn_unreadable_socket_opts(opts)
     Keyword.put_new(opts, :pool_size, @default_pool_size)
   end
 
@@ -524,6 +528,7 @@ defmodule Arangox do
 
   # The message never renders an element: a header value may be a credential
   # or a transaction identifier.
+  @spec check_headers_argument!(term) :: :ok
   defp check_headers_argument!(headers) do
     if header_list?(headers), do: :ok, else: bad_headers_argument!()
   end
@@ -531,6 +536,7 @@ defmodule Arangox do
   # One rule for what a header list is, shared by this per-request check and
   # the pool-option check in `validate_headers!/1` so the two notions cannot
   # drift.
+  @spec header_list?(term) :: boolean
   defp header_list?(headers) do
     is_list(headers) and
       Enum.all?(headers, fn
@@ -539,12 +545,15 @@ defmodule Arangox do
       end)
   end
 
+  @spec bad_headers_argument!() :: no_return
   defp bad_headers_argument! do
     raise ArgumentError,
           "request headers are a list of {name, value} tuples since 0.8, sent in order " <>
             "after the pool's :headers; maps are no longer accepted"
   end
 
+  @spec do_result({:ok, Request.t(), Response.t()} | {:error, any}) ::
+          {:ok, Response.t()} | {:error, any}
   defp do_result({:ok, _request, response}) do
     {:ok, response}
   end
@@ -587,14 +596,16 @@ defmodule Arangox do
   # The key is stamped either way, `nil` included. `DBConnection` treats
   # `deadline: nil` and an absent `:deadline` identically — its own option type
   # is `{:deadline, integer | nil}` (`db_connection.ex`) and `abs_timeout/2`
-  # reads it with `Keyword.get/2`, which answers `nil` for both — so the `nil`
+  # reads it with `Keyword.get/2`, which returns `nil` for both — so the `nil`
   # costs nothing there, and it is what tells
   # `Arangox.Connection.with_deadline/2` that the question of whether an
   # enclosing block applies has already been asked and answered.
+  @spec with_deadline(conn, [transaction_option()]) :: [transaction_option()]
   defp with_deadline(conn, opts) do
     Keyword.put(opts, :deadline, deadline_from(conn, opts))
   end
 
+  @spec deadline_from(conn, [transaction_option()]) :: integer | nil
   defp deadline_from(conn, opts) do
     budget = Keyword.get(opts, :timeout, @dbconnection_default_timeout)
 
@@ -626,6 +637,7 @@ defmodule Arangox do
   # A block on a second pool nested inside a block on the first is already
   # right: it publishes its own deadline for its duration, and `in_block/2`
   # restores the outer one after.
+  @spec block_deadline(conn) :: integer | nil
   defp block_deadline(%DBConnection{}), do: Connection.caller_deadline()
   defp block_deadline(_other_pool), do: nil
 
@@ -637,6 +649,7 @@ defmodule Arangox do
   # block so they can be, including the ones arangox never sees the options of
   # (a cursor's per-batch fetches, and the transaction callbacks
   # `DBConnection` invokes with its own option list).
+  @spec in_block([transaction_option()], (-> result)) :: result when result: var
   defp in_block(opts, fun) do
     previous = Connection.put_caller_deadline(Keyword.get(opts, :deadline))
 
@@ -796,7 +809,7 @@ defmodule Arangox do
         {:error,
          %Error{
            status: status,
-           message: "the server's answer to the begin request named no transaction"
+           message: "the server's response to the begin request named no transaction"
          }}
 
       {:error, exception} ->
@@ -827,7 +840,7 @@ defmodule Arangox do
 
   A failed commit leaves the handle usable: the transaction is still addressed
   by the identifier, so a follow-up `abort_transaction/3` reaches it.
-  Committing an already-committed transaction is answered 200 by the server
+  Committing an already-committed transaction gets a 200 from the server
   (idempotent); aborting or using a committed one is the server's error.
 
   Accepts any of the options accepted by `DBConnection.execute/4`, plus
@@ -914,12 +927,12 @@ defmodule Arangox do
   database.
 
   Answers from the body of the server's reply, not from the HTTP status: the
-  server keeps answering 200 for a finished transaction within a retention
+  server keeps responding 200 for a finished transaction within a retention
   window, with the actual state in the body. Returns `{:ok, :running}`,
   `{:ok, :committed}` or `{:ok, :aborted}`; a status this driver does not
   recognize is returned as its raw binary rather than turned into an atom.
 
-  This is the handle form's counterpart to `status/1`, which answers for the
+  This is the handle form's counterpart to `status/1`, which reports on the
   closure transaction bound to a connection. It runs against any pooled
   connection to the deployment; accepts only a `t:Arangox.Transaction.t/0`.
 
@@ -963,7 +976,9 @@ defmodule Arangox do
 
   # The guard is what routes a present-but-non-binary status — null, a
   # number — to the error clause below: the body is the server's data, so an
-  # unrecognized shape must answer as an error, never raise.
+  # unrecognized shape must be returned as an error, never a raise.
+  @spec trx_status_from_body(Response.t()) ::
+          {:ok, :running | :committed | :aborted | binary} | {:error, Error.t()}
   defp trx_status_from_body(%Response{body: %{"result" => %{"status" => status}}})
        when is_binary(status) do
     case status do
@@ -975,7 +990,7 @@ defmodule Arangox do
   end
 
   defp trx_status_from_body(%Response{status: status}) do
-    {:error, %Error{status: status, message: "the server's answer named no transaction status"}}
+    {:error, %Error{status: status, message: "the server's response named no transaction status"}}
   end
 
   # The four handle functions already name their transaction — in the handle
@@ -983,6 +998,7 @@ defmodule Arangox do
   # option here is a second, contradictory identity. Rejected loudly rather
   # than silently attaching a foreign transaction's header to a management
   # request. The value is not echoed; it may hold a live identifier.
+  @spec reject_transaction_opt!([transaction_option()], binary) :: :ok
   defp reject_transaction_opt!(opts, fun) do
     if Keyword.has_key?(opts, :transaction) do
       raise ArgumentError, """
@@ -1000,6 +1016,7 @@ defmodule Arangox do
   # The wrong value is described by type, never echoed: a bare binary handed
   # where a handle belongs is most likely a live transaction identifier, which
   # must not end up in an error message or a log.
+  @spec not_a_handle(binary, term) :: binary
   defp not_a_handle(fun, other) do
     """
     Arangox.#{fun} accepts only an %Arangox.Transaction{} handle, from \
@@ -1009,6 +1026,7 @@ defmodule Arangox do
     """
   end
 
+  @spec describe_type(term) :: binary
   defp describe_type(%module{}), do: "a #{inspect(module)} struct"
   defp describe_type(value) when is_binary(value), do: "a binary"
   defp describe_type(value) when is_atom(value), do: "an atom"
@@ -1079,7 +1097,7 @@ defmodule Arangox do
     do: cursor(conn, %Query{query: query}, bindvars, opts)
 
   @doc """
-  Runs an AQL query and answers with every row it returned.
+  Runs an AQL query and returns every row of the result.
 
   _ArangoDB_ executes AQL through a server-side cursor whichever of these two
   functions you use — they send the same request. The difference is who drives
@@ -1123,7 +1141,7 @@ defmodule Arangox do
     do: query(conn, %Query{query: statement}, bindvars, opts)
 
   @doc """
-  Runs an AQL query and answers with every row it returned. Raises on error.
+  Runs an AQL query and returns every row of the result. Raises on error.
 
   See `query/4`.
   """
@@ -1153,14 +1171,14 @@ defmodule Arangox do
   on. Requires read privileges on the database.
 
   Each entry is the server's own map, including `"query"`, `"hash"` — the same
-  value `Arangox.Response.plan_cache_key/1` answers — `"hits"`, `"memoryUsage"`
+  value `Arangox.Response.plan_cache_key/1` returns — `"hits"`, `"memoryUsage"`
   and `"created"`.
 
   > #### An empty list is ambiguous {: .warning}
   >
   > The server returns only the plans whose collections the caller may read, and
   > it filters rather than refuses. A caller permitted on no collections is
-  > answered `[]`, which is indistinguishable from an empty cache. A caller with
+  > given `[]`, which is indistinguishable from an empty cache. A caller with
   > no privileges on the *database* is refused outright, which does surface as
   > an error — note that the refusal is a `401`, and `401` is in the default
   > `:disconnect_on_error_codes`, so it also retires the connection. ArangoDB
@@ -1177,12 +1195,12 @@ defmodule Arangox do
         {:ok, entries}
 
       # A 200 whose body is not a list — an envelope, a body left undecoded —
-      # holds no entries to answer with, and wrapping it would invent one.
+      # holds no entries to return, and wrapping it would invent one.
       {:ok, %Response{status: status}} ->
         {:error,
          %Error{
            status: status,
-           message: "the server's answer to the plan-cache listing was not a list of entries"
+           message: "the server's response to the plan-cache listing was not a list of entries"
          }}
 
       {:error, _reason} = error ->
@@ -1239,7 +1257,7 @@ defmodule Arangox do
   Returns the JSON library from the deprecated application config, or `Jason`.
 
   Deprecated in v0.8 and to be removed in the next release, along with the
-  application-config read it reports on. It answers the *fallback*, not what any particular pool uses:
+  application-config read it reports on. It returns the *fallback*, not what any particular pool uses:
   since v0.8 the JSON library is a per-pool start option, so two pools can disagree
   and neither has to agree with this. Pass `:json_library` to `start_link/1` instead.
 
@@ -1266,6 +1284,56 @@ defmodule Arangox do
   # `DBConnection` on every backoff cycle, in each of `:pool_size` processes,
   # so a warning there is a permanent log flood against an unreachable
   # server, not a deprecation notice.
+  # Each client reads `:ssl_opts` for a TLS endpoint and `:tcp_opts` for a
+  # cleartext one, so an option given for a scheme no configured endpoint uses
+  # is never read and never rejected. Trust material in `:ssl_opts` behind an
+  # `http://` endpoint is the case that matters: it looks configured and does
+  # nothing.
+  #
+  # Skipped when `:endpoint_mapper` is set, because a redirect it admits can
+  # reach a scheme the configured list does not name.
+  @spec warn_unreadable_socket_opts(keyword) :: :ok
+  defp warn_unreadable_socket_opts(opts) do
+    unless Keyword.has_key?(opts, :endpoint_mapper) do
+      schemes =
+        opts
+        |> Keyword.get(:endpoints, [])
+        |> List.wrap()
+        |> Enum.filter(&is_binary/1)
+        |> Enum.map(&Endpoint.parse/1)
+        |> Enum.flat_map(fn
+          {:ok, %Endpoint{ssl?: ssl?}} -> [ssl?]
+          {:error, _message} -> []
+        end)
+
+      if schemes != [] do
+        warn_unread_key(opts, :ssl_opts, Enum.any?(schemes), "https:// or ssl://")
+
+        warn_unread_key(
+          opts,
+          :tcp_opts,
+          Enum.any?(schemes, &(not &1)),
+          "http://, tcp:// or unix://"
+        )
+      end
+    end
+
+    :ok
+  end
+
+  defp warn_unread_key(opts, key, readable?, schemes) do
+    if Keyword.has_key?(opts, key) and not readable? do
+      Logger.warning("""
+      #{inspect(key)} was given but no endpoint in this pool can read it. It applies \
+      only to an endpoint whose scheme is #{schemes}, and every endpoint configured \
+      here uses the other kind. The options will not reach a socket.
+      """)
+    end
+
+    :ok
+  end
+
+  @spec warn_deprecated_app_config(keyword) :: :ok
   defp warn_deprecated_app_config(opts) do
     warn_app_config_key(opts, :json_library, "Arangox.start_link(json_library: Poison)")
     warn_app_config_key(opts, :vst_maxsize, "Arangox.start_link(vst_maxsize: 12_345)")
@@ -1273,6 +1341,7 @@ defmodule Arangox do
     :ok
   end
 
+  @spec warn_app_config_key(keyword, atom, binary) :: :ok
   defp warn_app_config_key(opts, key, example) do
     # Only the fallback is deprecated. A pool that passes the start option is
     # already doing the right thing and hears nothing, whatever the app config says.
@@ -1338,6 +1407,7 @@ defmodule Arangox do
 
   @known_opts Enum.uniq(@arangox_opts ++ @db_connection_opts)
 
+  @spec ensure_opts_valid!(keyword) :: :ok
   defp ensure_opts_valid!(opts) do
     validate_present!(opts, :endpoints, &validate_endpoints!/1)
     validate_present!(opts, :endpoint_mapper, &validate_endpoint_mapper!/1)
@@ -1391,6 +1461,7 @@ defmodule Arangox do
   # A present key always validates its value; only an absent key is skipped.
   # `Keyword.get/2` must not be used here: it cannot tell `client: false` or
   # `auth: nil` apart from an absent key, which silently skipped validation.
+  @spec validate_present!(keyword, atom, (term -> :ok)) :: :ok
   defp validate_present!(opts, key, validator) do
     case Keyword.fetch(opts, key) do
       {:ok, value} -> validator.(value)
@@ -1400,8 +1471,9 @@ defmodule Arangox do
 
   # VelocyPack is opt-in and needs `:velocy`, which is an optional
   # dependency — so an unavailable codec is refused here rather than at the
-  # first request, where `Arangox.Connection` could only answer with an error
+  # first request, where `Arangox.Connection` could only return an error
   # per call.
+  @spec validate_content_type!(term) :: :ok
   defp validate_content_type!(:json), do: :ok
 
   defp validate_content_type!(:velocypack) do
@@ -1430,6 +1502,7 @@ defmodule Arangox do
 
   # Refused here rather than at the first response, where a zero or
   # negative bound would reject every body the pool ever reads.
+  @spec validate_max_body_size!(term) :: :ok
   defp validate_max_body_size!(value) when is_integer(value) and value > 0, do: :ok
 
   defp validate_max_body_size!(value) do
@@ -1439,6 +1512,7 @@ defmodule Arangox do
     """
   end
 
+  @spec validate_endpoints!(term) :: :ok
   defp validate_endpoints!(endpoints) do
     unless is_binary(endpoints) or (is_list(endpoints) and endpoints_valid?(endpoints)) do
       raise ArgumentError, """
@@ -1446,10 +1520,13 @@ defmodule Arangox do
       got: #{inspect(redact_endpoints(endpoints))}
       """
     end
+
+    :ok
   end
 
   # An endpoint may carry userinfo, and a `start_link/1` that raises is the most
   # likely thing anyone pastes into an issue.
+  @spec redact_endpoints(term) :: term
   defp redact_endpoints(endpoints) when is_list(endpoints),
     do: Enum.map(endpoints, &Endpoint.redact/1)
 
@@ -1458,6 +1535,7 @@ defmodule Arangox do
   # `:endpoint_mapper` decides whether the pool's credentials may be sent to an
   # endpoint the server named, so a malformed one is rejected here rather than
   # silently refusing every redirect at connect time.
+  @spec validate_endpoint_mapper!(term) :: :ok
   defp validate_endpoint_mapper!(mapper) when is_function(mapper, 1), do: :ok
 
   defp validate_endpoint_mapper!({mod, fun, args})
@@ -1509,6 +1587,7 @@ defmodule Arangox do
   # happening, and `Arangox.Connection` deliberately discards anything wrong
   # with it during connect — connect must not raise — so start-up is the only
   # place a misconfigured one can ever be reported.
+  @spec validate_failover_callback!(term) :: :ok
   defp validate_failover_callback!(callback) when is_function(callback, 1), do: :ok
 
   defp validate_failover_callback!({mod, fun, args})
@@ -1536,6 +1615,7 @@ defmodule Arangox do
 
   # The message never renders an element: an authorization entry in `:headers`
   # is a documented way to carry a credential.
+  @spec validate_headers!(term) :: :ok
   defp validate_headers!(headers) do
     unless header_list?(headers) do
       raise ArgumentError, """
@@ -1558,6 +1638,7 @@ defmodule Arangox do
   # endpoint never leaves the host and is exempt, which is what keeps the
   # documented default configuration — `http://localhost:8529` with `:auth` —
   # working untouched.
+  @spec validate_cleartext_auth!(keyword) :: :ok
   defp validate_cleartext_auth!(opts) do
     with false <- Keyword.get(opts, :allow_cleartext_auth, false) == true,
          true <- credentialed?(opts),
@@ -1581,6 +1662,7 @@ defmodule Arangox do
   # merged into every request, so an `authorization` header configured there
   # reaches the wire exactly as a resolved `:auth` would. Header names are
   # case-insensitive, so the match is too.
+  @spec credentialed?(keyword) :: boolean
   defp credentialed?(opts) do
     case Keyword.fetch(opts, :auth) do
       {:ok, {:basic, _username, _password}} -> true
@@ -1589,6 +1671,7 @@ defmodule Arangox do
     end
   end
 
+  @spec authorization_header?(term) :: boolean
   defp authorization_header?(headers) when is_map(headers) or is_list(headers) do
     Enum.any?(headers, fn
       {name, _value} -> String.downcase(to_string(name)) == "authorization"
@@ -1598,6 +1681,7 @@ defmodule Arangox do
 
   defp authorization_header?(_headers), do: false
 
+  @spec cleartext_remote_endpoints(keyword) :: [endpoint]
   defp cleartext_remote_endpoints(opts) do
     opts
     |> Keyword.get(:endpoints, [])
@@ -1606,6 +1690,7 @@ defmodule Arangox do
     |> Enum.map(&Endpoint.redact/1)
   end
 
+  @spec cleartext_remote?(term) :: boolean
   defp cleartext_remote?(endpoint) when is_binary(endpoint) do
     case Endpoint.parse(endpoint) do
       {:ok, %Endpoint{ssl?: false, addr: {:tcp, host, _port}}} -> not loopback?(host)
@@ -1625,6 +1710,7 @@ defmodule Arangox do
   # endpoints this check exists to refuse. Anything that is not a recognisable
   # loopback address is treated as remote: this gate fails closed, and the cost
   # of being wrong is an opt-in the operator can grant.
+  @spec loopback?(binary) :: boolean
   defp loopback?(host) do
     host = host |> to_string() |> String.trim_leading("[") |> String.trim_trailing("]")
 
@@ -1639,6 +1725,7 @@ defmodule Arangox do
     end
   end
 
+  @spec validate_request_timeout!(term) :: :ok
   defp validate_request_timeout!(request_timeout) do
     case Client.validate_request_timeout(request_timeout) do
       :ok -> :ok
@@ -1650,6 +1737,7 @@ defmodule Arangox do
   # `Arangox.Connection`, which enforces it again on every request — one rule,
   # two entry points, so a name this raises on cannot reach a path by some
   # other route.
+  @spec validate_database!(term) :: :ok
   defp validate_database!(database) do
     case __MODULE__.Connection.validate_database(database) do
       :ok -> :ok
@@ -1671,6 +1759,7 @@ defmodule Arangox do
   # `Arangox.VelocyClient.request/2`.
   # Returns the value along with a description of where it came from, so the
   # error names the thing the caller actually has to go and change.
+  @spec fetch_opt_or_app_config(keyword, atom) :: {:ok, term, binary} | :error
   defp fetch_opt_or_app_config(opts, key) do
     case Keyword.fetch(opts, key) do
       {:ok, value} ->
@@ -1684,6 +1773,7 @@ defmodule Arangox do
     end
   end
 
+  @spec validate_json_library!(term, binary) :: :ok
   defp validate_json_library!(json_library, source)
        when is_boolean(json_library) or is_nil(json_library) or not is_atom(json_library) do
     raise ArgumentError, """
@@ -1707,6 +1797,7 @@ defmodule Arangox do
   # `:velocy` is available — `:vst_maxsize` has to be validated either way.
   @vst_chunk_header_size 24
 
+  @spec validate_vst_maxsize!(term, binary) :: :ok
   defp validate_vst_maxsize!(vst_maxsize, source) when not is_integer(vst_maxsize) do
     raise ArgumentError, """
     #{source} expects an integer greater than #{@vst_chunk_header_size}, \
@@ -1732,6 +1823,7 @@ defmodule Arangox do
   # the unknown key and the closest known key. A typo'd option must not pass
   # silently: `Connection.new/3` builds state with `struct/2`, which drops a
   # key it does not know without complaint.
+  @spec warn_unknown_opts(keyword) :: :ok
   defp warn_unknown_opts(opts) do
     for {key, _value} <- opts, is_atom(key) and key not in @known_opts do
       Logger.warning(
@@ -1756,6 +1848,7 @@ defmodule Arangox do
   # `DBConnection` option this driver does not enumerate — the same reason that
   # check warns rather than raises, and warning once per request would be
   # unsilenceable noise.
+  @spec warn_unknown_query_opts(keyword) :: keyword
   defp warn_unknown_query_opts(opts) do
     for {key, _value} <- opts, is_atom(key) and key not in @known_query_opts do
       case closest_known_opt(key, @known_query_opts) do
@@ -1770,6 +1863,7 @@ defmodule Arangox do
     opts
   end
 
+  @spec closest_known_opt(atom, [atom, ...]) :: binary
   defp closest_known_opt(key, known) do
     key_string = Atom.to_string(key)
 
@@ -1781,11 +1875,13 @@ defmodule Arangox do
     if distance >= 0.77, do: ". Did you mean #{inspect(closest)}?", else: ""
   end
 
+  @spec endpoints_valid?(list) :: boolean
   defp endpoints_valid?(endpoints) when is_list(endpoints) do
     length(endpoints) > 0 and
       Enum.count(endpoints, &is_binary/1) == length(endpoints)
   end
 
+  @spec ensure_client_loaded!(term) :: :ok
   defp ensure_client_loaded!(client) do
     cond do
       is_boolean(client) or is_nil(client) or not is_atom(client) ->
@@ -1819,6 +1915,7 @@ defmodule Arangox do
   # The hex package, which is not the module name downcased: the modules are
   # `VelocyClient`, `MintClient` and `GunClient`, the packages are `velocy`,
   # `mint` and `gun`.
+  @spec client_dependency(VelocyClient | MintClient | GunClient) :: binary
   defp client_dependency(VelocyClient), do: "velocy"
   defp client_dependency(MintClient), do: "mint"
   defp client_dependency(GunClient), do: "gun"
@@ -1831,6 +1928,7 @@ defmodule Arangox do
   # instead, naming the new signature. `Arangox.Client.request/3` translates the
   # same mistake at runtime, for a pool started through `DBConnection`
   # directly.
+  @spec ensure_client_contract!(module) :: :ok
   defp ensure_client_contract!(client) do
     loaded? = Code.ensure_loaded?(client)
 

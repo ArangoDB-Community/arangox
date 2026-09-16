@@ -9,6 +9,18 @@ if Code.ensure_loaded?(Mint.HTTP) do
     Speaks HTTP/1.1 and HTTP/2 over TCP, TLS (Transport Layer Security) and
     unix domain sockets.
 
+    ### Options
+
+    `:client_opts` is a keyword list, passed to `Mint.HTTP.connect/4`.
+
+    Mint takes its socket settings under its own `:transport_opts` key, which
+    is not an `Arangox.start_link/1` option. This client builds that key from
+    `:tcp_opts` or `:ssl_opts` — whichever the endpoint's scheme selects —
+    plus the connect timeout and the socket write bounds. A `:transport_opts`
+    given inside `:client_opts` is merged over that per key, so setting one
+    socket option does not discard the others, and trust material configured
+    through `:ssl_opts` survives.
+
     ### Which protocol gets used
 
     This client speaks HTTP/1.1 by default on **both** schemes. HTTP/2 is
@@ -160,6 +172,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
         {:error, %Error{reason: :client_error, message: "threw: #{inspect(value)}"}}
     end
 
+    @spec do_connect(Endpoint.addr(), boolean, keyword) ::
+            {:ok, Mint.t()} | {:error, Error.t()}
     defp do_connect(addr, ssl?, options) do
       case open(addr, ssl?, options) do
         {:ok, conn} ->
@@ -176,6 +190,20 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     # A unix domain socket is a `{:local, path}` address with port `0`,
     # supported since `:mint` 1.5.
+    #
+    # Dialyzer reports the unix-socket call as one that cannot succeed.
+    # `Mint.HTTP1.connect/4` is specced for `Mint.Types.address()`, which
+    # includes the `{:local, path}` form — but dialyzer works from success
+    # typings rather than specs, and Mint's inferred typing for that argument
+    # narrows to `binary()` because the SSL transport cannot take a
+    # `{:local, _}` address and the transport module is only known at run
+    # time. The call works: `Arangox.ClientContractTest` completes a request
+    # to a real unix-socket HTTP server through it, and no public Mint API
+    # avoids it. Revisit when Mint's transport dispatch is specced per
+    # scheme.
+    @dialyzer {:no_fail_call, open: 3}
+    @spec open(Endpoint.addr(), boolean, keyword) ::
+            {:ok, Mint.t()} | {:error, Elixir.Mint.Types.error()}
     defp open({:unix, path}, ssl?, options) do
       scheme = if ssl?, do: :https, else: :http
 
@@ -262,12 +290,19 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     # `:mint` renders the `host` header as `hostname:port` for any port that is
     # not the scheme's default, so a unix connection would send
-    # `host: localhost:0` and an RFC-strict server answers `400` before reading
+    # `host: localhost:0` and an RFC-strict server responds `400` before reading
     # the path. Port `0` only ever means a `{:local, path}` address.
+    #
+    # Dialyzer objects to matching into the connection struct because Mint
+    # declares its connection type opaque — and offers no public accessor
+    # for either field; `Mint.HTTP.get_socket/1` is public but the local
+    # port of a unix socket cannot recover the hostname. The field read has
+    # been stable across Mint 1.x. Revisit if Mint grows an address
+    # accessor.
+    @dialyzer {:no_opaque, with_host: 2}
+    @spec with_host(Arangox.headers(), Mint.t()) :: Arangox.headers()
     defp with_host(headers, %{port: 0, host: host}) when is_binary(host) do
-      if Enum.any?(headers, fn {name, _value} ->
-           String.downcase(to_string(name)) == "host"
-         end) do
+      if has_host_header?(headers) do
         headers
       else
         [{"host", host} | headers]
@@ -276,10 +311,18 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp with_host(headers, _socket), do: headers
 
+    @spec has_host_header?(Arangox.headers()) :: boolean
+    defp has_host_header?(headers) do
+      Enum.any?(headers, fn {name, _value} ->
+        String.downcase(to_string(name)) == "host"
+      end)
+    end
+
     # Best-effort: a socket `setopts` cannot reach is about to fail its send
     # anyway, with a better-typed error than this call could build. The
     # `send_timeout_close` set at connect stays in force, so a timed-out write
     # still closes the socket under it.
+    @spec set_send_timeout(Elixir.Mint.Types.socket(), pos_integer) :: :ok | {:error, term}
     defp set_send_timeout(socket, timeout) when is_port(socket),
       do: :inet.setopts(socket, send_timeout: timeout)
 
@@ -295,7 +338,33 @@ if Code.ensure_loaded?(Mint.HTTP) do
     # failure noticed between reads and must report the same reason. `:timeout`
     # is in `Arangox.Client.connection_lost_reasons/0`, so both disconnect:
     # bytes are on the wire and the socket cannot be handed on.
-    defp do_recv(conn, ref, deadline, opts, state, buffer \\ []) do
+    @spec do_recv(
+            Mint.t(),
+            Elixir.Mint.Types.request_ref(),
+            integer,
+            keyword,
+            Connection.t()
+          ) ::
+            {:ok, Mint.t(), [Elixir.Mint.Types.response()]}
+            | {:error, Mint.t(), Error.t()}
+            | {:error, Mint.t(), Elixir.Mint.Types.error(), [Elixir.Mint.Types.response()]}
+    defp do_recv(conn, ref, deadline, opts, state),
+      do: do_recv(conn, ref, deadline, opts, state, [], nil, 0)
+
+    @spec do_recv(
+            Mint.t(),
+            Elixir.Mint.Types.request_ref(),
+            integer,
+            keyword,
+            Connection.t(),
+            [[Elixir.Mint.Types.response()]],
+            non_neg_integer | nil,
+            non_neg_integer
+          ) ::
+            {:ok, Mint.t(), [Elixir.Mint.Types.response()]}
+            | {:error, Mint.t(), Error.t()}
+            | {:error, Mint.t(), Elixir.Mint.Types.error(), [Elixir.Mint.Types.response()]}
+    defp do_recv(conn, ref, deadline, opts, state, buffer, status, size) do
       case Client.socket_timeout(deadline, opts, state) do
         :elapsed ->
           {:error, conn, elapsed_error()}
@@ -307,12 +376,19 @@ if Code.ensure_loaded?(Mint.HTTP) do
             # socket read, which is quadratic in the number of reads a
             # response takes.
             {:ok, new_conn, next_buffer} ->
-              buffer = [next_buffer | buffer]
+              status = response_status(next_buffer, ref, status)
+              size = size + response_data_size(next_buffer, ref)
 
-              if Enum.any?(next_buffer, &final?(&1, ref)) do
-                {:ok, new_conn, buffer |> Enum.reverse() |> Enum.concat()}
+              if size > state.max_body_size do
+                {:error, new_conn, Client.body_too_large(status, size, state.max_body_size)}
               else
-                do_recv(new_conn, ref, deadline, opts, state, buffer)
+                buffer = [next_buffer | buffer]
+
+                if Enum.any?(next_buffer, &final?(&1, ref)) do
+                  {:ok, new_conn, buffer |> Enum.reverse() |> Enum.concat()}
+                else
+                  do_recv(new_conn, ref, deadline, opts, state, buffer, status, size)
+                end
               end
 
             {:error, _, _, _} = error ->
@@ -321,6 +397,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
+    @spec elapsed_error() :: Error.t()
     defp elapsed_error do
       %Error{
         reason: :timeout,
@@ -346,6 +423,29 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp final?({:done, ref}, ref), do: true
     defp final?({:error, ref, _reason}, ref), do: true
     defp final?(_response, _ref), do: false
+
+    @spec response_status(
+            [Elixir.Mint.Types.response()],
+            Elixir.Mint.Types.request_ref(),
+            non_neg_integer | nil
+          ) :: non_neg_integer | nil
+    defp response_status(responses, ref, current) do
+      Enum.reduce(responses, current, fn
+        {:status, ^ref, status}, _current -> status
+        _response, current -> current
+      end)
+    end
+
+    @spec response_data_size(
+            [Elixir.Mint.Types.response()],
+            Elixir.Mint.Types.request_ref()
+          ) :: non_neg_integer
+    defp response_data_size(responses, ref) do
+      Enum.reduce(responses, 0, fn
+        {:data, ^ref, data}, size -> size + byte_size(data)
+        _response, size -> size
+      end)
+    end
 
     # Folded rather than matched on shape: an informational response
     # (`103 Early Hints`) puts a `:status`/`:headers` pair before the real one,
@@ -428,6 +528,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
       }
     end
 
+    # `Mint.TransportError` renders any reason it does not special-case through
+    # `:ssl.format_error/1`, which requires an atom. A tagged tuple from the
+    # socket layer — `{:badarg, charlist}` from `:gen_tcp.connect/4` on an
+    # unrecognised option — makes that raise, and `Exception.message/1` then
+    # answers with a diagnostic carrying a stack trace instead of a message.
+    # That string would become this error's `:message`, which callers log.
+    defp normalize(%{__struct__: @transport_error, reason: reason})
+         when is_tuple(reason) and elem(reason, 0) != :bad_alpn_protocol do
+      %Error{reason: reason_atom(reason), message: describe_reason(reason)}
+    end
+
     defp normalize(%{__struct__: struct, reason: reason} = exception)
          when struct in [@transport_error, @http_error] do
       %Error{reason: reason_atom(reason), message: Exception.message(exception)}
@@ -447,6 +558,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
         message: inspect(reason)
       }
     end
+
+    # `{:badarg, charlist}` from `:gen_tcp.connect/4` carries the whole option
+    # list it rejected, which is the only thing that names the option at fault.
+    # Rendering it as text keeps that readable; `inspect/1` escapes it.
+    defp describe_reason({tag, detail}) when is_list(detail) do
+      if List.ascii_printable?(detail),
+        do: "#{tag}: #{List.to_string(detail)}",
+        else: inspect({tag, detail})
+    end
+
+    defp describe_reason(reason), do: inspect(reason)
 
     # `:mint` reasons are usually a bare atom (`:closed`, `:econnrefused`,
     # `:timeout`), sometimes a tagged tuple (`{:bad_alpn_protocol, protocol}`).

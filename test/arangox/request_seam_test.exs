@@ -7,7 +7,7 @@ defmodule Arangox.RequestSeamTest.StubClient do
 
   Scripts are keyed by `{method, path}` and travel in the fabricated socket
   inside the connection state, so there is no named process and the tests stay
-  `async: true`. Anything unscripted answers `200 {}`.
+  `async: true`. Anything unscripted returns `200 {}`.
 
   The same shape as `Arangox.TransactionTest.StubClient`, duplicated rather than
   shared: that one is the transaction suite's harness, and a stub two suites
@@ -49,7 +49,7 @@ defmodule Arangox.RequestSeamTest do
   argument. The request-time half of path interpolation lives inside that
   same function: the per-request `:database` is validated and percent-encoded
   there, as is the server-supplied cursor identifier, so hand-written requests,
-  cursors, prepared queries and the `Arangox.Api.*` operations all cross one
+  cursors, prepared queries and the `Arangox.API.*` operations all cross one
   point.
 
   Protocol tier: no Docker, no network — the client is scripted.
@@ -257,7 +257,7 @@ defmodule Arangox.RequestSeamTest do
     # `Arangox.start_link/1` documents the rule as "every request that isn't
     # already prepended", and does not distinguish the pool option from the
     # per-request one — prepending anyway would produce `/_db/b/_db/a/...`,
-    # a path no server can answer.
+    # a path no server can serve.
     test "a per-request database does not prepend onto a path that already names one" do
       assert {:ok, _request, %Response{}, %Connection{}} =
                Connection.handle_execute(
