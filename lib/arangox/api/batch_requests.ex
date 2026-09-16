@@ -1,0 +1,80 @@
+defmodule Arangox.API.BatchRequests do
+  @moduledoc """
+  ArangoDB's BatchRequests operations.
+
+  Every function takes the pool as its first argument and returns the decoded
+  response body. See `Arangox.API.Client` for the options they all accept and
+  for what a `404` returns.
+  """
+
+  alias Arangox.API.Client
+
+  @doc """
+  Execute a batch request
+
+  > **WARNING:**
+  The `/_api/batch` endpoint was deprecated in v3.8.0 and has been removed
+  in v3.12.3.
+
+
+  Executes a batch request. A batch request can contain any number of
+  other requests that can be sent to ArangoDB in isolation. The benefit of
+  using batch requests is that batching requests requires less client/server
+  roundtrips than when sending isolated requests.
+
+  All parts of a batch request are executed serially on the server. The
+  server will return the results of all parts in a single response when all
+  parts are finished.
+
+  Technically, a batch request is a multipart HTTP request, with
+  content-type `multipart/form-data`. A batch request consists of an
+  envelope and the individual batch part actions. Batch part actions
+  are "regular" HTTP requests, including full header and an optional body.
+  Multiple batch parts are separated by a boundary identifier. The
+  boundary identifier is declared in the batch envelope. The MIME content-type
+  for each individual batch part must be `application/x-arango-batchpart`.
+
+  Please note that when constructing the individual batch parts, you must
+  use CRLF (`\\r\\n`) as the line terminator as in regular HTTP messages.
+
+  The response sent by the server will be an `HTTP 200` response, with an
+  optional error summary header `x-arango-errors`. This header contains the
+  number of batch part operations that failed with an HTTP error code of at
+  least 400. This header is only present in the response if the number of
+  errors is greater than zero.
+
+  The response sent by the server is a multipart response, too. It contains
+  the individual HTTP responses for all batch parts, including the full HTTP
+  result header (with status code and other potential headers) and an
+  optional result body. The individual batch parts in the result are
+  separated using the same boundary value as specified in the request.
+
+  The order of batch parts in the response will be the same as in the
+  original client request. Client can additionally use the `Content-Id`
+  MIME header in a batch part to define an individual id for each batch part.
+  The server will return this id is the batch part responses, too.
+  """
+  @spec execute(Arangox.conn(), binary, keyword) :: {:ok, term} | {:error, Exception.t()}
+  def execute(conn, body, opts \\ []) do
+    Client.request(conn,
+      method: :post,
+      segments: ["_api", "batch"],
+      body: body,
+      media: "text/plain; charset=utf-8",
+      opts: opts
+    )
+  end
+
+  @doc """
+  Execute a batch request. Raises on error.
+
+  See `execute/2`.
+  """
+  @spec execute!(Arangox.conn(), binary, keyword) :: term
+  def execute!(conn, body, opts \\ []) do
+    case execute(conn, body, opts) do
+      {:ok, body} -> body
+      {:error, exception} -> raise exception
+    end
+  end
+end

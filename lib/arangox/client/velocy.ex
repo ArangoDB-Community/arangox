@@ -1,18 +1,35 @@
 if Code.ensure_loaded?(VelocyPack) do
   defmodule Arangox.VelocyClient do
     @moduledoc """
-    The default client. Implements the \
-    [VelocyStream](https://github.com/arangodb/velocystream) \
-    protocol.
+    The [VelocyStream](https://github.com/arangodb/velocystream) client, an
+    explicit opt-in for ArangoDB 3.11 deployments
+    (`client: Arangox.VelocyClient`) — the server removed the protocol in
+    3.12, and `Arangox.MintClient` over HTTP is the default.
+
+    Conforms to the `Arangox.Client` error contract: every failure is an
+    `Arangox.Error` carrying a `:reason` atom, and neither `connect/2` nor
+    `request/3` raises or exits, whatever the transport does with the options it
+    is given.
+
+    VelocyStream carries headers as a map in *both* directions, so this
+    client cannot express a repeated header name. Outbound, it builds the map
+    from the merged list itself: the right-most occurrence of a name wins and
+    the others are dropped. Inbound, the list on `Arangox.Response` is built
+    from the server's map: no repeated name can arrive, and the order is the
+    map's key order, not the order the server wrote them. Casing is preserved
+    in both directions — unlike the HTTP clients, which lowercase names.
 
     URI query parsing functions proudly stolen from Plataformatec and
     licensed under Apache 2.0.
     """
 
+    require Logger
+
     alias Arangox.{
       Client,
       Connection,
       Endpoint,
+      Errno,
       Error,
       Request,
       Response
@@ -22,147 +39,336 @@ if Code.ensure_loaded?(VelocyPack) do
 
     @vst_version 1.1
     @vst_version_trunc trunc(@vst_version)
+
+    # Fixed by the VelocyStream 1.1 protocol, unlike the chunk size. Mirrored
+    # as `@vst_chunk_header_size` in `Arangox`, which validates `:vst_maxsize`
+    # against it whether or not this module was compiled. Keep them equal.
     @chunk_header_size 24
 
-    vst_maxsize = Application.compile_env(:arangox, :vst_maxsize, 30_720)
-
-    unless vst_maxsize > @chunk_header_size,
-      do: raise(":vst_maxsize must be greater than #{@chunk_header_size}")
-
-    @vst_maxsize vst_maxsize
-    @chunk_without_header_size @vst_maxsize - @chunk_header_size
-
     @doc """
-    Returns the configured maximum size (in bytes) for a _VelocyPack_ chunk.
+    Returns the _VelocyStream_ chunk size from the deprecated application config,
+    or `30_720`.
 
-    To change the chunk size, include the following in your `config/config.exs`:
+    Deprecated in 0.8 and removed in the next release, along with the
+    application-config read it reports on. It returns the *fallback*, not what any particular pool uses:
+    since 0.8 the chunk size is a per-pool start option, resolved at connect and
+    held in `Arangox.Connection`, so two pools can disagree and neither has to
+    agree with this. Pass `:vst_maxsize` to `Arangox.start_link/1` instead.
 
-        config :arangox, :vst_maxsize, 12_345
-
-    Cannot be changed during runtime. Defaults to `30_720`.
+    Emits a deprecation warning on every call.
     """
+    @deprecated "Pass :vst_maxsize to Arangox.start_link/1 instead"
     @spec vst_maxsize() :: pos_integer()
-    def vst_maxsize, do: @vst_maxsize
+    def vst_maxsize do
+      Logger.warning("""
+      Arangox.VelocyClient.vst_maxsize/0 is deprecated and will be removed in \
+      the next arangox release. The chunk size is a per-pool start option now, \
+      and this function cannot see it:
 
-    @spec maybe_authenticate(Connection.t()) :: :ok | {:error, Error.t()}
-    def maybe_authenticate(%Connection{auth: {:basic, username, password}} = state),
-      do: do_maybe_authenticate(state, [@vst_version_trunc, 1000, "plain", username, password])
-    def maybe_authenticate(%Connection{auth: {:bearer, token}} = state),
-      do: do_maybe_authenticate(state, [@vst_version_trunc, 1000, "jwt", token])
-    def maybe_authenticate(%Connection{}), do: :ok
+          Arangox.start_link(vst_maxsize: 12_345)
+      """)
 
-    defp do_maybe_authenticate(%Connection{socket: socket, endpoint: endpoint}, auth_msg) do
+      Connection.fallback_vst_maxsize()
+    end
+
+    @spec maybe_authenticate(Connection.t(), [Client.request_option()]) ::
+            :ok | {:error, Error.t()}
+    def maybe_authenticate(state, opts \\ [])
+
+    def maybe_authenticate(%Connection{auth: {:basic, username, password}} = state, opts),
+      do:
+        do_maybe_authenticate(
+          state,
+          opts,
+          [@vst_version_trunc, 1000, "plain", username, password]
+        )
+
+    def maybe_authenticate(%Connection{auth: {:bearer, token}} = state, opts),
+      do: do_maybe_authenticate(state, opts, [@vst_version_trunc, 1000, "jwt", token])
+
+    def maybe_authenticate(%Connection{}, _opts), do: :ok
+
+    # Same boundary as `connect/2` and `request/3`: this runs inside the connect
+    # pipeline, on bytes a server chose, so a raise here escapes a
+    # `DBConnection` callback and costs the process its backoff. A
+    # chunk header declaring a length below the 24-byte header, for one,
+    # reaches `recv` with a negative length.
+    @spec do_maybe_authenticate(Connection.t(), [Client.request_option()], list) ::
+            :ok | {:error, Error.t()}
+    defp do_maybe_authenticate(state, opts, auth_msg) do
+      do_authenticate(state, opts, auth_msg)
+    rescue
+      exception ->
+        {:error, %Error{reason: :client_error, message: Exception.message(exception)}}
+    catch
+      :exit, reason ->
+        {:error, %Error{reason: caught_reason(reason), message: "exited: #{inspect(reason)}"}}
+
+      :throw, value ->
+        {:error, %Error{reason: :client_error, message: "threw: #{inspect(value)}"}}
+    end
+
+    @spec do_authenticate(Connection.t(), [Client.request_option()], list) ::
+            :ok | {:error, Error.t()}
+    defp do_authenticate(
+           %Connection{socket: socket, endpoint: endpoint, vst_maxsize: vst_maxsize} = state,
+           opts,
+           auth_msg
+         ) do
+      deadline = Client.deadline(opts, state)
+
       with(
         {:ok, encoded_message} <-
           VelocyPack.encode(auth_msg),
         :ok <-
-          send_stream(socket, build_stream(encoded_message)),
+          send_stream(socket, build_stream(encoded_message, vst_maxsize), deadline, opts, state),
         {:ok, header} <-
-          recv_header(socket),
+          recv_header(socket, deadline, opts, state),
         {:ok, stream} <-
-          recv_stream(socket, header),
-        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} <-
-          decode_stream(stream)
+          recv_stream(socket, header, deadline, opts, state)
       ) do
-        :ok
+        check_auth_response(stream, endpoint)
       else
+        # Every step normalizes its own failure into this one shape;
+        # `normalize/1` passes an `%Error{}` through and translates the
+        # transport's raw reasons.
+        {:error, reason} -> {:error, normalize(reason)}
+      end
+    end
+
+    # The server refuses an authentication with an ordinary error body, so a
+    # non-200 response is decoded into the driver's error rather than
+    # reported as malformed bytes.
+    @spec check_auth_response(binary, binary) :: :ok | {:error, Error.t()}
+    defp check_auth_response(stream, endpoint) do
+      case decode_stream(stream) do
+        {:ok, [[@vst_version_trunc, 2, 200, _headers] | _body]} ->
+          :ok
+
         {:ok, [[@vst_version_trunc, 2, status, _headers] | [body | _]]} ->
+          error_num = body["errorNum"]
+
           {:error,
-           %Error{status: status, message: body["errorMessage"], endpoint: endpoint}}
+           %Error{
+             status: status,
+             error_num: error_num,
+             reason: error_num && Errno.reason(error_num),
+             message: body["errorMessage"],
+             endpoint: endpoint
+           }}
+
+        {:ok, _decoded} = other ->
+          {:error, malformed(other)}
 
         {:error, reason} ->
-          {:error, reason}
+          {:error, normalize(reason)}
       end
     end
 
     @impl true
     def connect(%Endpoint{addr: addr, ssl?: ssl?}, opts) do
       mod = if ssl?, do: :ssl, else: :gen_tcp
-      transport_opts = if ssl?, do: :ssl_opts, else: :tcp_opts
-      transport_opts = Keyword.get(opts, transport_opts, [])
+      given = Keyword.get(opts, if(ssl?, do: :ssl_opts, else: :tcp_opts), [])
       connect_timeout = Keyword.get(opts, :connect_timeout, 5_000)
 
-      options = Keyword.merge(transport_opts, packet: :raw, mode: :binary, active: false)
+      # Options reach `:ssl`/`:gen_tcp` as written. `packet`, `mode` and
+      # `active` are merged last and stay forced: this client's framing depends
+      # on them. No TLS defaults are added here — since OTP 26 `:ssl` verifies
+      # peers and refuses to connect without trust material, so a TLS endpoint
+      # needs `ssl_opts: [cacertfile: ...]` or, knowingly,
+      # `[verify: :verify_none]`. Why no defaults belong here is argued in
+      # docs/solutions/architecture-patterns/transport-tls-defaults-are-not-the-drivers-to-supply.md.
+      # Send bounds go under the caller's options so they can be overridden;
+      # the framing options go over them because this client's chunking
+      # depends on them. The connect-time send bound covers the handshake and
+      # auth writes; `send_stream/5` replaces it per chunk with the request's
+      # remaining budget.
+      # The zero linger makes every close an abort: a close with bytes still
+      # queued to a peer that stopped reading otherwise blocks the closing
+      # process for the driver's multi-second flush wait. Sockets here are
+      # only ever closed when they are being retired.
+      options =
+        [send_timeout: 15_000, send_timeout_close: true, linger: {true, 0}]
+        |> Keyword.merge(given)
+        |> Keyword.merge(packet: :raw, mode: :binary, active: false)
 
-      with(
-        {:ok, port} <-
-          mod.connect(addr_for(addr), port_for(addr), options, connect_timeout),
-        :ok <-
-          mod.send(port, "VST/#{@vst_version}\r\n\r\n")
-      ) do
-        {:ok, {mod, port}}
+      # The handshake write is a second failure point *after* the port exists,
+      # so it cannot share the connect failure's `else`: nothing else owns the
+      # port yet, and a caller that only sees `{:error, _}` cannot close it.
+      case mod.connect(addr_for(addr), port_for(addr), options, connect_timeout) do
+        {:ok, port} ->
+          case mod.send(port, "VST/#{@vst_version}\r\n\r\n") do
+            :ok ->
+              {:ok, {mod, port}}
+
+            {:error, reason} ->
+              mod.close(port)
+              {:error, normalize(reason)}
+          end
+
+        {:error, reason} ->
+          {:error, normalize(reason)}
       end
+    rescue
+      exception ->
+        {:error, %Error{reason: :client_error, message: Exception.message(exception)}}
+    catch
+      # `:gen_tcp.connect/4` exits with `:badarg` on an unrecognised option
+      # (`tcp_opts: [verify: :verify_peer]`, say). This callback must not raise
+      # or exit.
+      :exit, reason ->
+        {:error, %Error{reason: caught_reason(reason), message: "exited: #{inspect(reason)}"}}
+
+      :throw, value ->
+        {:error, %Error{reason: :client_error, message: "threw: #{inspect(value)}"}}
     end
 
+    @spec addr_for(Endpoint.addr()) :: {:local, charlist} | charlist
     defp addr_for({:unix, path}), do: {:local, to_charlist(path)}
     defp addr_for({:tcp, host, _port}), do: to_charlist(host)
 
+    @spec port_for(Endpoint.addr()) :: non_neg_integer
     defp port_for({:unix, _path}), do: 0
     defp port_for({:tcp, _host, port}), do: port
 
     @impl true
     def request(
           %Request{method: method, path: path, headers: headers, body: body},
-          %Connection{socket: socket, database: database} = state
-        ) do
+          opts,
+          %Connection{socket: socket, database: database, vst_maxsize: vst_maxsize} = state
+        )
+        when is_list(opts) do
       %{path: path, query: query} = URI.parse(path)
 
       {database, path} =
         case path do
+          # A caller can write the prefix with no trailing segment —
+          # `/_db/mydb` — so the split yields one part as well as two.
           "/_db/" <> rest ->
-            [database, path] = :binary.split(rest, "/")
-
-            {database, "/" <> path}
+            case :binary.split(rest, "/") do
+              [database, path] -> {database, "/" <> path}
+              [database] -> {database, "/"}
+            end
 
           _ ->
             {database || "", path}
         end
 
-      request = [
-        @vst_version_trunc,
-        1,
-        database,
-        method_for(method),
-        path,
-        query_for(query),
-        headers_for(headers)
-      ]
+      # One deadline for the whole exchange, re-derived before every
+      # receive. A response arrives as a header and a payload per chunk, so a
+      # per-`recv` timeout would let an N-chunk response take N budgets.
+      deadline = Client.deadline(opts, state)
 
       with(
+        {:ok, method_code} <-
+          method_for(method),
         {:ok, request} <-
-          VelocyPack.encode(request),
+          encode_term([
+            @vst_version_trunc,
+            1,
+            database,
+            method_code,
+            path,
+            query_for(query),
+            headers_for(headers)
+          ]),
         {:ok, body} <-
           body_for(body),
         :ok <-
-          send_stream(socket, build_stream(request <> body)),
+          send_stream(socket, build_stream(request <> body, vst_maxsize), deadline, opts, state),
         {:ok, header} <-
-          recv_header(socket),
+          recv_header(socket, deadline, opts, state),
         {:ok, stream} <-
-          recv_stream(socket, header),
-        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} <-
-          decode_stream(stream)
+          recv_stream(socket, header, deadline, opts, state),
+        {:ok, status, headers, body} <-
+          decode_response(stream)
       ) do
-        {:ok, %Response{status: status, headers: headers, body: body_from(body)}, state}
+        {:ok,
+         %Response{status: status, headers: response_headers(headers), body: body_from(body)},
+         state}
       else
-        {:error, :closed} ->
-          {:error, :noproc, state}
+        # Every step normalizes its own failure into this one shape;
+        # `normalize/1` passes an `%Error{}` through and translates the
+        # transport's raw reasons. `:closed` is in
+        # `Arangox.Client.connection_lost_reasons/0` and so forces a
+        # disconnect.
+        {:error, reason} ->
+          {:error, normalize(reason), state}
+      end
+    rescue
+      # A raise here can land after the request was written — a response the
+      # framing math chokes on arrives with unread bytes still on the socket —
+      # so the connection cannot be resynchronised and must not go back to the
+      # pool. `:closed` is in `connection_lost_reasons/0`, which forces the
+      # disconnect. Encoding failures on caller data never reach this
+      # clause: `encode_term/1` catches them before anything is written.
+      exception ->
+        {:error, %Error{reason: :closed, message: Exception.message(exception)}, state}
+    catch
+      :exit, reason ->
+        {:error,
+         %Error{reason: retiring(caught_reason(reason)), message: "exited: #{inspect(reason)}"},
+         state}
+
+      :throw, value ->
+        {:error, %Error{reason: :closed, message: "threw: #{inspect(value)}"}, state}
+    end
+
+    # An exit mid-request leaves the socket in an unknown state, so a reason
+    # the pool would not retire on is replaced with one it does; `:noproc` and
+    # friends keep their more precise selves.
+    @spec retiring(atom) :: atom
+    defp retiring(reason) do
+      if Client.connection_lost?(reason), do: reason, else: :closed
+    end
+
+    # The response boundary: whatever `decode_stream/1` yields is normalized
+    # here, so `request/3`'s `else` sees one error shape. A decoded term that
+    # is not a VelocyStream response message must not escape the callback as
+    # a `WithClauseError`.
+    @spec decode_response(binary) :: {:ok, term, term, list} | {:error, term}
+    defp decode_response(stream) do
+      case decode_stream(stream) do
+        {:ok, [[@vst_version_trunc, 2, status, headers] | body]} ->
+          {:ok, status, headers, body}
+
+        {:ok, _decoded} = other ->
+          {:error, malformed(other)}
 
         {:error, reason} ->
-          {:error, reason, state}
+          {:error, reason}
       end
     end
 
-    defp method_for(:delete), do: 0
-    defp method_for(:get), do: 1
-    defp method_for(:post), do: 2
-    defp method_for(:put), do: 3
-    defp method_for(:head), do: 4
-    defp method_for(:patch), do: 5
-    defp method_for(:options), do: 6
-    defp method_for(_), do: -1
+    # `Arangox.method/0` names seven methods and nothing enforces that at
+    # runtime, so the fallback is reachable. It must not return a sentinel
+    # integer: VelocyStream defines no such method, so the request would go
+    # out, the server could not reply, and the caller would wait out its budget
+    # for a `:timeout`.
+    # It returns rather than raises because `request/3` must not raise,
+    # which `Arangox.ClientContractTest` pins for every client.
+    @spec method_for(term) :: {:ok, 0..6} | {:error, Error.t()}
+    defp method_for(:delete), do: {:ok, 0}
+    defp method_for(:get), do: {:ok, 1}
+    defp method_for(:post), do: {:ok, 2}
+    defp method_for(:put), do: {:ok, 3}
+    defp method_for(:head), do: {:ok, 4}
+    defp method_for(:patch), do: {:ok, 5}
+    defp method_for(:options), do: {:ok, 6}
+
+    defp method_for(method) do
+      {:error,
+       %Error{
+         reason: :client_error,
+         message:
+           "VelocyStream defines no method #{inspect(method)}; expected one of " <>
+             ":get, :head, :delete, :post, :put, :patch or :options"
+       }}
+    end
 
     # ------- Begin Query Parsing Functions (Plataformatec) --------
 
+    @spec query_for(binary | nil) :: map | list
     defp query_for(nil), do: %{}
 
     defp query_for(query) do
@@ -171,6 +377,7 @@ if Code.ensure_loaded?(VelocyPack) do
       Enum.reduce(Enum.reverse(parts), %{}, &decode_www_pair(&1, &2))
     end
 
+    @spec decode_www_pair(binary, map | list) :: map | list
     defp decode_www_pair("", acc), do: acc
 
     defp decode_www_pair(binary, acc) do
@@ -186,8 +393,10 @@ if Code.ensure_loaded?(VelocyPack) do
       decode_pair(current, acc)
     end
 
+    @spec decode_www_form(binary) :: binary
     defp decode_www_form(value), do: URI.decode_www_form(value)
 
+    @spec decode_pair({binary, binary | nil}, map | list) :: map | list
     defp decode_pair({key, value}, acc) do
       if key != "" and :binary.last(key) == ?] do
         subkey = :binary.part(key, 0, byte_size(key) - 1)
@@ -198,6 +407,7 @@ if Code.ensure_loaded?(VelocyPack) do
       end
     end
 
+    @spec assign_split([binary], binary | nil, map | list | :none, :binary.cp()) :: map | list
     defp assign_split(["", rest], value, acc, pattern) do
       parts = :binary.split(rest, pattern)
 
@@ -242,6 +452,7 @@ if Code.ensure_loaded?(VelocyPack) do
       assign_map(acc, key, value)
     end
 
+    @spec assign_map(map | list | :none, binary, binary | nil) :: map
     defp assign_map(acc, key, value) do
       case acc do
         %{^key => _} -> acc
@@ -252,42 +463,79 @@ if Code.ensure_loaded?(VelocyPack) do
 
     # ------- End Query Parsing Functions --------
 
+    # VelocyStream carries request headers as a VPack *map*, so the wire
+    # format itself cannot express a repeated name: `:maps.from_list/1` keeps
+    # the right-most occurrence and drops the rest, and names keep whatever
+    # casing the caller used. This collapse is this client's own — the HTTP
+    # clients deliver the list as given.
+    @spec headers_for(map | Arangox.headers()) :: map
     defp headers_for(%{} = headers), do: headers
     defp headers_for(headers) when is_list(headers), do: :maps.from_list(headers)
 
-    defp body_for(""), do: {:ok, ""}
-    defp body_for(body), do: VelocyPack.encode(body)
+    # VelocyStream delivers response headers as a VPack map, so the list is
+    # built from it: no repeated name can arrive, and the order is the map's
+    # key order, not the order the server wrote them. Names keep the server's
+    # casing.
+    @spec response_headers(term) :: term
+    defp response_headers(headers) when is_map(headers), do: Map.to_list(headers)
+    defp response_headers(headers), do: headers
 
+    @spec body_for(term) :: {:ok, binary} | {:error, term}
+    defp body_for(""), do: {:ok, ""}
+    defp body_for(body), do: encode_term(body)
+
+    # `VelocyPack.encode/1` raises rather than returning `{:error, _}` for a
+    # term it has no encoder for — a struct with no `Enumerable`, say. That is
+    # the caller's data failing before anything reached the wire, so it must
+    # not take the `request/3` rescue, whose reason retires the connection.
+    @spec encode_term(term) :: {:ok, binary} | {:error, term}
+    defp encode_term(term) do
+      VelocyPack.encode(term)
+    rescue
+      exception ->
+        {:error, %Error{reason: :encode_error, message: Exception.message(exception)}}
+    end
+
+    @spec body_from(list) :: term
     defp body_from([]), do: nil
     defp body_from([body]), do: body
     defp body_from(body), do: body
 
-    defp build_stream(message) do
-      case chunk_every(message, @chunk_without_header_size) do
-        [first_chunk | rest_chunks] ->
-          n_chunks = length([first_chunk | rest_chunks])
-          msg_length = byte_size(message) + n_chunks * @chunk_header_size
+    # The chunk size is resolved per pool at connect and arrives from
+    # connection state, so it is an argument rather than a module attribute.
+    @spec build_stream(binary, pos_integer) :: [binary, ...]
+    defp build_stream(message, vst_maxsize) do
+      [first_chunk | rest_chunks] =
+        chunks = chunk_every(message, vst_maxsize - @chunk_header_size)
 
-          rest_chunks =
-            for n <- 1..length(rest_chunks), rest_chunks != [] do
-              prepend_chunk(:lists.nth(n, rest_chunks), n, 0, 0, msg_length)
-            end
+      n_chunks = length(chunks)
+      msg_length = byte_size(message) + n_chunks * @chunk_header_size
 
-          [prepend_chunk(first_chunk, n_chunks, 1, 0, msg_length) | rest_chunks]
+      # The first chunk carries the chunk *count* and the rest carry their own
+      # index from 1, which is how a reader learns how many to wait for.
+      numbered_rest =
+        rest_chunks
+        |> Enum.with_index(1)
+        |> Enum.map(fn {chunk, n} -> prepend_chunk(chunk, n, 0, 0, msg_length) end)
 
-        only_chunk ->
-          prepend_chunk(only_chunk, 1, 1, 0, byte_size(message) + @chunk_header_size)
-      end
+      [prepend_chunk(first_chunk, n_chunks, 1, 0, msg_length) | numbered_rest]
     end
 
-    defp chunk_every(bytes, size) when byte_size(bytes) <= size, do: bytes
+    # Always a list, one element included. `build_stream/2` and `send_stream/2`
+    # both depend on that: a bare binary for the single-chunk case forces a
+    # second branch in each, and makes the numbering comprehension build a
+    # descending range for a message that fits in one chunk.
+    @spec chunk_every(binary, pos_integer) :: [binary, ...]
+    defp chunk_every(bytes, size) when byte_size(bytes) <= size, do: [bytes]
 
     defp chunk_every(bytes, size) do
-      <<chunk::binary-size(size), rest::binary>> = bytes
+      <<chunk::binary-size(^size), rest::binary>> = bytes
 
-      [chunk | List.wrap(chunk_every(rest, size))]
+      [chunk | chunk_every(rest, size)]
     end
 
+    @spec prepend_chunk(binary, non_neg_integer, 0 | 1, non_neg_integer, non_neg_integer) ::
+            binary
     defp prepend_chunk(chunk, chunk_n, is_first, msg_id, msg_length) do
       <<
         @chunk_header_size + byte_size(chunk)::little-32,
@@ -298,36 +546,104 @@ if Code.ensure_loaded?(VelocyPack) do
       >>
     end
 
-    defp send_stream({mod, port}, chunk) when is_binary(chunk), do: mod.send(port, chunk)
+    # Stops at the first chunk that fails and returns its reason. Must be
+    # an error return rather than a throw: the caller cannot match on a throw.
+    #
+    # The write half of the deadline: each chunk's send is bounded by the budget remaining
+    # *at that chunk*, re-derived through a per-chunk `setopts`. A fixed bound
+    # would let an N-chunk stream against a peer that stopped reading block
+    # for N bounds, with the deadline consulted only at the first receive.
+    @spec send_stream(
+            {module, term},
+            [binary],
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: :ok | {:error, term}
+    defp send_stream({mod, port}, chunks, deadline, opts, state) do
+      Enum.reduce_while(chunks, :ok, fn chunk, :ok ->
+        case Client.socket_timeout(deadline, opts, state) do
+          :elapsed ->
+            {:halt,
+             {:error,
+              %Error{
+                reason: :timeout,
+                message: "the request timeout elapsed before the request was fully sent"
+              }}}
 
-    defp send_stream({mod, port}, chunks) when is_list(chunks) do
-      for c <- chunks do
-        case mod.send(port, c) do
-          :ok ->
-            :ok
+          {:ok, remaining} ->
+            _ = set_send_timeout(mod, port, remaining)
 
-          {_, error} ->
-            throw(error)
+            case mod.send(port, chunk) do
+              :ok -> {:cont, :ok}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
         end
-      end
-
-      :ok
-    catch
-      error -> {:error, error}
+      end)
     end
 
-    defp recv_header({mod, port}) do
-      case mod.recv(port, @chunk_header_size) do
+    # Best-effort: a socket `setopts` cannot reach is about to fail its send
+    # anyway, with a better-typed error than this call could build. A
+    # transport module other than the two real ones (the config suite drives
+    # this client over a fake) bounds its own sends.
+    @spec set_send_timeout(module, term, pos_integer) :: :ok | {:error, term}
+    defp set_send_timeout(:gen_tcp, port, timeout),
+      do: :inet.setopts(port, send_timeout: timeout)
+
+    defp set_send_timeout(:ssl, port, timeout),
+      do: :ssl.setopts(port, send_timeout: timeout)
+
+    defp set_send_timeout(_transport, _port, _timeout), do: :ok
+
+    # The receive bound. Both receives must use the three-argument
+    # `recv/3`; the two-argument form takes no timeout and waits forever.
+    @spec timeout_for(integer, [Client.request_option()], Connection.t()) ::
+            {:ok, pos_integer} | {:error, Error.t()}
+    defp timeout_for(deadline, opts, state) do
+      case Client.socket_timeout(deadline, opts, state) do
+        {:ok, timeout} ->
+          {:ok, timeout}
+
+        :elapsed ->
+          {:error,
+           %Error{
+             reason: :timeout,
+             message: "the request timeout elapsed before the response was fully received"
+           }}
+      end
+    end
+
+    @spec recv_header({module, term}, integer, [Client.request_option()], Connection.t()) ::
+            {:ok, [non_neg_integer, ...]} | {:error, term}
+    defp recv_header(socket, deadline, opts, state) do
+      case timeout_for(deadline, opts, state) do
+        {:ok, timeout} -> do_recv_header(socket, timeout)
+        {:error, _reason} = error -> error
+      end
+    end
+
+    @spec do_recv_header({module, term}, pos_integer) ::
+            {:ok, [non_neg_integer, ...]} | {:error, term}
+    defp do_recv_header({mod, port}, timeout) do
+      case mod.recv(port, @chunk_header_size, timeout) do
         {:ok,
          <<
            chunk_length::little-32,
            chunk_x::32,
            msg_id::little-64,
            msg_length::little-64
-         >>} ->
+         >>}
+        when chunk_length >= @chunk_header_size ->
           <<chunk_n::31, is_first::1>> = <<chunk_x::little-32>>
 
           {:ok, [chunk_length, chunk_n, is_first, msg_id, msg_length]}
+
+        # A length field smaller than the header it arrived in cannot come
+        # from a conforming peer: these bytes are mid-stream garbage and the
+        # socket cannot be resynchronised.
+        {:ok, _header} ->
+          {:error,
+           %Error{reason: :closed, message: "malformed VelocyStream chunk header received"}}
 
         {:error, reason} ->
           {:error, reason}
@@ -335,27 +651,56 @@ if Code.ensure_loaded?(VelocyPack) do
     end
 
     # TODO: this could be refactored to decode streams as they are received
-    defp recv_stream(socket, [chunk_length, 1, 1, _msg_id, _msg_length]),
-      do: recv_chunk(socket, chunk_length)
+    @spec recv_stream(
+            {module, term},
+            [non_neg_integer, ...],
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: {:ok, binary} | {:error, term}
+    defp recv_stream(socket, [chunk_length, 1, 1, _msg_id, _msg_length], deadline, opts, state),
+      do: recv_chunk(socket, chunk_length, deadline, opts, state)
 
-    defp recv_stream(socket, [chunk_length, n_chunks, 1, _msg_id, _msg_length]) do
+    defp recv_stream(
+           socket,
+           [chunk_length, n_chunks, 1, _msg_id, _msg_length],
+           deadline,
+           opts,
+           state
+         ) do
       with(
         {:ok, buffer} <-
-          recv_chunk(socket, chunk_length),
+          recv_chunk(socket, chunk_length, deadline, opts, state),
         {:ok, stream} <-
-          recv_stream(socket, n_chunks, buffer)
+          recv_stream(socket, n_chunks, buffer, deadline, opts, state)
       ) do
         {:ok, stream}
       end
     end
 
-    defp recv_stream(socket, n_chunks, buffer) do
+    @spec recv_stream(
+            {module, term},
+            non_neg_integer,
+            binary,
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: {:ok, binary} | {:error, term}
+    defp recv_stream(_socket, n_chunks, _buffer, _deadline, _opts, _state) when n_chunks < 2 do
+      {:error,
+       %Error{
+         reason: :malformed_header,
+         message: "a chunked message declared #{n_chunks} chunks, which cannot be read"
+       }}
+    end
+
+    defp recv_stream(socket, n_chunks, buffer, deadline, opts, state) do
       Enum.reduce_while(1..(n_chunks - 1), buffer, fn n, buffer ->
         with(
           {:ok, [chunk_length, _, _, _, _]} <-
-            recv_header(socket),
+            recv_header(socket, deadline, opts, state),
           {:ok, chunk} <-
-            recv_chunk(socket, chunk_length)
+            recv_chunk(socket, chunk_length, deadline, opts, state)
         ) do
           if n == n_chunks - 1 do
             {:halt, {:ok, buffer <> chunk}}
@@ -369,9 +714,26 @@ if Code.ensure_loaded?(VelocyPack) do
       end)
     end
 
-    defp recv_chunk({mod, port}, chunk_length),
-      do: mod.recv(port, chunk_length - @chunk_header_size)
+    # An empty chunk must not reach `recv/3`: length 0 on a raw-mode socket
+    # means "whatever bytes are buffered", not "nothing", so it would swallow
+    # the next chunk's header and desynchronise the stream.
+    @spec recv_chunk(
+            {module, term},
+            pos_integer,
+            integer,
+            [Client.request_option()],
+            Connection.t()
+          ) :: {:ok, binary} | {:error, term}
+    defp recv_chunk(_socket, @chunk_header_size, _deadline, _opts, _state), do: {:ok, ""}
 
+    defp recv_chunk({mod, port}, chunk_length, deadline, opts, state) do
+      case timeout_for(deadline, opts, state) do
+        {:ok, timeout} -> mod.recv(port, chunk_length - @chunk_header_size, timeout)
+        {:error, _reason} = error -> error
+      end
+    end
+
+    @spec decode_stream(binary, [term]) :: {:ok, [term]} | {:error, term}
     defp decode_stream(stream, acc \\ [])
 
     defp decode_stream("", acc), do: {:ok, acc}
@@ -391,7 +753,7 @@ if Code.ensure_loaded?(VelocyPack) do
 
     @impl true
     def alive?(%Connection{} = state) do
-      case request(%Request{method: :options, path: "/"}, state) do
+      case request(%Request{method: :options, path: "/"}, [], state) do
         {:ok, _response, _state} ->
           true
 
@@ -402,5 +764,68 @@ if Code.ensure_loaded?(VelocyPack) do
 
     @impl true
     def close(%Connection{socket: {mod, port}}), do: mod.close(port)
+
+    ## Error normalization
+
+    # The one place a transport or VelocyPack failure becomes an
+    # `Arangox.Error`. `:endpoint` stays `nil` on everything built here: this
+    # module only ever sees a parsed `Arangox.Endpoint`, which carries no
+    # userinfo, and `Arangox.Connection` fills in the redacted configured
+    # endpoint.
+    @spec normalize(term) :: Error.t()
+    defp normalize(%Error{} = error), do: error
+
+    # `:gen_tcp`/`:ssl` speak in bare POSIX atoms, including `:closed`, which is
+    # in `Arangox.Client.connection_lost_reasons/0`.
+    defp normalize(reason) when is_atom(reason),
+      do: %Error{reason: reason, message: inspect(reason)}
+
+    defp normalize(exception) when is_exception(exception),
+      do: %Error{reason: :client_error, message: Exception.message(exception)}
+
+    # Since OTP 26 `:ssl` verifies peers by default but supplies no trust
+    # material of its own, so a TLS connection with no `:ssl_opts` fails on the
+    # options rather than on the handshake. The raw tuple names neither the
+    # cause nor the fix, and this is the first thing anyone enabling TLS on this
+    # client meets. Reporting it is this driver's job; supplying a default
+    # for it is not.
+    defp normalize({:options, :incompatible, details} = reason) do
+      if Keyword.get(details, :cacerts) == :undefined and
+           Keyword.get(details, :verify) == :verify_peer do
+        %Error{
+          reason: :options,
+          message:
+            "TLS is enabled but no trust material was given, and :ssl verifies peers by " <>
+              "default. Pass the authority that signed the server's certificate with " <>
+              "ssl_opts: [cacertfile: \"/path/to/ca.pem\"], or ssl_opts: [verify: :verify_none] " <>
+              "to connect without checking. Got: #{inspect(reason)}"
+        }
+      else
+        %Error{reason: :options, message: inspect(reason)}
+      end
+    end
+
+    # `:ssl` reports option and handshake failures as `{:options, details}`,
+    # `{:tls_alert, details}` and friends. The tag is the part worth matching on.
+    defp normalize(reason) when is_tuple(reason) and tuple_size(reason) > 0 do
+      case elem(reason, 0) do
+        tag when is_atom(tag) -> %Error{reason: tag, message: inspect(reason)}
+        _other -> %Error{reason: :client_error, message: inspect(reason)}
+      end
+    end
+
+    defp normalize(reason), do: %Error{reason: :client_error, message: inspect(reason)}
+
+    @spec malformed({:ok, term}) :: Error.t()
+    defp malformed(other) do
+      %Error{
+        reason: :client_error,
+        message: "malformed VelocyStream response: #{inspect(other)}"
+      }
+    end
+
+    @spec caught_reason(term) :: atom
+    defp caught_reason(reason) when is_atom(reason), do: reason
+    defp caught_reason(_reason), do: :client_error
   end
 end

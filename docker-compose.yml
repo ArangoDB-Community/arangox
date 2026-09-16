@@ -1,34 +1,113 @@
-version: '3'
+# ARANGO_VERSION selects the server for the main integration tier. The default
+# is the driver's pinned tag (Arangox.Errno.tag/0): the conformance gate
+# verifies the Arangox.API surface against the OpenAPI document this very
+# server serves, and first asserts the server's reported version equals the
+# pin — so an override here fails that gate, which is the point of the
+# assert. It resolves without any env file — the default lives here, not in
+# `.env`.
+#
+# Images come from the official `arangodb` repository. The `arangodb/arangodb`
+# organisation repository is missing recent tags — 3.12.5 onwards is absent
+# there while present in the official one, which is what previously made the
+# pinned tag look unavailable.
+#
+# resilient_single is deliberately NOT parameterised. Active failover and the
+# VelocyStream transport are 3.11-only concerns, so that container stays on
+# 3.11 no matter what the rest of the tier runs.
+#
+# Profiles split the stack by server line: `3.12` and `3.11`. The committed
+# `.env` enables both, so a plain `docker compose up --detach --wait` still
+# starts everything; CI overrides COMPOSE_PROFILES to start only the leg it
+# tests. `--wait` returns on the healthchecks below, not on container start.
+#
+# Ports bind to loopback: two of these services take unauthenticated writes,
+# and the third's root password is empty, so none of them may listen on a
+# routable interface.
+#
+# `cm9vdDo=` in the healthchecks is base64("root:") — the root user with the
+# empty password the test tier uses everywhere.
 services:
   single_no_auth:
-      image: arangodb/arangodb
+      image: arangodb:${ARANGO_VERSION:-3.12.10}
+      profiles: ["3.12"]
       environment:
         - ARANGO_NO_AUTH=1
       ports:
-        - '8529:8529'
+        - '127.0.0.1:8529:8529'
+      healthcheck:
+        test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8529/_api/version"]
+        interval: 3s
+        timeout: 5s
+        retries: 30
+        start_period: 15s
 
   single_auth:
-      image: arangodb/arangodb
+      image: arangodb:${ARANGO_VERSION:-3.12.10}
+      profiles: ["3.12"]
       environment:
         - ARANGO_ROOT_PASSWORD=
       volumes:
         - ./test:/var/lib/arangox/test
       ports:
-        - '8001:8529'
-        - '8002:8530'
+        - '127.0.0.1:8001:8529'
+        - '127.0.0.1:8002:8530'
       command:
         - arangod
         - --server.endpoint=tcp://0.0.0.0:8529
         - --server.endpoint=ssl://0.0.0.0:8530
         - --ssl.keyfile=var/lib/arangox/test/cert.pem
+      healthcheck:
+        test: ["CMD", "wget", "-q", "-O", "/dev/null", "--header=Authorization: Basic cm9vdDo=", "http://127.0.0.1:8529/_api/version"]
+        interval: 3s
+        timeout: 5s
+        retries: 30
+        start_period: 15s
 
+  # Authentication is enabled: the JWT secret turns it on, and the root
+  # user keeps the empty password the rest of the tier uses. This is what lets
+  # `"auth resolution with velocy client"` assert that wrong credentials are
+  # *refused* — 3.12 has authentication but no VelocyStream, so this 3.11
+  # service is the only place that test can mean anything.
   resilient_single:
-      image: arangodb/arangodb:3.11
+      image: arangodb:3.11
+      profiles: ["3.11"]
+      volumes:
+        - ./test:/var/lib/arangox/test
       ports:
-        - '8003:8529'
-        - '8004:8539'
-        - '8005:8549'
+        - '127.0.0.1:8003:8529'
+        - '127.0.0.1:8004:8539'
+        - '127.0.0.1:8005:8549'
       command:
         - arangodb
         - --starter.local
         - --starter.mode=activefailover
+        - --auth.jwt-secret=/var/lib/arangox/test/support/fixtures/arango-jwt-secret
+      healthcheck:
+        test: ["CMD", "sh", "-c", "wget -q -O /dev/null --header='Authorization: Basic cm9vdDo=' http://127.0.0.1:8529/_api/version && wget -q -O /dev/null --header='Authorization: Basic cm9vdDo=' http://127.0.0.1:8539/_api/version && wget -q -O /dev/null --header='Authorization: Basic cm9vdDo=' http://127.0.0.1:8549/_api/version"]
+        interval: 3s
+        timeout: 10s
+        retries: 40
+        start_period: 30s
+
+  # A local 3-member cluster: three coordinators (the mapped ports), three
+  # dbservers and three agents in one container. Stream-transaction identity
+  # and cross-coordinator transaction behavior are tested against this
+  # service; resilient_single is active failover (one leader, followers),
+  # not a cluster.
+  cluster:
+      image: arangodb:${ARANGO_VERSION:-3.12.10}
+      profiles: ["3.12"]
+      ports:
+        - '127.0.0.1:8006:8529'
+        - '127.0.0.1:8007:8539'
+        - '127.0.0.1:8008:8549'
+      command:
+        - arangodb
+        - --starter.local
+        - --starter.mode=cluster
+      healthcheck:
+        test: ["CMD", "sh", "-c", "wget -q -O /dev/null http://127.0.0.1:8529/_api/version && wget -q -O /dev/null http://127.0.0.1:8539/_api/version && wget -q -O /dev/null http://127.0.0.1:8549/_api/version"]
+        interval: 3s
+        timeout: 10s
+        retries: 40
+        start_period: 30s

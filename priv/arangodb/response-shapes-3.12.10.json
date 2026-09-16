@@ -1,0 +1,1866 @@
+{
+  "captured": {
+    "Arangox.API.Monitoring.statistics_description/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "figures": [
+          {
+            "description": "string",
+            "group": "string",
+            "identifier": "string",
+            "name": "string",
+            "type": "string",
+            "units": "string"
+          }
+        ],
+        "groups": [
+          {
+            "description": "string",
+            "group": "string",
+            "name": "string"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Users.database_permissions/4": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": "string"
+      }
+    },
+    "Arangox.API.Monitoring.metrics_v2/2": {
+      "outcome": "ok",
+      "shape": "string"
+    },
+    "Arangox.API.Administration.status/2": {
+      "outcome": "ok",
+      "shape": {
+        "foxxApi": "boolean",
+        "host": "string",
+        "hostname": "string",
+        "license": "string",
+        "mode": "string",
+        "operationMode": "string",
+        "pid": "integer",
+        "server": "string",
+        "serverInfo": {
+          "maintenance": "boolean",
+          "progress": {
+            "feature": "string",
+            "phase": "string",
+            "recoveryTick": "integer"
+          },
+          "readOnly": "boolean",
+          "role": "string",
+          "writeOpsEnabled": "boolean"
+        },
+        "version": "string"
+      }
+    },
+    "Arangox.API.Collections.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": [
+          {
+            "globallyUniqueId": "string",
+            "id": "string",
+            "isSystem": "boolean",
+            "name": "string",
+            "status": "integer",
+            "type": "integer"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Analyzers.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": [
+          {
+            "features": [
+              "string"
+            ],
+            "name": "string",
+            "properties": {
+              "accent": "boolean",
+              "case": "string",
+              "locale": "string",
+              "stemming": "boolean",
+              "stopwords": []
+            },
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Users.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "active": "boolean",
+        "code": "integer",
+        "error": "boolean",
+        "extra": {},
+        "user": "string"
+      }
+    },
+    "Arangox.API.Replication.wal_tail/2": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "db": "string",
+          "tick": "string",
+          "tid": "string",
+          "type": "integer"
+        }
+      ]
+    },
+    "Arangox.API.Cluster.health/2": {
+      "outcome": "ok",
+      "shape": {
+        "ClusterId": "string",
+        "Health": {
+          "AGNT-45e0a050-ce4d-4da8-9fde-36c6a917c66d": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "LastAckedTime": "integer",
+            "Leader": "string",
+            "Leading": "boolean",
+            "Role": "string",
+            "Status": "string",
+            "Version": "string"
+          },
+          "AGNT-a8209bbc-1afd-45ef-90f5-dc208c57004f": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "LastAckedTime": "float",
+            "Leader": "string",
+            "Leading": "boolean",
+            "Role": "string",
+            "Status": "string",
+            "Version": "string"
+          },
+          "AGNT-f24d169c-d8c8-43cf-9089-c28251402983": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "LastAckedTime": "float",
+            "Leader": "string",
+            "Leading": "boolean",
+            "Role": "string",
+            "Status": "string",
+            "Version": "string"
+          },
+          "CRDN-42a57593-b942-49b0-84af-7231d373f272": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "Host": "string",
+            "LastAckedTime": "string",
+            "Role": "string",
+            "ShortName": "string",
+            "Status": "string",
+            "SyncStatus": "string",
+            "SyncTime": "string",
+            "Timestamp": "string",
+            "Version": "string"
+          },
+          "CRDN-76cb69cd-2d7d-4294-8b8a-41a859aa70f5": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "Host": "string",
+            "LastAckedTime": "string",
+            "Role": "string",
+            "ShortName": "string",
+            "Status": "string",
+            "SyncStatus": "string",
+            "SyncTime": "string",
+            "Timestamp": "string",
+            "Version": "string"
+          },
+          "CRDN-7db819e9-ec25-4a0a-9c39-e3f99e5a3de8": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "Host": "string",
+            "LastAckedTime": "string",
+            "Role": "string",
+            "ShortName": "string",
+            "Status": "string",
+            "SyncStatus": "string",
+            "SyncTime": "string",
+            "Timestamp": "string",
+            "Version": "string"
+          },
+          "PRMR-36e455fd-7f1a-4516-9f40-497fbfc420d7": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "Host": "string",
+            "LastAckedTime": "string",
+            "Role": "string",
+            "ShortName": "string",
+            "Status": "string",
+            "SyncStatus": "string",
+            "SyncTime": "string",
+            "Timestamp": "string",
+            "Version": "string"
+          },
+          "PRMR-61e7bb1b-77c3-4910-b7f9-589bc482db6f": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "Host": "string",
+            "LastAckedTime": "string",
+            "Role": "string",
+            "ShortName": "string",
+            "Status": "string",
+            "SyncStatus": "string",
+            "SyncTime": "string",
+            "Timestamp": "string",
+            "Version": "string"
+          },
+          "PRMR-9fc93aee-322f-4ae3-9b20-116477c50f41": {
+            "CanBeDeleted": "boolean",
+            "Endpoint": "string",
+            "Engine": "string",
+            "Host": "string",
+            "LastAckedTime": "string",
+            "Role": "string",
+            "ShortName": "string",
+            "Status": "string",
+            "SyncStatus": "string",
+            "SyncTime": "string",
+            "Timestamp": "string",
+            "Version": "string"
+          }
+        },
+        "code": "integer",
+        "error": "boolean"
+      }
+    },
+    "Arangox.API.Monitoring.statistics/2": {
+      "outcome": "ok",
+      "shape": {
+        "client": {
+          "bytesReceived": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "integer"
+          },
+          "bytesSent": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "integer"
+          },
+          "connectionTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "httpConnections": "integer",
+          "ioTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "queueTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "requestTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "totalTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          }
+        },
+        "clientUser": {
+          "bytesReceived": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "integer"
+          },
+          "bytesSent": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "integer"
+          },
+          "connectionTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "httpConnections": "integer",
+          "ioTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "queueTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "requestTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          },
+          "totalTime": {
+            "count": "integer",
+            "counts": [
+              "integer"
+            ],
+            "sum": "float"
+          }
+        },
+        "code": "integer",
+        "enabled": "boolean",
+        "error": "boolean",
+        "http": {
+          "requestsAsync": "integer",
+          "requestsDelete": "integer",
+          "requestsGet": "integer",
+          "requestsHead": "integer",
+          "requestsOptions": "integer",
+          "requestsOther": "integer",
+          "requestsPatch": "integer",
+          "requestsPost": "integer",
+          "requestsPut": "integer",
+          "requestsSuperuser": "integer",
+          "requestsTotal": "integer",
+          "requestsUser": "integer"
+        },
+        "server": {
+          "physicalMemory": "integer",
+          "threads": {
+            "blocked": "integer",
+            "direct-exec": "integer",
+            "in-progress": "integer",
+            "queued": "integer",
+            "scheduler-threads": "integer"
+          },
+          "transactions": {
+            "aborted": "integer",
+            "committed": "integer",
+            "dirtyReadOnly": "integer",
+            "intermediateCommits": "integer",
+            "readOnly": "integer",
+            "started": "integer"
+          },
+          "uptime": "float",
+          "v8Context": {
+            "available": "integer",
+            "busy": "integer",
+            "dirty": "integer",
+            "free": "integer",
+            "max": "integer",
+            "memory": [
+              {
+                "contextId": "integer",
+                "countOfTimes": "integer",
+                "heapMax": "integer",
+                "heapMin": "integer",
+                "invocations": "integer",
+                "tMax": "float"
+              }
+            ],
+            "min": "integer"
+          }
+        },
+        "system": {
+          "majorPageFaults": "integer",
+          "minorPageFaults": "integer",
+          "numberOfThreads": "integer",
+          "residentSize": "integer",
+          "residentSizePercent": "float",
+          "systemTime": "float",
+          "userTime": "float",
+          "virtualSize": "integer"
+        },
+        "time": "float"
+      }
+    },
+    "Arangox.API.Import.data/4": {
+      "outcome": "ok",
+      "shape": {
+        "created": "integer",
+        "empty": "integer",
+        "error": "boolean",
+        "errors": "integer",
+        "ignored": "integer",
+        "updated": "integer"
+      }
+    },
+    "Arangox.API.Monitoring.log_entries/2": {
+      "outcome": "ok",
+      "shape": {
+        "messages": [
+          {
+            "date": "string",
+            "id": "integer",
+            "level": "string",
+            "message": "string",
+            "topic": "string"
+          }
+        ],
+        "total": "integer"
+      }
+    },
+    "Arangox.API.Queries.all/2": {
+      "outcome": "ok",
+      "shape": []
+    },
+    "Arangox.API.Administration.engine/2": {
+      "outcome": "ok",
+      "shape": {
+        "endianness": "string",
+        "name": "string",
+        "supports": {
+          "aliases": {
+            "indexes": {
+              "hash": "string",
+              "skiplist": "string",
+              "zkd": "string"
+            }
+          },
+          "indexes": [
+            "string"
+          ]
+        }
+      }
+    },
+    "Arangox.API.Indexes.all/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "identifiers": {
+          "capture_1787176566/0": {
+            "fields": [
+              "string"
+            ],
+            "id": "string",
+            "name": "string",
+            "selectivityEstimate": "integer",
+            "sparse": "boolean",
+            "type": "string",
+            "unique": "boolean"
+          },
+          "capture_1787176566/284576": {
+            "cacheEnabled": "boolean",
+            "deduplicate": "boolean",
+            "estimates": "boolean",
+            "fields": [
+              "string"
+            ],
+            "id": "string",
+            "name": "string",
+            "selectivityEstimate": "integer",
+            "sparse": "boolean",
+            "type": "string",
+            "unique": "boolean"
+          }
+        },
+        "indexes": [
+          {
+            "fields": [
+              "string"
+            ],
+            "id": "string",
+            "name": "string",
+            "selectivityEstimate": "integer",
+            "sparse": "boolean",
+            "type": "string",
+            "unique": "boolean"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Foxx.all/2": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "development": "boolean",
+          "legacy": "boolean",
+          "mount": "string",
+          "name": "string",
+          "provides": {},
+          "version": "string"
+        }
+      ]
+    },
+    "Arangox.API.Administration.all_crash_dumps/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": []
+      }
+    },
+    "Arangox.API.Documents.create/4": {
+      "outcome": "ok",
+      "shape": {
+        "_id": "string",
+        "_key": "string",
+        "_rev": "string"
+      }
+    },
+    "Arangox.API.Collections.checksum/3": {
+      "outcome": "ok",
+      "shape": {
+        "checksum": "string",
+        "code": "integer",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "isSystem": "boolean",
+        "name": "string",
+        "revision": "string",
+        "status": "integer",
+        "type": "integer"
+      }
+    },
+    "Arangox.API.Views.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": [
+          {
+            "globallyUniqueId": "string",
+            "id": "string",
+            "name": "string",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Cluster.server_role/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "mode": "string",
+        "role": "string"
+      }
+    },
+    "Arangox.API.Cluster.server_id/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "id": "string"
+      }
+    },
+    "Arangox.API.Collections.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "isSystem": "boolean",
+        "name": "string",
+        "status": "integer",
+        "type": "integer"
+      }
+    },
+    "Arangox.API.Views.properties/3": {
+      "outcome": "ok",
+      "shape": {
+        "cleanupIntervalStep": "integer",
+        "code": "integer",
+        "commitIntervalMsec": "integer",
+        "consolidationIntervalMsec": "integer",
+        "consolidationPolicy": {
+          "maxSkewThreshold": "float",
+          "minDeletionRatio": "float",
+          "segmentsBytesMax": "integer",
+          "type": "string"
+        },
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "links": {},
+        "name": "string",
+        "optimizeTopK": [],
+        "primarySort": [],
+        "primarySortCompression": "string",
+        "storedValues": [],
+        "type": "string",
+        "writebufferActive": "integer",
+        "writebufferIdle": "integer",
+        "writebufferSizeMax": "integer"
+      }
+    },
+    "Arangox.API.Databases.delete/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": "boolean"
+      }
+    },
+    "Arangox.API.Administration.shutdown_progress/2": {
+      "error_num": 405,
+      "outcome": "error",
+      "status": 405
+    },
+    "Arangox.API.Monitoring.recent_aql_queries/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {
+          "queries": [
+            {
+              "bindVars": {
+                "@collection": "string",
+                "vertex": "string"
+              },
+              "database": "string",
+              "query": "string",
+              "timeStamp": "string"
+            }
+          ]
+        }
+      }
+    },
+    "Arangox.API.Databases.all_user_accessible/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": [
+          "string"
+        ]
+      }
+    },
+    "Arangox.API.Monitoring.metrics/2": {
+      "outcome": "ok",
+      "shape": "string"
+    },
+    "Arangox.API.Queries.optimizer_rules/2": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "description": "string",
+          "flags": {
+            "canBeDisabled": "boolean",
+            "canCreateAdditionalPlans": "boolean",
+            "clusterOnly": "boolean",
+            "disabledByDefault": "boolean",
+            "enterpriseOnly": "boolean",
+            "hidden": "boolean"
+          },
+          "name": "string"
+        }
+      ]
+    },
+    "Arangox.API.Administration.time/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "time": "float"
+      }
+    },
+    "Arangox.API.Databases.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": [
+          "string"
+        ]
+      }
+    },
+    "Arangox.API.Authentication.server_jwt_secrets/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {
+          "active": {
+            "sha256": "string"
+          },
+          "passive": []
+        }
+      }
+    },
+    "Arangox.API.Indexes.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheEnabled": "boolean",
+        "code": "integer",
+        "deduplicate": "boolean",
+        "error": "boolean",
+        "estimates": "boolean",
+        "fields": [
+          "string"
+        ],
+        "id": "string",
+        "name": "string",
+        "selectivityEstimate": "integer",
+        "sparse": "boolean",
+        "type": "string",
+        "unique": "boolean"
+      }
+    },
+    "Arangox.API.Documents.update/5": {
+      "outcome": "ok",
+      "shape": {
+        "_id": "string",
+        "_key": "string",
+        "_oldRev": "string",
+        "_rev": "string"
+      }
+    },
+    "Arangox.API.Collections.shards/3": {
+      "outcome": "ok",
+      "shape": {
+        "__keys__": 28,
+        "__sample__": [
+          "cacheEnabled",
+          "code",
+          "computedValues",
+          "error",
+          "globallyUniqueId",
+          "id",
+          "internalValidatorType",
+          "isDisjoint"
+        ],
+        "__shape__": "map"
+      }
+    },
+    "Arangox.API.Monitoring.log_level/2": {
+      "outcome": "ok",
+      "shape": {
+        "__keys__": 55,
+        "__sample__": [
+          "agency",
+          "agencycomm",
+          "agencystore",
+          "aql",
+          "arangosearch",
+          "audit-authentication",
+          "audit-authorization",
+          "audit-collection"
+        ],
+        "__shape__": "map"
+      }
+    },
+    "Arangox.API.Graphs.all_vertex_collections/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "collections": [
+          "string"
+        ],
+        "error": "boolean"
+      }
+    },
+    "Arangox.API.Queries.tracking_properties/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "enabled": "boolean",
+        "error": "boolean",
+        "maxQueryStringLength": "integer",
+        "maxSlowQueries": "integer",
+        "slowQueryThreshold": "integer",
+        "slowStreamingQueryThreshold": "integer",
+        "trackBindVars": "boolean",
+        "trackSlowQueries": "boolean"
+      }
+    },
+    "Arangox.API.Documents.create_many/3": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "_id": "string",
+          "_key": "string",
+          "_rev": "string"
+        }
+      ]
+    },
+    "Arangox.API.Monitoring.recent_api_calls/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {
+          "calls": [
+            {
+              "database": "string",
+              "path": "string",
+              "requestType": "string",
+              "timeStamp": "string"
+            }
+          ]
+        }
+      }
+    },
+    "Arangox.API.Transactions.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "transactions": [
+          {
+            "id": "string",
+            "state": "string"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Administration.effective_startup_options/2": {
+      "outcome": "ok",
+      "shape": {
+        "__keys__": 471,
+        "__sample__": [
+          "activities.only-superuser-enabled",
+          "activities.registry-cleanup-timeout",
+          "agency.activate",
+          "agency.compaction-keep-size",
+          "agency.compaction-step-size",
+          "agency.disaster-recovery-id",
+          "agency.election-timeout-max",
+          "agency.election-timeout-min"
+        ],
+        "__shape__": "map"
+      }
+    },
+    "Arangox.API.Cluster.all_endpoints/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "endpoints": [
+          {
+            "endpoint": "string"
+          }
+        ],
+        "error": "boolean"
+      }
+    },
+    "Arangox.API.Monitoring.usage_metrics/2": {
+      "outcome": "ok",
+      "shape": "null"
+    },
+    "Arangox.API.Replication.wal_range/2": {
+      "outcome": "ok",
+      "shape": {
+        "server": {
+          "serverId": "string",
+          "version": "string"
+        },
+        "tickMax": "string",
+        "tickMin": "string",
+        "time": "string"
+      }
+    },
+    "Arangox.API.Administration.database_version/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "version": "string"
+      }
+    },
+    "Arangox.API.Databases.create/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": "boolean"
+      }
+    },
+    "Arangox.API.Transactions.execute_javascript/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": "integer"
+      }
+    },
+    "Arangox.API.Collections.count/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheEnabled": "boolean",
+        "code": "integer",
+        "computedValues": "null",
+        "count": "integer",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "internalValidatorType": "integer",
+        "isSmartChild": "boolean",
+        "isSystem": "boolean",
+        "keyOptions": {
+          "allowUserKeys": "boolean",
+          "lastValue": "integer",
+          "type": "string"
+        },
+        "name": "string",
+        "objectId": "string",
+        "schema": "null",
+        "status": "integer",
+        "statusString": "string",
+        "supportsRBAC": "boolean",
+        "syncByRevision": "boolean",
+        "type": "integer",
+        "usesRevisionsAsDocumentIds": "boolean",
+        "waitForSync": "boolean",
+        "writeConcern": "integer"
+      }
+    },
+    "Arangox.API.Collections.figures/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheEnabled": "boolean",
+        "code": "integer",
+        "computedValues": "null",
+        "count": "integer",
+        "error": "boolean",
+        "figures": {
+          "cacheInUse": "boolean",
+          "cacheSize": "integer",
+          "cacheUsage": "integer",
+          "documentsSize": "integer",
+          "indexes": {
+            "count": "integer",
+            "size": "integer"
+          }
+        },
+        "globallyUniqueId": "string",
+        "id": "string",
+        "internalValidatorType": "integer",
+        "isSmartChild": "boolean",
+        "isSystem": "boolean",
+        "keyOptions": {
+          "allowUserKeys": "boolean",
+          "lastValue": "integer",
+          "type": "string"
+        },
+        "name": "string",
+        "objectId": "string",
+        "schema": "null",
+        "status": "integer",
+        "statusString": "string",
+        "supportsRBAC": "boolean",
+        "syncByRevision": "boolean",
+        "type": "integer",
+        "usesRevisionsAsDocumentIds": "boolean",
+        "waitForSync": "boolean",
+        "writeConcern": "integer"
+      }
+    },
+    "Arangox.API.Administration.version/2": {
+      "outcome": "ok",
+      "shape": {
+        "apiVersions": [
+          "string"
+        ],
+        "deprecatedApiVersions": [],
+        "license": "string",
+        "requestedApiVersion": "string",
+        "server": "string",
+        "version": "string"
+      }
+    },
+    "Arangox.API.Administration.available_startup_options/2": {
+      "outcome": "ok",
+      "shape": {
+        "__keys__": 475,
+        "__sample__": [
+          "activities.only-superuser-enabled",
+          "activities.registry-cleanup-timeout",
+          "agency.activate",
+          "agency.compaction-keep-size",
+          "agency.compaction-step-size",
+          "agency.disaster-recovery-id",
+          "agency.election-timeout-max",
+          "agency.election-timeout-min"
+        ],
+        "__shape__": "map"
+      }
+    },
+    "Arangox.API.Graphs.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "graphs": [
+          {
+            "_id": "string",
+            "_key": "string",
+            "_rev": "string",
+            "edgeDefinitions": [
+              {
+                "collection": "string",
+                "from": [
+                  "string"
+                ],
+                "to": [
+                  "string"
+                ]
+              }
+            ],
+            "name": "string",
+            "orphanCollections": []
+          }
+        ]
+      }
+    },
+    "Arangox.API.Administration.license/2": {
+      "outcome": "ok",
+      "shape": {
+        "diskUsage": {
+          "bytesLimit": "integer",
+          "bytesUsed": "integer",
+          "limitReached": "boolean",
+          "secondsUntilReadOnly": "integer",
+          "secondsUntilShutDown": "integer",
+          "status": "string"
+        },
+        "upgrading": "boolean"
+      }
+    },
+    "Arangox.API.Databases.current/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {
+          "id": "string",
+          "isSystem": "boolean",
+          "name": "string",
+          "path": "string"
+        }
+      }
+    },
+    "Arangox.API.Collections.rename/4": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "isSystem": "boolean",
+        "name": "string",
+        "status": "integer",
+        "type": "integer"
+      }
+    },
+    "Arangox.API.Monitoring.log/2": {
+      "outcome": "ok",
+      "shape": {
+        "level": [
+          "integer"
+        ],
+        "lid": [
+          "integer"
+        ],
+        "text": [
+          "string"
+        ],
+        "timestamp": [
+          "integer"
+        ],
+        "topic": [
+          "string"
+        ],
+        "totalAmount": "integer"
+      }
+    },
+    "Arangox.API.Replication.logger_state/2": {
+      "outcome": "ok",
+      "shape": {
+        "clients": [],
+        "server": {
+          "engine": "string",
+          "serverId": "string",
+          "version": "string"
+        },
+        "state": {
+          "lastLogTick": "string",
+          "lastUncommittedLogTick": "string",
+          "running": "boolean",
+          "time": "string",
+          "totalEvents": "integer"
+        }
+      }
+    },
+    "Arangox.API.Administration.server_mode/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "mode": "string"
+      }
+    },
+    "Arangox.API.Users.collection_permissions/5": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": "string"
+      }
+    },
+    "Arangox.API.Queries.parse/3": {
+      "outcome": "ok",
+      "shape": {
+        "ast": [
+          {
+            "subNodes": [
+              {
+                "subNodes": [
+                  {
+                    "id": "integer",
+                    "name": "string",
+                    "type": "string"
+                  }
+                ],
+                "type": "string"
+              }
+            ],
+            "type": "string"
+          }
+        ],
+        "bindVars": [],
+        "code": "integer",
+        "collections": [
+          "string"
+        ],
+        "error": "boolean",
+        "parsed": "boolean",
+        "warnings": []
+      }
+    },
+    "Arangox.API.Administration.server_availability/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "mode": "string"
+      }
+    },
+    "Arangox.API.Replication.cluster_inventory/2": {
+      "outcome": "ok",
+      "shape": {
+        "collections": [
+          {
+            "allInSync": "boolean",
+            "indexes": [],
+            "isReady": "boolean",
+            "parameters": {
+              "__keys__": 28,
+              "__sample__": [
+                "cacheEnabled",
+                "computedValues",
+                "deleted",
+                "distributeShardsLike",
+                "globallyUniqueId",
+                "id",
+                "internalValidatorType",
+                "isDisjoint"
+              ],
+              "__shape__": "map"
+            },
+            "planVersion": "integer"
+          }
+        ],
+        "properties": {
+          "id": "string",
+          "isSystem": "boolean",
+          "name": "string",
+          "path": "string",
+          "replicationFactor": "integer",
+          "replicationVersion": "string",
+          "sharding": "string",
+          "writeConcern": "integer"
+        },
+        "state": "string",
+        "tick": "string",
+        "views": []
+      }
+    },
+    "Arangox.API.Graphs.get_vertex/5": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "vertex": {
+          "_id": "string",
+          "_key": "string",
+          "_rev": "string",
+          "marker": "integer"
+        }
+      }
+    },
+    "Arangox.API.Administration.engine_stats/2": {
+      "outcome": "ok",
+      "shape": {
+        "__keys__": 69,
+        "__sample__": [
+          "cache.active-tables",
+          "cache.allocated",
+          "cache.edge-compression-ratio",
+          "cache.free-memory-tasks-duration-total",
+          "cache.free-memory-tasks-total",
+          "cache.hit-rate-lifetime",
+          "cache.hit-rate-recent",
+          "cache.limit"
+        ],
+        "__shape__": "map"
+      }
+    },
+    "Arangox.API.Collections.properties/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheEnabled": "boolean",
+        "code": "integer",
+        "computedValues": "null",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "internalValidatorType": "integer",
+        "isSmartChild": "boolean",
+        "isSystem": "boolean",
+        "keyOptions": {
+          "allowUserKeys": "boolean",
+          "lastValue": "integer",
+          "type": "string"
+        },
+        "name": "string",
+        "objectId": "string",
+        "schema": "null",
+        "status": "integer",
+        "statusString": "string",
+        "supportsRBAC": "boolean",
+        "syncByRevision": "boolean",
+        "type": "integer",
+        "usesRevisionsAsDocumentIds": "boolean",
+        "waitForSync": "boolean",
+        "writeConcern": "integer"
+      }
+    },
+    "Arangox.API.Administration.public_startup_options/2": {
+      "outcome": "ok",
+      "shape": {
+        "cluster.api-jwt-policy": "string",
+        "cluster.max-number-of-shards": "integer",
+        "cluster.max-replication-factor": "integer",
+        "cluster.min-replication-factor": "integer",
+        "database.extended-names": "boolean",
+        "server.session-timeout": "integer"
+      }
+    },
+    "Arangox.API.Views.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "name": "string",
+        "type": "string"
+      }
+    },
+    "Arangox.API.Transactions.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {
+          "id": "string",
+          "status": "string"
+        }
+      }
+    },
+    "Arangox.API.Queries.create_cursor/3": {
+      "outcome": "ok",
+      "shape": {
+        "cached": "boolean",
+        "code": "integer",
+        "error": "boolean",
+        "extra": {
+          "stats": {
+            "cacheHits": "integer",
+            "cacheMisses": "integer",
+            "cursorsCreated": "integer",
+            "cursorsRearmed": "integer",
+            "documentLookups": "integer",
+            "executionTime": "float",
+            "filtered": "integer",
+            "httpRequests": "integer",
+            "intermediateCommits": "integer",
+            "peakMemoryUsage": "integer",
+            "scannedFull": "integer",
+            "scannedIndex": "integer",
+            "searchParallelism": "integer",
+            "seeks": "integer",
+            "writesExecuted": "integer",
+            "writesIgnored": "integer"
+          },
+          "warnings": []
+        },
+        "hasMore": "boolean",
+        "result": [
+          {
+            "_id": "string",
+            "_key": "string",
+            "_rev": "string",
+            "marker": "integer"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Administration.support_info/2": {
+      "outcome": "ok",
+      "shape": {
+        "date": "string",
+        "deployment": {
+          "type": "string"
+        },
+        "host": {
+          "build": "string",
+          "cpuStats": {
+            "idlePercent": "float",
+            "iowaitPercent": "float",
+            "systemPercent": "float",
+            "userPercent": "float"
+          },
+          "engineStats": {
+            "cache.allocated": "integer",
+            "cache.limit": "integer",
+            "rocksdb.block-cache-capacity": "integer",
+            "rocksdb.block-cache-usage": "integer",
+            "rocksdb.estimate-live-data-size": "integer",
+            "rocksdb.estimate-num-keys": "integer",
+            "rocksdb.free-disk-space": "integer",
+            "rocksdb.live-sst-files-size": "integer",
+            "rocksdb.total-disk-space": "integer"
+          },
+          "license": "string",
+          "maintenance": "boolean",
+          "numberOfCores": {
+            "overridden": "boolean",
+            "value": "integer"
+          },
+          "os": "string",
+          "physicalMemory": {
+            "overridden": "boolean",
+            "value": "integer"
+          },
+          "platform": "string",
+          "processStats": {
+            "fileDescrtors": "integer",
+            "fileDescrtorsLimit": "integer",
+            "numberOfThreads": "integer",
+            "processUptime": "float",
+            "residentSetSize": "integer",
+            "virtualSize": "integer"
+          },
+          "readOnly": "boolean",
+          "role": "string",
+          "version": "string"
+        }
+      }
+    },
+    "Arangox.API.Collections.key_generators/2": {
+      "outcome": "ok",
+      "shape": {
+        "keyGenerators": [
+          "string"
+        ]
+      }
+    },
+    "Arangox.API.Cluster.imbalance/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {
+          "leader": {
+            "imbalance": "float",
+            "leaderDupl": [
+              "integer"
+            ],
+            "numberShards": [
+              "integer"
+            ],
+            "targetWeight": [
+              "float"
+            ],
+            "totalShards": "integer",
+            "totalWeight": "integer",
+            "weightUsed": [
+              "integer"
+            ]
+          },
+          "pendingMoveShards": "integer",
+          "shards": {
+            "imbalance": "integer",
+            "numberShards": [
+              "integer"
+            ],
+            "sizeUsed": [
+              "integer"
+            ],
+            "targetSize": [
+              "integer"
+            ],
+            "totalShards": "integer",
+            "totalShardsFromSystemCollections": "integer",
+            "totalUsed": "integer"
+          },
+          "todoMoveShards": "integer"
+        }
+      }
+    },
+    "Arangox.API.Queries.all_aql_user_functions/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": []
+      }
+    },
+    "Arangox.API.Security.server_tls/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {}
+      }
+    },
+    "Arangox.API.Documents.get_many/3": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "_id": "string",
+          "_key": "string",
+          "_rev": "string",
+          "marker": "integer"
+        }
+      ]
+    },
+    "Arangox.API.Administration.deployment_id/2": {
+      "outcome": "ok",
+      "shape": {
+        "id": "string"
+      }
+    },
+    "Arangox.API.Tasks.all/2": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "command": "string",
+          "created": "float",
+          "database": "string",
+          "id": "string",
+          "name": "string",
+          "offset": "float",
+          "period": "integer",
+          "type": "string"
+        }
+      ]
+    },
+    "Arangox.API.Collections.create/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheEnabled": "boolean",
+        "code": "integer",
+        "computedValues": "null",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "internalValidatorType": "integer",
+        "isSmartChild": "boolean",
+        "isSystem": "boolean",
+        "keyOptions": {
+          "allowUserKeys": "boolean",
+          "lastValue": "integer",
+          "type": "string"
+        },
+        "name": "string",
+        "objectId": "string",
+        "schema": "null",
+        "status": "integer",
+        "statusString": "string",
+        "supportsRBAC": "boolean",
+        "syncByRevision": "boolean",
+        "type": "integer",
+        "usesRevisionsAsDocumentIds": "boolean",
+        "waitForSync": "boolean",
+        "writeConcern": "integer"
+      }
+    },
+    "Arangox.API.Analyzers.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "features": [],
+        "name": "string",
+        "properties": {},
+        "type": "string"
+      }
+    },
+    "Arangox.API.Queries.query_cache_properties/2": {
+      "outcome": "ok",
+      "shape": {
+        "includeSystem": "boolean",
+        "maxEntrySize": "integer",
+        "maxResults": "integer",
+        "maxResultsSize": "integer",
+        "mode": "string"
+      }
+    },
+    "Arangox.API.Collections.delete/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "id": "string"
+      }
+    },
+    "Arangox.API.Documents.replace/5": {
+      "outcome": "ok",
+      "shape": {
+        "_id": "string",
+        "_key": "string",
+        "_oldRev": "string",
+        "_rev": "string"
+      }
+    },
+    "Arangox.API.Users.all_databases/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": {}
+      }
+    },
+    "Arangox.API.Collections.revision/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheEnabled": "boolean",
+        "code": "integer",
+        "computedValues": "null",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "internalValidatorType": "integer",
+        "isSmartChild": "boolean",
+        "isSystem": "boolean",
+        "keyOptions": {
+          "allowUserKeys": "boolean",
+          "lastValue": "integer",
+          "type": "string"
+        },
+        "name": "string",
+        "objectId": "string",
+        "revision": "string",
+        "schema": "null",
+        "status": "integer",
+        "statusString": "string",
+        "supportsRBAC": "boolean",
+        "syncByRevision": "boolean",
+        "type": "integer",
+        "usesRevisionsAsDocumentIds": "boolean",
+        "waitForSync": "boolean",
+        "writeConcern": "integer"
+      }
+    },
+    "Arangox.API.Replication.wal_last_tick/2": {
+      "outcome": "ok",
+      "shape": {
+        "server": {
+          "serverId": "string",
+          "version": "string"
+        },
+        "tick": "string",
+        "time": "string"
+      }
+    },
+    "Arangox.API.Queries.all_query_cache_results/2": {
+      "outcome": "ok",
+      "shape": []
+    },
+    "Arangox.API.Graphs.all_edge_collections/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "collections": [
+          "string"
+        ],
+        "error": "boolean"
+      }
+    },
+    "Arangox.API.Collections.truncate/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "globallyUniqueId": "string",
+        "id": "string",
+        "isSystem": "boolean",
+        "name": "string",
+        "status": "integer",
+        "type": "integer"
+      }
+    },
+    "Arangox.API.Administration.all_endpoints/2": {
+      "outcome": "ok",
+      "shape": [
+        {
+          "endpoint": "string"
+        }
+      ]
+    },
+    "Arangox.API.Authentication.all_access_tokens/3": {
+      "outcome": "ok",
+      "shape": {
+        "tokens": []
+      }
+    },
+    "Arangox.API.Users.all/2": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "result": [
+          {
+            "active": "boolean",
+            "extra": {},
+            "user": "string"
+          }
+        ]
+      }
+    },
+    "Arangox.API.Queries.explain/3": {
+      "outcome": "ok",
+      "shape": {
+        "cacheable": "boolean",
+        "code": "integer",
+        "error": "boolean",
+        "plan": {
+          "asyncPrefetchNodes": "integer",
+          "collections": [
+            {
+              "name": "string",
+              "type": "string"
+            }
+          ],
+          "estimatedCost": "integer",
+          "estimatedNrItems": "integer",
+          "isModificationQuery": "boolean",
+          "nodes": [
+            {
+              "bindParameterVariables": {},
+              "dependencies": [],
+              "estimatedCost": "integer",
+              "estimatedNrItems": "integer",
+              "id": "integer",
+              "type": "string"
+            }
+          ],
+          "rules": [
+            "string"
+          ],
+          "variables": [
+            {
+              "id": "integer",
+              "isFullDocumentFromCollection": "boolean",
+              "name": "string"
+            }
+          ]
+        },
+        "stats": {
+          "executionTime": "float",
+          "peakMemoryUsage": "integer",
+          "plansCreated": "integer",
+          "rules": {},
+          "rulesExecuted": "integer",
+          "rulesSkipped": "integer"
+        },
+        "warnings": []
+      }
+    },
+    "Arangox.API.Monitoring.structured_log/2": {
+      "outcome": "ok",
+      "shape": {}
+    },
+    "Arangox.API.Documents.get/4": {
+      "outcome": "ok",
+      "shape": {
+        "_id": "string",
+        "_key": "string",
+        "_rev": "string",
+        "marker": "integer"
+      }
+    },
+    "Arangox.API.Graphs.get/3": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "error": "boolean",
+        "graph": {
+          "_id": "string",
+          "_key": "string",
+          "_rev": "string",
+          "edgeDefinitions": [
+            {
+              "collection": "string",
+              "from": [
+                "string"
+              ],
+              "to": [
+                "string"
+              ]
+            }
+          ],
+          "name": "string",
+          "orphanCollections": []
+        }
+      }
+    },
+    "Arangox.API.Queries.all_slow/2": {
+      "outcome": "ok",
+      "shape": []
+    },
+    "Arangox.API.Queries.all_query_cache_plans/2": {
+      "outcome": "ok",
+      "shape": []
+    },
+    "Arangox.API.Documents.header/4": {
+      "outcome": "ok",
+      "shape": "string"
+    },
+    "Arangox.API.Graphs.vertex_edges/4": {
+      "outcome": "ok",
+      "shape": {
+        "code": "integer",
+        "edges": [
+          {
+            "_from": "string",
+            "_id": "string",
+            "_key": "string",
+            "_rev": "string",
+            "_to": "string"
+          }
+        ],
+        "error": "boolean",
+        "stats": {
+          "cacheHits": "integer",
+          "cacheMisses": "integer",
+          "cursorsCreated": "integer",
+          "cursorsRearmed": "integer",
+          "documentLookups": "integer",
+          "executionTime": "float",
+          "filtered": "integer",
+          "httpRequests": "integer",
+          "intermediateCommits": "integer",
+          "peakMemoryUsage": "integer",
+          "scannedFull": "integer",
+          "scannedIndex": "integer",
+          "searchParallelism": "integer",
+          "seeks": "integer",
+          "writesExecuted": "integer",
+          "writesIgnored": "integer"
+        }
+      }
+    }
+  },
+  "skipped": {
+    "Arangox.API.Administration.crash_dump/3": [
+      "crash_id"
+    ],
+    "Arangox.API.Cluster.dbserver_maintenance/3": [
+      "dbserver_id"
+    ],
+    "Arangox.API.Cluster.statistics/3": [
+      "d_bserver"
+    ],
+    "Arangox.API.Foxx.all_scripts/3": [
+      "mount"
+    ],
+    "Arangox.API.Foxx.configuration/3": [
+      "mount"
+    ],
+    "Arangox.API.Foxx.dependencies/3": [
+      "mount"
+    ],
+    "Arangox.API.Foxx.description/3": [
+      "mount"
+    ],
+    "Arangox.API.Foxx.readme/3": [
+      "mount"
+    ],
+    "Arangox.API.Foxx.swagger_description/3": [
+      "mount"
+    ],
+    "Arangox.API.Graphs.get_edge/5": [
+      "edge"
+    ],
+    "Arangox.API.Jobs.get/3": [
+      "job_id"
+    ],
+    "Arangox.API.Replication.dump/4": [
+      "batch_id"
+    ],
+    "Arangox.API.Replication.inventory/3": [
+      "batch_id"
+    ],
+    "Arangox.API.Replication.revision_tree/4": [
+      "batch_id"
+    ],
+    "Arangox.API.Tasks.get/3": [
+      "id"
+    ]
+  },
+  "tag": "3.12.10"
+}

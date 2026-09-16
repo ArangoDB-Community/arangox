@@ -1,15 +1,16 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
+# The containerless job runs the unit and protocol tiers on the
+# full Elixir/OTP matrix — TLS defaults changed in OTP 26, so one release is
+# not evidence about the rest. The integration legs each start only their
+# server line's compose profile, so a test must carry the tag of the line
+# whose service it actually reaches.
 
 name: Elixir CI
 
+# The default branch is `main`.
 on:
   push:
     branches:
       - "main"
-      - "dev"
   pull_request:
     branches:
       - "main"
@@ -18,27 +19,148 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  test:
+    name: Unit and protocol (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
+    runs-on: ubuntu-latest
 
-    name: Build and test
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor leg is the declared minimum pair: Elixir 1.15 on OTP 26.
+        # mix.exs raises below OTP 26 (`:ssl` only verifies peers by default
+        # from 26, which the TLS posture relies on), so no older OTP belongs
+        # in this matrix.
+        include:
+          - elixir: '1.15'
+            otp: '26'
+          - elixir: '1.16'
+            otp: '26'
+          - elixir: '1.17'
+            otp: '27'
+          - elixir: '1.19'
+            otp: '28'
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: ${{ matrix.elixir }}
+        otp-version: ${{ matrix.otp }}
+    - name: Restore dependencies cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+    - name: Install dependencies
+      run: mix deps.get
+    - name: Compile with warnings as errors
+      run: mix compile --warnings-as-errors
+      env:
+        MIX_ENV: test
+    # No Docker here: the unit and protocol tiers run against local harnesses.
+    - name: Run tests
+      run: mix test
+
+  format:
+    name: Formatting
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Elixir
-      uses: erlef/setup-beam@61e01a43a562a89bfc54c7f9a378ff67b03e4a21 # v1.16.0
+      uses: erlef/setup-beam@v1
       with:
-        elixir-version: '1.16'
-        otp-version: '26'
-    - name: Restore dependencies cache
-      uses: actions/cache@v3
+        # Formatter output is only stable within an Elixir release, so this
+        # job pins the release the tree is formatted with.
+        elixir-version: '1.19'
+        otp-version: '28'
+    - name: Check formatting
+      run: mix format --check-formatted
+
+  dialyzer:
+    name: Dialyzer
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
       with:
-        path: deps
-        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-        restore-keys: ${{ runner.os }}-mix-
+        elixir-version: '1.19'
+        otp-version: '28'
+    - name: Restore dependencies and PLT cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-plt-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-plt-
     - name: Install dependencies
       run: mix deps.get
-    - name: Run ArangoDB containers
-      run: docker compose up --detach --wait --wait-timeout 45
-    - name: Run tests
-      run: mix test
+    - name: Run Dialyzer
+      run: mix dialyzer
+
+  integration-3-12:
+    name: Integration (3.12 profile)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.19'
+        otp-version: '28'
+    - name: Restore dependencies cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-1.19-28-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-1.19-28-
+    - name: Install dependencies
+      run: mix deps.get
+    - name: Start the 3.12 services
+      run: docker compose up --detach --wait --wait-timeout 180
+      env:
+        COMPOSE_PROFILES: '3.12'
+    # Valued tag selection: plain integration tests carry `integration: true`
+    # and the 3.11 tier `integration: :arango_3_11`. ExUnit's include filter
+    # beats excludes, so subtracting overlapping tags with --exclude cannot
+    # work; selecting by value can.
+    - name: Run the 3.12 integration tier
+      run: mix test --only integration:true
+
+  integration-3-11:
+    name: Integration (3.11 profile)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.19'
+        otp-version: '28'
+    - name: Restore dependencies cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-1.19-28-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-1.19-28-
+    - name: Install dependencies
+      run: mix deps.get
+    - name: Start the 3.11 service
+      run: docker compose up --detach --wait --wait-timeout 180
+      env:
+        COMPOSE_PROFILES: '3.11'
+    - name: Run the 3.11 tier (VelocyStream, failover, read-only)
+      run: mix test --only integration:arango_3_11
