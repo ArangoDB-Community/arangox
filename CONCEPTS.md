@@ -19,6 +19,11 @@ A single addressable ArangoDB server location: either a host and port, or a Unix
 
 An Endpoint is an address, not a URL — the scheme in the string a user supplies is consumed at parse time to decide the address form and the TLS flag, and is not carried forward. A pool may be configured with a single Endpoint or with several; when several are given, they are tried in order of precedence.
 
+### Active failover
+An ArangoDB deployment of several servers in which one is elected leader and the others follow. Only the leader admits a connection.
+
+A follower refuses one, and which member leads is not fixed and changes without notice. A pool aimed at such a deployment is therefore given every member, and the ordered walk over Endpoints is how it finds the one currently admissible; naming a single member makes the outcome depend on an election the caller does not control. Removed by the server in 3.12, so a 3.11 concern only.
+
 ### VelocyStream
 ArangoDB's binary wire protocol, as opposed to HTTP. One of the protocols a Client can implement. Abbreviated VST.
 
@@ -62,6 +67,13 @@ A second, server-free tier checks what can be read from the operation sources al
 The API description the tested server itself serves, used as the authority the Conformance gate checks the API surface against. Distinct from a vendored copy of the same description, which can drift from the server it claims to describe; the live oracle and the system under test cannot disagree about which release they are.
 
 It is an authority on shape, not on behaviour: it states what an operation is called and what it accepts, never what the server does with a particular value. The same server's responses to real calls are a separate authority, and the only one that settles what an operation returns or whether it works at all.
+
+## Testing
+
+### Server line
+One of the two ArangoDB releases the suite is exercised against, together with the compose services that run it: the 3.12 line (single servers, one of them with TLS, plus a three-coordinator cluster) and the 3.11 line (an active-failover trio, pinned there because VelocyStream and Active failover are 3.11-only concerns).
+
+An integration test is tagged by the line whose service it reaches, never by the line whose feature it is about — a test about a 3.11 feature that connects to a 3.12 port belongs to the 3.12 line. The distinction is invisible where every line is running and decisive where one line is started at a time.
 
 ## Transactions
 
