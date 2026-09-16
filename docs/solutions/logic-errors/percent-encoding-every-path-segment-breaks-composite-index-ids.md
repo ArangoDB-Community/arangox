@@ -115,7 +115,7 @@ The adapter's moduledoc states the bound alongside the others it enforces (`lib/
 
 The surface extractor accepts the new segment form and still renders it as one address slot, so `/_api/index/{index_id}` is what both gates compare (`test/support/api_surface.ex:115-118`, with `address/1` at `:152-159`).
 
-The fix sits on `feat/v0-8-modernization`, which has never been pushed and has no pull request open against it; it is not merged to `master`. Commit identifiers on that branch can be rewritten by a rebase or squash before it lands, so this doc cites file and line rather than a revision.
+The fix sits on `feat/v0-8-modernization`, which has never been pushed and has no pull request open against it; it is not merged to `main`. Commit identifiers on that branch can be rewritten by a rebase or squash before it lands, so this doc cites file and line rather than a revision.
 
 ## Why This Works
 

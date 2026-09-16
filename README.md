@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/arangox.svg)](https://hex.pm/packages/arangox)
 [![Documentation](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/arangox)
-[![CI](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml/badge.svg?branch=master&event=push)](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml)
+[![CI](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml/badge.svg?branch=main&event=push)](https://github.com/ArangoDB-Community/arangox/actions/workflows/elixir.yml)
 
 Arangox is a pooled Elixir driver for ArangoDB. It gives you a conventional
 resource API for everyday work, first-class AQL queries and transactions, and

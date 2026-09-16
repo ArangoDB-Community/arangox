@@ -195,41 +195,45 @@ README's user-facing disclosures.
 
 ## Publishing to origin
 
-Work happens on a feature branch and is never pushed. Origin gets a separate
-release branch whose tree is identical to the work branch's but whose history
-is a small number of deliberate commits, written by hand.
+Work happens on a feature branch. The branch is pushed, a pull request carries
+it, and GitHub squash-merges it into `main`. There is no separate release
+branch and no hand-split history: `main` gets one commit per merged branch.
+
+That squash commit is created by GitHub, so it is signed with GitHub's own key
+rather than yours — it shows as verified, by GitHub. Your own commits on the
+branch are signed with your key; `commit.gpgsign` and `tag.gpgsign` are set
+locally so that happens without being asked for. If the signing agent's
+passphrase cache has expired, a commit fails with `gpg failed to sign the
+data` and nothing is written; unlock the agent and repeat the command.
 
 These notes, `CLAUDE.md`, `CONCEPTS.md`, `docs/plans/` and `docs/solutions/`
-are tracked and reach origin with the library. Anything written in them is
-public: write for a reader who has this repository and nothing else.
+are tracked and reach origin with the library. They keep the citations that
+produced them — requirement, decision and unit numbers, and which review pass
+found what — because a maintainer reading them is the audience. The library
+itself does not: no planning identifier belongs in code, comments, docstrings,
+test names, or a commit message, where a library user would meet it with no
+way to look it up.
 
-That rule is not yet satisfied by what is already there. The planning
-documents and the learnings still cite requirement, decision and unit numbers
-that resolve only against each other, and the learnings still attribute
-findings to particular review passes. A citation nobody outside can follow is
-worse than no citation, so those want rewriting as the substance they stand
-for — the reasoning is the useful part, and only its provenance is not.
+Still untracked, in `.git/info/exclude`: `docs/handoffs/` (notes passed
+between working sessions), `.claude/`, and `.gstack/`.
 
-Still untracked, in `.git/info/exclude`: `docs/handoffs/` (working notes
-between sessions), `.claude/`, and `.gstack/`.
-
-Three local tools support this, in `.git/release-tools/`:
+Two local tools guard the push, in `.git/release-tools/`:
 
 - `scan.sh [ref]` refuses content that reveals how the repository is worked
   on. With no argument it reads the tracked working tree; with a ref it reads
   that ref's tree. Patterns live beside it, split into case-insensitive prose
   (`patterns-i.txt`) and case-sensitive planning identifiers
-  (`patterns-s.txt`). Lockfiles are excluded, because hex digests match the
-  identifier patterns by accident. It also fails when any path in
-  `paths.txt` is tracked at all: a directory arriving wholesale is a lost
-  exclusion, not a phrase, and no content pattern would see it.
-- `prepare-release.sh <work-branch> <release-branch> [base]` points the
-  release branch at `base` (default `origin/master`), sets its tree to the
-  work branch's exactly, scans it, and leaves everything staged for splitting
-  into commits. It takes the tree wholesale rather than merging, so it behaves
-  the same after origin already carries a squashed release. It refuses to run
-  unless the working tree is clean, including untracked files — it removes
-  whatever the work branch does not have.
+  (`patterns-s.txt`).
+
+  It does not read `AGENTS.md`, `docs/plans/` or `docs/solutions/`, which are
+  published with their citations intact, nor lockfiles, whose hex digests match
+  the identifier patterns by accident. Those exclusions are listed in
+  `scan.sh` itself. What remains guarded is everything a library user reads as
+  the library: `lib/`, `test/`, `README.md`, `CHANGELOG.md`, `CONCEPTS.md`,
+  `mix.exs`. It also fails when any path in `paths.txt` is tracked at all — a
+  directory arriving wholesale is a lost exclusion, not a phrase, and no
+  content pattern would see it.
+
 - `.git/hooks/pre-push` scans the tree being pushed and the commit messages in
   the push range, and refuses the push on a hit. `--no-verify` overrides it.
 

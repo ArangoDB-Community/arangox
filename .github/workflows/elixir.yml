@@ -7,14 +7,14 @@
 
 name: Elixir CI
 
-# The default branch is `master`.
+# The default branch is `main`.
 on:
   push:
     branches:
-      - "master"
+      - "main"
   pull_request:
     branches:
-      - "master"
+      - "main"
 
 permissions:
   contents: read
