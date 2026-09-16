@@ -88,7 +88,10 @@ defmodule Arangox.MixProject do
     [
       source_ref: "v#{@version}",
       main: "readme",
-      extras: ["README.md"]
+      # The README links to both, so both must be in the docs output or the
+      # links resolve to nothing on HexDocs. They already ship in the
+      # tarball through `package/0`.
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"]
     ]
   end
 

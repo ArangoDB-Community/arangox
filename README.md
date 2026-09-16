@@ -440,8 +440,8 @@ Mint is now the default client, TLS verification is enabled, headers are
 ordered `{name, value}` lists, and stream transactions use
 `%Arangox.Transaction{}` handles.
 
-Read the complete [0.8 migration guide](CHANGELOG.md#migrating-from-v07) before
-upgrading an existing application.
+Read the complete [0.8 migration guide](CHANGELOG.md) — the "Migrating from
+v0.7" section — before upgrading an existing application.
 
 ## Development
 
